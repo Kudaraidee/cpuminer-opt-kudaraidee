@@ -242,6 +242,8 @@ void cryptolight_hash(void* output, const void* input, int len) {
 	free(ctx);
 }
 
+#if defined(__AES__)
+
 static void cryptolight_hash_ctx_aes_ni(void* output, const void* input,
                        int len, struct cryptonight_ctx* ctx)
 {
@@ -312,8 +314,10 @@ static void cryptolight_hash_ctx_aes_ni(void* output, const void* input,
 	oaes_free((OAES_CTX **) &ctx->aes_ctx);
 }
 
-int scanhash_cryptolight(int thr_id, struct work *work,
-		uint32_t max_nonce, uint64_t *hashes_done)
+#endif
+
+int scanhash_cryptolight( struct work *work,
+		uint32_t max_nonce, uint64_t *hashes_done, struct thr_info *mythr)
 {
         uint32_t *pdata = work->data;
         uint32_t *ptarget = work->target;
@@ -322,6 +326,7 @@ int scanhash_cryptolight(int thr_id, struct work *work,
 	const uint32_t first_nonce = n + 1;
 	//const uint32_t Htarg = ptarget[7];
 	uint32_t _ALIGN(32) hash[HASH_SIZE / 4];
+   int thr_id = mythr->id;
 
 	struct cryptonight_ctx *ctx = (struct cryptonight_ctx*)malloc(sizeof(struct cryptonight_ctx));
 

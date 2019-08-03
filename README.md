@@ -16,7 +16,8 @@ https://bitcointalk.org/index.php?topic=1326803.0
 
 mailto://jayddee246@gmail.com
 
-See file RELEASE_NOTES for change log and compile instructions.
+See file RELEASE_NOTES for change log and INSTALL_LINUX or INSTALL_WINDOWS
+for compile instructions.
 
 Requirements
 ------------
@@ -54,13 +55,12 @@ Supported Algorithms
                           axiom         Shabal-256 MemoHash
                           bastion
                           blake         Blake-256 (SFR)
-                          blakecoin     blake256r8
+                          blake2b       Blake2b 256
                           blake2s       Blake-2 S
+                          blakecoin     blake256r8
                           bmw           BMW 256
+                          bmw512        BMW 512
                           c11           Chaincoin
-                          cryptolight   Cryptonight-light
-                          cryptonight  
-                          cryptonightv7 Monero (XMR)
                           decred
                           deep          Deepcoin (DCN)
                           dmd-gr        Diamond-Groestl
@@ -68,6 +68,7 @@ Supported Algorithms
                           fresh         Fresh
                           groestl       Groestl coin
                           heavy         Heavy
+                          hex           x16r-hex
                           hmq1725       Espers
                           hodl          Hodlcoin
                           jha           Jackpotcoin
@@ -77,15 +78,17 @@ Supported Algorithms
                           luffa         Luffa
                           lyra2h        Hppcoin
                           lyra2re       lyra2
-                          lyra2rev2     lyra2v2, Vertcoin
-                          lyra2z        Zcoin (XZC)
+                          lyra2rev2     lyra2v2
+                          lyra2rev3     lyrav2v3, Vertcoin
+                          lyra2z        
                           lyra2z330     Lyra2 330 rows, Zoin (ZOI)
                           m7m           Magi (XMG)
                           myr-gr        Myriad-Groestl
                           neoscrypt     NeoScrypt(128, 2, 1)
                           nist5         Nist5
                           pentablake    Pentablake
-                          phi1612       phi, LUX coin
+                          phi1612       phi, LUX coin (original algo)
+                          phi2          LUX coin (new algo)
                           pluck         Pluck:128 (Supcoin)
                           polytimos     Ninja
                           quark         Quark
@@ -94,11 +97,13 @@ Supported Algorithms
                           scrypt:N      scrypt(N, 1, 1)
                           scryptjane:nf
                           sha256d       Double SHA-256
+                          sha256q       Quad SHA-256, Pyrite (PYE)
                           sha256t       Triple SHA-256, Onecoin (OC)
                           shavite3      Shavite3
                           skein         Skein+Sha (Skeincoin)
                           skein2        Double Skein (Woodcoin)
                           skunk         Signatum (SIGT)
+                          sonoa         Sono
                           timetravel    Machinecoin (MAC)
                           timetravel10  Bitcore
                           tribus        Denarius (DNR)
@@ -111,21 +116,29 @@ Supported Algorithms
                           x11gost       sib (SibCoin)
                           x12           Galaxie Cash (GCH)
                           x13           X13
+                          x13bcd        bcd
                           x13sm3        hsr (Hshare)
                           x14           X14
                           x15           X15
                           x16r          Ravencoin (RVN)
-                          x16s          pigeoncoin (PGN)
+                          x16rt         Gincoin (GIN)
+                          x16rt_veil    Veil (VEIL)
+                          x16s          Pigeoncoin (PGN)
                           x17
+                          x21s
                           xevan         Bitsend (BSD)
                           yescrypt      Globalboost-Y (BSTY)
                           yescryptr8    BitZeny (ZNY)
-                          yescryptr16   Yenten (YTN)
+                          yescryptr16   Eli
                           yescryptr32   WAVI
+                          yespower      Cryply
+                          yespowerr16   Yenten (YTN)
                           zr5           Ziftr
 
 Errata
 ------
+
+Cryptonight and variants are no longer supported, use another miner.
 
 Neoscrypt crashes on Windows, use legacy version.
 

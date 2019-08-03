@@ -3,7 +3,7 @@
 #include "wolf-aes.h"
 #include "miner.h"
 
-#ifndef NO_AES_NI
+#if defined(__AES__)
 
 static inline void ExpandAESKey256_sub1(__m128i *tmp1, __m128i *tmp2)
 {
@@ -83,7 +83,7 @@ void ExpandAESKey256(__m128i *keys, const __m128i *KeyBuf)
     keys[14] = tmp1;
 }
 
-#ifdef __SSE4_2__
+#if defined(__SSE4_2__)
 //#ifdef __AVX__
 
 #define AESENC(i,j) \

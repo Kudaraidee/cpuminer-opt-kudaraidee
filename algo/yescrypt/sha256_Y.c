@@ -290,7 +290,7 @@ SHA256_Final_Y(unsigned char digest[32], SHA256_CTX_Y * ctx)
 
 /* Initialize an HMAC-SHA256 operation with the given key. */
 void
-HMAC_SHA256_Init(HMAC_SHA256_CTX * ctx, const void * _K, size_t Klen)
+HMAC_SHA256_Init_Y(HMAC_SHA256_CTX_Y * ctx, const void * _K, size_t Klen)
 {
 	unsigned char pad[64];
 	unsigned char khash[32];
@@ -299,48 +299,26 @@ HMAC_SHA256_Init(HMAC_SHA256_CTX * ctx, const void * _K, size_t Klen)
 
 	/* If Klen > 64, the key is really SHA256(K). */
 	if (Klen > 64) {
-#ifndef USE_SPH_SHA
 		SHA256_Init(&ctx->ictx);
 		SHA256_Update(&ctx->ictx, K, Klen);
 		SHA256_Final(khash, &ctx->ictx);
-#else
-                SHA256_Init_Y(&ctx->ictx);
-                SHA256_Update_Y(&ctx->ictx, K, Klen);
-                SHA256_Final_Y(khash, &ctx->ictx);
-#endif
 		K = khash;
 		Klen = 32;
 	}
 
 	/* Inner SHA256 operation is SHA256(K xor [block of 0x36] || data). */
-#ifndef USE_SPH_SHA
         SHA256_Init(&ctx->ictx);
-#else
-        SHA256_Init_Y(&ctx->ictx);
-#endif
 	memset(pad, 0x36, 64);
 	for (i = 0; i < Klen; i++)
 		pad[i] ^= K[i];
-#ifndef USE_SPH_SHA
 	SHA256_Update(&ctx->ictx, pad, 64);
-#else
-        SHA256_Update_Y(&ctx->ictx, pad, 64);
-#endif
 
 	/* Outer SHA256 operation is SHA256(K xor [block of 0x5c] || hash). */
-#ifndef USE_SPH_SHA
 	SHA256_Init(&ctx->octx);
-#else
-        SHA256_Init_Y(&ctx->octx);
-#endif
 	memset(pad, 0x5c, 64);
 	for (i = 0; i < Klen; i++)
 		pad[i] ^= K[i];
-#ifndef USE_SPH_SHA
 	SHA256_Update(&ctx->octx, pad, 64);
-#else
-        SHA256_Update_Y(&ctx->octx, pad, 64);
-#endif
 
 	/* Clean the stack. */
 	//memset(khash, 0, 32);
@@ -348,24 +326,19 @@ HMAC_SHA256_Init(HMAC_SHA256_CTX * ctx, const void * _K, size_t Klen)
 
 /* Add bytes to the HMAC-SHA256 operation. */
 void
-HMAC_SHA256_Update(HMAC_SHA256_CTX * ctx, const void *in, size_t len)
+HMAC_SHA256_Update_Y(HMAC_SHA256_CTX_Y * ctx, const void *in, size_t len)
 {
 
 	/* Feed data to the inner SHA256 operation. */
-#ifndef USE_SPH_SHA
 	SHA256_Update(&ctx->ictx, in, len);
-#else
-        SHA256_Update_Y(&ctx->ictx, in, len);
-#endif
 }
 
 /* Finish an HMAC-SHA256 operation. */
 void
-HMAC_SHA256_Final(unsigned char digest[32], HMAC_SHA256_CTX * ctx)
+HMAC_SHA256_Final_Y(unsigned char digest[32], HMAC_SHA256_CTX_Y * ctx)
 {
 	unsigned char ihash[32];
 
-#ifndef USE_SPH_SHA
 	/* Finish the inner SHA256 operation. */
 	SHA256_Final(ihash, &ctx->ictx);
 
@@ -374,16 +347,6 @@ HMAC_SHA256_Final(unsigned char digest[32], HMAC_SHA256_CTX * ctx)
 
 	/* Finish the outer SHA256 operation. */
 	SHA256_Final(digest, &ctx->octx);
-#else
-        /* Finish the inner SHA256 operation. */
-        SHA256_Final_Y(ihash, &ctx->ictx);
-
-        /* Feed the inner hash to the outer SHA256 operation. */
-        SHA256_Update_Y(&ctx->octx, ihash, 32);
-
-        /* Finish the outer SHA256 operation. */
-        SHA256_Final_Y(digest, &ctx->octx);
-#endif
 
 	/* Clean the stack. */
 	//memset(ihash, 0, 32);
@@ -395,10 +358,10 @@ HMAC_SHA256_Final(unsigned char digest[32], HMAC_SHA256_CTX * ctx)
  * write the output to buf.  The value dkLen must be at most 32 * (2^32 - 1).
  */
 void
-PBKDF2_SHA256(const uint8_t * passwd, size_t passwdlen, const uint8_t * salt,
+PBKDF2_SHA256_Y(const uint8_t * passwd, size_t passwdlen, const uint8_t * salt,
     size_t saltlen, uint64_t c, uint8_t * buf, size_t dkLen)
 {
-	HMAC_SHA256_CTX PShctx, hctx;
+	HMAC_SHA256_CTX_Y PShctx, hctx;
 	uint8_t _ALIGN(128) T[32];
 	uint8_t _ALIGN(128) U[32];
 	uint8_t ivec[4];
@@ -407,8 +370,8 @@ PBKDF2_SHA256(const uint8_t * passwd, size_t passwdlen, const uint8_t * salt,
 	int k;
 
 	/* Compute HMAC state after processing P and S. */
-	HMAC_SHA256_Init(&PShctx, passwd, passwdlen);
-	HMAC_SHA256_Update(&PShctx, salt, saltlen);
+	HMAC_SHA256_Init_Y(&PShctx, passwd, passwdlen);
+	HMAC_SHA256_Update_Y(&PShctx, salt, saltlen);
 
 	/* Iterate through the blocks. */
 	for (i = 0; i * 32 < dkLen; i++) {
@@ -416,18 +379,18 @@ PBKDF2_SHA256(const uint8_t * passwd, size_t passwdlen, const uint8_t * salt,
 		be32enc(ivec, (uint32_t)(i + 1));
 
 		/* Compute U_1 = PRF(P, S || INT(i)). */
-		memcpy(&hctx, &PShctx, sizeof(HMAC_SHA256_CTX));
-		HMAC_SHA256_Update(&hctx, ivec, 4);
-		HMAC_SHA256_Final(U, &hctx);
+		memcpy(&hctx, &PShctx, sizeof(HMAC_SHA256_CTX_Y));
+		HMAC_SHA256_Update_Y(&hctx, ivec, 4);
+		HMAC_SHA256_Final_Y(U, &hctx);
 
 		/* T_i = U_1 ... */
 		memcpy(T, U, 32);
 
 		for (j = 2; j <= c; j++) {
 			/* Compute U_j. */
-			HMAC_SHA256_Init(&hctx, passwd, passwdlen);
-			HMAC_SHA256_Update(&hctx, U, 32);
-			HMAC_SHA256_Final(U, &hctx);
+			HMAC_SHA256_Init_Y(&hctx, passwd, passwdlen);
+			HMAC_SHA256_Update_Y(&hctx, U, 32);
+			HMAC_SHA256_Final_Y(U, &hctx);
 
 			/* ... xor U_j ... */
 			for (k = 0; k < 32; k++)

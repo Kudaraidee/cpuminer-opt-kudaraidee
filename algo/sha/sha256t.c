@@ -5,8 +5,6 @@
 #include <stdio.h>
 #include <openssl/sha.h>
 
-#if !defined(SHA256T_4WAY)
-
 static __thread SHA256_CTX sha256t_ctx __attribute__ ((aligned (64)));
 
 void sha256t_midstate( const void* input )
@@ -38,8 +36,8 @@ void sha256t_hash( void* output, const void* input )
    memcpy( output, hash, 32 );
 }
 
-int scanhash_sha256t( int thr_id, struct work *work, uint32_t max_nonce,
-                      uint64_t *hashes_done)
+int scanhash_sha256t( struct work *work, uint32_t max_nonce,
+                      uint64_t *hashes_done, struct thr_info *mythr )
 {
    uint32_t *pdata = work->data;
    uint32_t *ptarget = work->target;
@@ -52,6 +50,7 @@ int scanhash_sha256t( int thr_id, struct work *work, uint32_t max_nonce,
    uint32_t hash64[8] __attribute__((aligned(32)));
 #endif
    uint32_t endiandata[32];
+   int thr_id = mythr->id;  // thr_id arg is deprecated
 
    uint64_t htmax[] = {
 		0,
@@ -71,8 +70,11 @@ int scanhash_sha256t( int thr_id, struct work *work, uint32_t max_nonce,
 	};
 
    // we need bigendian data...
-   for ( int k = 0; k < 19; k++ )
-      be32enc( &endiandata[k], pdata[k] );
+   casti_m128i( endiandata, 0 ) = mm128_bswap_32( casti_m128i( pdata, 0 ) );
+   casti_m128i( endiandata, 1 ) = mm128_bswap_32( casti_m128i( pdata, 1 ) );
+   casti_m128i( endiandata, 2 ) = mm128_bswap_32( casti_m128i( pdata, 2 ) );
+   casti_m128i( endiandata, 3 ) = mm128_bswap_32( casti_m128i( pdata, 3 ) );
+   casti_m128i( endiandata, 4 ) = mm128_bswap_32( casti_m128i( pdata, 4 ) );
 
    sha256t_midstate( endiandata );
 
@@ -85,18 +87,14 @@ int scanhash_sha256t( int thr_id, struct work *work, uint32_t max_nonce,
             pdata[19] = ++n;
             be32enc(&endiandata[19], n);
             sha256t_hash( hash64, endiandata );
-            if ( ( !(hash64[7] & mask) ) && fulltest( hash64, ptarget ) )
-            {
-               *hashes_done = n - first_nonce + 1;
-               return true;
-            }
+            if ( !(hash64[7] & mask) )
+            if ( fulltest( hash64, ptarget ) && !opt_benchmark )
+               submit_solution( work, hash64, mythr );
          } while ( n < max_nonce && !work_restart[thr_id].restart );
          break;
       }
    }
-
    *hashes_done = n - first_nonce + 1;
    pdata[19] = n;
    return 0;
 }
-#endif

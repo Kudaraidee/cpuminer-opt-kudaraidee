@@ -20,7 +20,7 @@
 
 #include <string.h>
 #include <emmintrin.h>
-#include "avxdefs.h"
+#include "simd-utils.h"
 #include "luffa_for_sse2.h"
 
 #define MULT2(a0,a1) do \
@@ -29,6 +29,19 @@
   a0 = _mm_or_si128( _mm_srli_si128(b,4), _mm_slli_si128(a1,12) ); \
   a1 = _mm_or_si128( _mm_srli_si128(a1,4), _mm_slli_si128(b,12) );  \
 } while(0)
+
+/*
+static inline __m256i mult2_avx2( a )
+{ 
+   __m128 a0, a0, b;
+   a0 = mm128_extractlo_256( a );
+   a1 = mm128_extracthi_256( a );
+   b =  _mm_xor_si128( a0, _mm_shuffle_epi32( _mm_and_si128(a1,MASK), 16 ) );
+   a0 = _mm_or_si128( _mm_srli_si128(b,4), _mm_slli_si128(a1,12) );
+   a1 = _mm_or_si128( _mm_srli_si128(a1,4), _mm_slli_si128(b,12) );
+   return mm256_concat_128( a1, a0 );
+}
+*/
 
 #define STEP_PART(x,c,t)\
     SUBCRUMB(*x,*(x+1),*(x+2),*(x+3),*t);\
@@ -272,8 +285,8 @@ HashReturn update_luffa( hashState_luffa *state, const BitSequence *data,
     // full blocks
     for ( i = 0; i < blocks; i++ )
     {
-       rnd512( state, mm_bswap_32( casti_m128i( data, 1 ) ),
-                      mm_bswap_32( casti_m128i( data, 0 ) ) );
+       rnd512( state, mm128_bswap_32( casti_m128i( data, 1 ) ),
+                      mm128_bswap_32( casti_m128i( data, 0 ) ) );
        data += MSG_BLOCK_BYTE_LEN;
     }
 
@@ -282,7 +295,7 @@ HashReturn update_luffa( hashState_luffa *state, const BitSequence *data,
     if ( state->rembytes  )
     {
       // remaining data bytes
-      casti_m128i( state->buffer, 0 ) = mm_bswap_32( cast_m128i( data ) );
+      casti_m128i( state->buffer, 0 ) = mm128_bswap_32( cast_m128i( data ) );
       // padding of partial block
       casti_m128i( state->buffer, 1 ) =
             _mm_set_epi8( 0,0,0,0, 0,0,0,0, 0,0,0,0, 0x80,0,0,0 );
@@ -324,8 +337,8 @@ HashReturn update_and_final_luffa( hashState_luffa *state, BitSequence* output,
     // full blocks
     for ( i = 0; i < blocks; i++ )
     {
-       rnd512( state, mm_bswap_32( casti_m128i( data, 1 ) ),
-                      mm_bswap_32( casti_m128i( data, 0 ) ) );
+       rnd512( state, mm128_bswap_32( casti_m128i( data, 1 ) ),
+                      mm128_bswap_32( casti_m128i( data, 0 ) ) );
        data += MSG_BLOCK_BYTE_LEN;
     }
 
@@ -334,7 +347,7 @@ HashReturn update_and_final_luffa( hashState_luffa *state, BitSequence* output,
     {
       // padding of partial block
       rnd512( state, _mm_set_epi8( 0,0,0,0, 0,0,0,0, 0,0,0,0, 0x80,0,0,0 ),
-                      mm_bswap_32( cast_m128i( data ) ) );
+                      mm128_bswap_32( cast_m128i( data ) ) );
     }
     else
     {
@@ -587,8 +600,8 @@ static void finalization512( hashState_luffa *state, uint32 *b )
     _mm_store_si128((__m128i*)&hash[0], t[0]);
     _mm_store_si128((__m128i*)&hash[4], t[1]);
 
-    casti_m128i( b, 0 ) = mm_bswap_32( casti_m128i( hash, 0 ) );
-    casti_m128i( b, 1 ) = mm_bswap_32( casti_m128i( hash, 1 ) );
+    casti_m128i( b, 0 ) = mm128_bswap_32( casti_m128i( hash, 0 ) );
+    casti_m128i( b, 1 ) = mm128_bswap_32( casti_m128i( hash, 1 ) );
 
     rnd512( state, zero, zero );
 
@@ -609,8 +622,8 @@ static void finalization512( hashState_luffa *state, uint32 *b )
     _mm_store_si128((__m128i*)&hash[0], t[0]);
     _mm_store_si128((__m128i*)&hash[4], t[1]);
 
-    casti_m128i( b, 2 ) = mm_bswap_32( casti_m128i( hash, 0 ) );
-    casti_m128i( b, 3 ) = mm_bswap_32( casti_m128i( hash, 1 ) );
+    casti_m128i( b, 2 ) = mm128_bswap_32( casti_m128i( hash, 0 ) );
+    casti_m128i( b, 3 ) = mm128_bswap_32( casti_m128i( hash, 1 ) );
 }
 #endif
 

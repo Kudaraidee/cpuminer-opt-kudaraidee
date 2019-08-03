@@ -40,7 +40,7 @@ void veltor_4way_hash( void *output, const void *input )
 
      skein512_4way( &ctx.skein, input, 80 );
      skein512_4way_close( &ctx.skein, vhash );
-     mm256_deinterleave_4x64( hash0, hash1, hash2, hash3, vhash, 512 );
+     dintrlv_4x64( hash0, hash1, hash2, hash3, vhash, 512 );
 
      sph_shavite512( &ctx.shavite, hash0, 64 );
      sph_shavite512_close( &ctx.shavite, hash0 );
@@ -54,10 +54,10 @@ void veltor_4way_hash( void *output, const void *input )
      sph_shavite512( &ctx.shavite, hash3, 64 );
      sph_shavite512_close( &ctx.shavite, hash3 );
 
-     mm_interleave_4x32( vhash, hash0, hash1, hash2, hash3, 512 );
+     intrlv_4x32( vhash, hash0, hash1, hash2, hash3, 512 );
      shabal512_4way( &ctx.shabal, vhash, 64 );
      shabal512_4way_close( &ctx.shabal, vhash );
-     mm_deinterleave_4x32( hash0, hash1, hash2, hash3, vhash, 512 );
+     dintrlv_4x32( hash0, hash1, hash2, hash3, vhash, 512 );
 
      sph_gost512( &ctx.gost, hash0, 64 );
      sph_gost512_close( &ctx.gost, hash0 );
@@ -77,37 +77,29 @@ void veltor_4way_hash( void *output, const void *input )
      memcpy( output+96, hash3, 32 );
 }
 
-int scanhash_veltor_4way( int thr_id, struct work *work, uint32_t max_nonce,
-                          uint64_t *hashes_done )
+int scanhash_veltor_4way( struct work *work, uint32_t max_nonce,
+                          uint64_t *hashes_done, struct thr_info *mythr )
 {
      uint32_t hash[4*8] __attribute__ ((aligned (64)));
      uint32_t vdata[24*4] __attribute__ ((aligned (64)));
-     uint32_t endiandata[20] __attribute__((aligned(64)));
      uint32_t *pdata = work->data;
      uint32_t *ptarget = work->target;
      const uint32_t Htarg = ptarget[7];
      const uint32_t first_nonce = pdata[19];
      uint32_t n = first_nonce;
-     uint32_t *nonces = work->nonces;
-     int num_found = 0;
-     uint32_t *noncep = vdata + 73;   // 9*8 + 1
+     __m256i  *noncev = (__m256i*)vdata + 9;   // aligned
+     int thr_id = mythr->id;  // thr_id arg is deprecated
      volatile uint8_t *restart = &(work_restart[thr_id].restart);
 
      if ( opt_benchmark )
         ptarget[7] = 0x0cff;
-     for ( int i=0; i < 19; i++ )
-     {
-        be32enc( &endiandata[i], pdata[i] );
-     }
 
-     uint64_t *edata = (uint64_t*)endiandata;
-     mm256_interleave_4x64( (uint64_t*)vdata, edata, edata, edata, edata, 640 );
+     mm256_bswap32_intrlv80_4x64( vdata, pdata );
+
      do
      {
-         be32enc( noncep,   n   );
-         be32enc( noncep+2, n+1 );
-         be32enc( noncep+4, n+2 );
-         be32enc( noncep+6, n+3 );
+         *noncev = mm256_intrlv_blend_32( mm256_bswap_32(
+                 _mm256_set_epi32( n+3, 0, n+2, 0, n+1, 0, n, 0 ) ), *noncev );
 
          veltor_4way_hash( hash, vdata );
          pdata[19] = n;
@@ -116,13 +108,12 @@ int scanhash_veltor_4way( int thr_id, struct work *work, uint32_t max_nonce,
          if ( (hash+(i<<3))[7] <= Htarg && fulltest( hash+(i<<3), ptarget ) )
          {
             pdata[19] = n+i;
-            nonces[ num_found++ ] = n+i;
-            work_set_target_ratio( work, hash+(i<<3) );
+            submit_lane_solution( work, hash+(i<<3), mythr, i );
          }
          n += 4;
-     } while ( ( num_found == 0 ) && ( n < max_nonce ) && !(*restart) );
+     } while ( ( n < max_nonce ) && !(*restart) );
      *hashes_done = n - first_nonce + 1;
-     return num_found;
+     return 0;
 }
 
 #endif

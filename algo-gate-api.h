@@ -2,8 +2,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "miner.h"
-#include "avxdefs.h"
-#include "interleave.h"
+#include "simd-utils.h"
 
 /////////////////////////////
 ////
@@ -109,8 +108,15 @@ inline bool set_excl ( set_t a, set_t b ) { return (a & b) == 0; }
 
 typedef struct
 {
+// special case, only one target, provides a callback for scanhash to
+// submit work with less overhead.
+// bool (*submit_work )             ( struct thr_info*, const struct work* );
+
 // mandatory functions, must be overwritten
-int ( *scanhash ) ( int, struct work*, uint32_t, uint64_t* );
+// Added a 5th arg for the thread_info structure to replace the int thr id
+// in the first arg. Both will co-exist during the trasition.
+//int ( *scanhash ) ( int, struct work*, uint32_t, uint64_t* );
+int ( *scanhash ) ( struct work*, uint32_t, uint64_t*, struct thr_info* );
 
 // optional unsafe, must be overwritten if algo uses function
 void ( *hash )     ( void*, const void*, uint32_t ) ;
@@ -122,7 +128,7 @@ void ( *stratum_gen_work )       ( struct stratum_ctx*, struct work* );
 void ( *get_new_work )           ( struct work*, struct work*, int, uint32_t*,
                                    bool );
 uint32_t *( *get_nonceptr )      ( uint32_t* );
-void ( *display_extra_data )     ( struct work*, uint64_t* );
+void ( *decode_extra_data )      ( struct work*, uint64_t* );
 void ( *wait_for_diff )          ( struct stratum_ctx* );
 int64_t ( *get_max64 )           ();
 bool ( *work_decode )            ( const json_t*, struct work* );
@@ -131,7 +137,7 @@ bool ( *submit_getwork_result )  ( CURL*, struct work* );
 void ( *gen_merkle_root )        ( char*, struct stratum_ctx* );
 void ( *build_extraheader )      ( struct work*, struct stratum_ctx* );
 void ( *build_block_header )     ( struct work*, uint32_t, uint32_t*,
-                                   uint32_t*, uint32_t, uint32_t );
+	                           uint32_t*, uint32_t, uint32_t );
 void ( *build_stratum_request )  ( char*, struct work*, struct stratum_ctx* );
 char* ( *malloc_txs_request )    ( struct work* );
 void ( *set_work_data_endian )   ( struct work* );
@@ -142,12 +148,11 @@ bool ( *do_this_thread )         ( int );
 json_t* (*longpoll_rpc_call)     ( CURL*, int*, char* );
 bool ( *stratum_handle_response )( json_t* );
 set_t optimizations;
+int  ( *get_work_data_size )     ();
 int  ntime_index;
 int  nbits_index;
 int  nonce_index;            // use with caution, see warning below
-int  work_data_size;
 int  work_cmp_size;
-
 } algo_gate_t;
 
 extern algo_gate_t algo_gate;
@@ -187,6 +192,15 @@ void four_way_not_tested();
 
 // allways returns failure
 int null_scanhash();
+
+// Allow algos to submit from scanhash loop.
+bool submit_solution( struct work *work, void *hash,
+                      struct thr_info *thr );
+bool submit_lane_solution( struct work *work, void *hash,
+                          struct thr_info *thr, int lane );
+
+ 
+bool submit_work( struct thr_info *thr, const struct work *work_in );
 
 // displays warning
 void null_hash    ();
@@ -242,8 +256,8 @@ void set_work_data_big_endian( struct work *work );
 double std_calc_network_diff( struct work *work );
 
 void std_build_block_header( struct work* g_work, uint32_t version,
-                             uint32_t *prevhash, uint32_t *merkle_root,
-                             uint32_t ntime, uint32_t nbits );
+	                     uint32_t *prevhash,  uint32_t *merkle_root,
+   	                     uint32_t ntime, uint32_t nbits );
 
 void std_build_extraheader( struct work *work, struct stratum_ctx *sctx );
 
@@ -255,6 +269,8 @@ bool jr2_stratum_handle_response( json_t *val );
 
 bool std_ready_to_mine( struct work* work, struct stratum_ctx* stratum,
                         int thr_id );
+
+int std_get_work_data_size();
 
 // Gate admin functions
 

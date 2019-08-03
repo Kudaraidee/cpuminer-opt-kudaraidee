@@ -28,9 +28,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <mm_malloc.h>
 
 #include "core.h"
-#include "thread.h"
+#include "argon2d_thread.h"
 #include "../blake2/blake2.h"
 #include "../blake2/blake2-impl.h"
 
@@ -99,7 +100,8 @@ int allocate_memory(const argon2_context *context, uint8_t **memory,
     if (context->allocate_cbk) {
         (context->allocate_cbk)(memory, memory_size);
     } else {
-        *memory = malloc(memory_size);
+        *memory = _mm_malloc( memory_size, 64 );
+//        *memory = malloc(memory_size);
     }
 
     if (*memory == NULL) {
@@ -112,11 +114,12 @@ int allocate_memory(const argon2_context *context, uint8_t **memory,
 void free_memory(const argon2_context *context, uint8_t *memory,
                  size_t num, size_t size) {
     size_t memory_size = num*size;
-    clear_internal_memory(memory, memory_size);
+//    clear_internal_memory(memory, memory_size);
     if (context->free_cbk) {
         (context->free_cbk)(memory, memory_size);
     } else {
-        free(memory);
+//        free(memory);
+        _mm_free( memory );
     }
 }
 
@@ -137,7 +140,7 @@ void NOT_OPTIMIZED secure_wipe_memory(void *v, size_t n) {
 int FLAG_clear_internal_memory = 0;
 void clear_internal_memory(void *v, size_t n) {
   if (FLAG_clear_internal_memory && v) {
-    secure_wipe_memory(v, n);
+//    secure_wipe_memory(v, n);
   }
 }
 
@@ -559,7 +562,7 @@ void initial_hash(uint8_t *blockhash, argon2_context *context,
                        context->pwdlen);
 
         if (context->flags & ARGON2_FLAG_CLEAR_PASSWORD) {
-            secure_wipe_memory(context->pwd, context->pwdlen);
+//            secure_wipe_memory(context->pwd, context->pwdlen);
             context->pwdlen = 0;
         }
     }
@@ -580,7 +583,7 @@ void initial_hash(uint8_t *blockhash, argon2_context *context,
                        context->secretlen);
 
         if (context->flags & ARGON2_FLAG_CLEAR_SECRET) {
-            secure_wipe_memory(context->secret, context->secretlen);
+//            secure_wipe_memory(context->secret, context->secretlen);
             context->secretlen = 0;
         }
     }

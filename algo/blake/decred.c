@@ -52,12 +52,14 @@ void decred_hash_simple(void *state, const void *input)
         sph_blake256_close(&ctx, state);
 }
 
-int scanhash_decred(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
+int scanhash_decred( struct work *work, uint32_t max_nonce,
+               uint64_t *hashes_done, struct thr_info *mythr )
 {
         uint32_t _ALIGN(64) endiandata[48];
         uint32_t _ALIGN(64) hash32[8];
         uint32_t *pdata = work->data;
         uint32_t *ptarget = work->target;
+   int thr_id = mythr->id;  // thr_id arg is deprecated
 
 //        #define DCR_NONCE_OFT32 35
 
@@ -268,7 +270,7 @@ bool register_decred_algo( algo_gate_t* gate )
   gate->hash                  = (void*)&decred_hash;
   gate->get_nonceptr          = (void*)&decred_get_nonceptr;
   gate->get_max64             = (void*)&get_max64_0x3fffffLL;
-  gate->display_extra_data    = (void*)&decred_decode_extradata;
+  gate->decode_extra_data     = (void*)&decred_decode_extradata;
   gate->build_stratum_request = (void*)&decred_be_build_stratum_request;
   gate->work_decode           = (void*)&std_be_work_decode;
   gate->submit_getwork_result = (void*)&std_be_submit_getwork_result;

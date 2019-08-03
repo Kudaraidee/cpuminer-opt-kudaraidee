@@ -4,24 +4,17 @@
 #include <string.h>
 #include <stdio.h>
 #include "sph_ripemd.h"
-#include "algo/sha/sph_sha2.h"
 #include <openssl/sha.h>
 
 void lbry_hash(void* output, const void* input)
 {
-#ifndef USE_SPH_SHA
    SHA256_CTX              ctx_sha256 __attribute__ ((aligned (64)));
    SHA512_CTX              ctx_sha512 __attribute__ ((aligned (64)));
-#else
-   sph_sha256_context      ctx_sha256 __attribute__ ((aligned (64)));
-   sph_sha512_context      ctx_sha512 __attribute__ ((aligned (64)));
-#endif
    sph_ripemd160_context   ctx_ripemd __attribute__ ((aligned (64)));
    uint32_t _ALIGN(64) hashA[16];
    uint32_t _ALIGN(64) hashB[16];
    uint32_t _ALIGN(64) hashC[16];
 
-#ifndef USE_SPH_SHA
    SHA256_Init( &ctx_sha256 );
    SHA256_Update( &ctx_sha256, input, 112 );
    SHA256_Final( (unsigned char*) hashA, &ctx_sha256 );
@@ -33,19 +26,6 @@ void lbry_hash(void* output, const void* input)
    SHA512_Init( &ctx_sha512 );
    SHA512_Update( &ctx_sha512, hashA, 32 );
    SHA512_Final( (unsigned char*) hashA, &ctx_sha512 );
-#else
-   sph_sha256_init( &ctx_sha256 );
-   sph_sha256 ( &ctx_sha256, input, 112 );
-   sph_sha256_close( &ctx_sha256, hashA );
-
-   sph_sha256_init( &ctx_sha256 );
-   sph_sha256 ( &ctx_sha256, hashA, 32 );
-   sph_sha256_close( &ctx_sha256, hashA );
-
-   sph_sha512_init( &ctx_sha512 );
-   sph_sha512 ( &ctx_sha512, hashA, 32 );
-   sph_sha512_close( &ctx_sha512, hashA );
-#endif
 
    sph_ripemd160_init( &ctx_ripemd );
    sph_ripemd160 ( &ctx_ripemd, hashA, 32 );
@@ -55,7 +35,6 @@ void lbry_hash(void* output, const void* input)
    sph_ripemd160 ( &ctx_ripemd, hashA+8, 32 );
    sph_ripemd160_close( &ctx_ripemd, hashC );
 
-#ifndef USE_SPH_SHA
    SHA256_Init( &ctx_sha256 );
    SHA256_Update( &ctx_sha256, hashB, 20 );
    SHA256_Update( &ctx_sha256, hashC, 20 );
@@ -64,27 +43,19 @@ void lbry_hash(void* output, const void* input)
    SHA256_Init( &ctx_sha256 );
    SHA256_Update( &ctx_sha256, hashA, 32 );
    SHA256_Final( (unsigned char*) hashA, &ctx_sha256 );
-#else
-   sph_sha256_init( &ctx_sha256 );
-   sph_sha256 ( &ctx_sha256, hashB, 20 );
-   sph_sha256 ( &ctx_sha256, hashC, 20 );
-   sph_sha256_close( &ctx_sha256, hashA );
 
-   sph_sha256_init( &ctx_sha256 );
-   sph_sha256 ( &ctx_sha256, hashA, 32 );
-   sph_sha256_close( &ctx_sha256, hashA );
-#endif
    memcpy( output, hashA, 32 );
 }
 
-int scanhash_lbry( int thr_id, struct work *work, uint32_t max_nonce,
-                   uint64_t *hashes_done)
+int scanhash_lbry( struct work *work, uint32_t max_nonce,
+                   uint64_t *hashes_done, struct thr_info *mythr)
 {
   uint32_t *pdata = work->data;
   uint32_t *ptarget = work->target;
 	uint32_t n = pdata[27] - 1;
 	const uint32_t first_nonce = pdata[27];
 	const uint32_t Htarg = ptarget[7];
+   int thr_id = mythr->id;  // thr_id arg is deprecated
 
 	uint32_t hash64[8] __attribute__((aligned(64)));
 	uint32_t endiandata[32] __attribute__ ((aligned (64)));

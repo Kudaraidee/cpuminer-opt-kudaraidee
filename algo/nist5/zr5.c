@@ -144,8 +144,8 @@ static const int arrOrder[][4] =
 	memcpy(state, hash, 32);
 }
 
-int scanhash_zr5( int thr_id, struct work *work,
-                   uint32_t max_nonce, unsigned long *hashes_done)
+int scanhash_zr5( struct work *work, uint32_t max_nonce,
+                  unsigned long *hashes_done, struct thr_info *mythr )
 {
   uint32_t *pdata = work->data;
   uint32_t *ptarget = work->target;
@@ -154,6 +154,7 @@ int scanhash_zr5( int thr_id, struct work *work,
   const uint32_t version = pdata[0] & (~POK_DATA_MASK);
   const uint32_t first_nonce = pdata[19];
   uint32_t nonce = first_nonce;
+  int thr_id = mythr->id;  // thr_id arg is deprecated
 
   memcpy(tmpdata, pdata, 80);
 
@@ -219,6 +220,8 @@ void zr5_display_pok( struct work* work )
         applog(LOG_BLUE, "POK received: %08xx", work->data[0] );
 }
 
+int zr5_get_work_data_size() { return 80; }
+
 bool register_zr5_algo( algo_gate_t* gate )
 {
     gate->optimizations = SSE2_OPT | AES_OPT;
@@ -227,12 +230,12 @@ bool register_zr5_algo( algo_gate_t* gate )
     gate->scanhash              = (void*)&scanhash_zr5;
     gate->hash                  = (void*)&zr5hash;
     gate->get_max64             = (void*)&zr5_get_max64;
-    gate->display_extra_data    = (void*)&zr5_display_pok;
+    gate->decode_extra_data     = (void*)&zr5_display_pok;
     gate->build_stratum_request = (void*)&std_be_build_stratum_request;
     gate->work_decode           = (void*)&std_be_work_decode;
     gate->submit_getwork_result = (void*)&std_be_submit_getwork_result;
     gate->set_work_data_endian  = (void*)&set_work_data_big_endian;
-    gate->work_data_size        = 80;
+    gate->get_work_data_size    = (void*)&zr5_get_work_data_size;
     gate->work_cmp_size         = 72;
     return true;
 };

@@ -1303,23 +1303,16 @@ yescrypt_kdf(const yescrypt_shared_t * shared, yescrypt_local_t * local,
 		S = (uint8_t *)XY + XY_size;
 
 	if (t || flags) {
-#ifndef USE_SPH_SHA
 		SHA256_CTX ctx;
 		SHA256_Init(&ctx);
 		SHA256_Update(&ctx, passwd, passwdlen);
 		SHA256_Final(sha256, &ctx);
-#else
-                SHA256_CTX_Y ctx;
-                SHA256_Init_Y(&ctx);
-                SHA256_Update_Y(&ctx, passwd, passwdlen);
-                SHA256_Final_Y(sha256, &ctx);
-#endif
 		passwd = sha256;
 		passwdlen = sizeof(sha256);
 	}
 
 	/* 1: (B_0 ... B_{p-1}) <-- PBKDF2(P, S, 1, p * MFLen) */
-	PBKDF2_SHA256(passwd, passwdlen, salt, saltlen, 1, B, B_size);
+	PBKDF2_SHA256_Y(passwd, passwdlen, salt, saltlen, 1, B, B_size);
 
 	if (t || flags)
 		memcpy(sha256, B, sizeof(sha256));
@@ -1349,7 +1342,7 @@ yescrypt_kdf(const yescrypt_shared_t * shared, yescrypt_local_t * local,
 	}
 
 	/* 5: DK <-- PBKDF2(P, B, 1, dkLen) */
-	PBKDF2_SHA256(passwd, passwdlen, B, B_size, 1, buf, buflen);
+	PBKDF2_SHA256_Y(passwd, passwdlen, B, B_size, 1, buf, buflen);
 
 	/*
 	 * Except when computing classic scrypt, allow all computation so far
@@ -1361,28 +1354,21 @@ yescrypt_kdf(const yescrypt_shared_t * shared, yescrypt_local_t * local,
 	if ((t || flags) && buflen == sizeof(sha256)) {
 	   /* Compute ClientKey */
 	   {
-		HMAC_SHA256_CTX ctx;
-		HMAC_SHA256_Init(&ctx, buf, buflen);
+		HMAC_SHA256_CTX_Y ctx;
+		HMAC_SHA256_Init_Y(&ctx, buf, buflen);
                 if ( yescrypt_client_key )
-                    HMAC_SHA256_Update( &ctx, (uint8_t*)yescrypt_client_key,
+                    HMAC_SHA256_Update_Y( &ctx, (uint8_t*)yescrypt_client_key,
                                         yescrypt_client_key_len );
                 else
-                    HMAC_SHA256_Update( &ctx, salt, saltlen );
-		HMAC_SHA256_Final(sha256, &ctx);
+                    HMAC_SHA256_Update_Y( &ctx, salt, saltlen );
+		HMAC_SHA256_Final_Y(sha256, &ctx);
 	   }
 	   /* Compute StoredKey */
 	   {
-#ifndef USE_SPH_SHA
 		SHA256_CTX ctx;
 		SHA256_Init(&ctx);
 		SHA256_Update(&ctx, sha256, sizeof(sha256));
 		SHA256_Final(buf, &ctx);
-#else
-                SHA256_CTX_Y ctx;
-                SHA256_Init_Y(&ctx);
-                SHA256_Update_Y(&ctx, sha256, sizeof(sha256));
-                SHA256_Final_Y(buf, &ctx);
-#endif
 	   }
 	}
 

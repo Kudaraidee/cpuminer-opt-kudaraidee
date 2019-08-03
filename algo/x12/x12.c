@@ -17,55 +17,50 @@
 #include "algo/simd/sph_simd.h"
 #include "algo/echo/sph_echo.h"
 #include "algo/hamsi/sph_hamsi.h"
-//#include "algo/fugue/sph_fugue.h"
-
 #include "algo/luffa/luffa_for_sse2.h" 
-#include "algo/cubehash/sse2/cubehash_sse2.h"
+#include "algo/cubehash/cubehash_sse2.h"
 #include "algo/simd/nist.h"
 #include "algo/blake/sse2/blake.c"   
 #include "algo/bmw/sse2/bmw.c"
 #include "algo/keccak/sse2/keccak.c"
 #include "algo/skein/sse2/skein.c"
 #include "algo/jh/sse2/jh_sse2_opt64.h"
-
-#ifndef NO_AES_NI
+#if defined(__AES__)
   #include "algo/groestl/aes_ni/hash-groestl.h"
   #include "algo/echo/aes_ni/hash_api.h"
 #endif
 
 typedef struct {
-#ifdef NO_AES_NI
-        sph_groestl512_context   groestl;
-        sph_echo512_context      echo;
-#else
+#if defined(__AES__)
         hashState_groestl       groestl;
         hashState_echo          echo;
+#else
+        sph_groestl512_context   groestl;
+        sph_echo512_context      echo;
 #endif
         hashState_luffa         luffa;
         cubehashParam           cubehash;
         sph_shavite512_context  shavite;
         hashState_sd            simd;
         sph_hamsi512_context    hamsi;
-//        sph_fugue512_context    fugue;
 } x12_ctx_holder;
 
 x12_ctx_holder x12_ctx;
 
 void init_x12_ctx()
 {
-#ifdef NO_AES_NI
-        sph_groestl512_init(&x12_ctx.groestl);
-        sph_echo512_init(&x12_ctx.echo);
-#else
+#if defined(__AES__)
         init_echo( &x12_ctx.echo, 512 );
         init_groestl (&x12_ctx.groestl, 64 );
+#else
+        sph_groestl512_init(&x12_ctx.groestl);
+        sph_echo512_init(&x12_ctx.echo);
 #endif
         init_luffa( &x12_ctx.luffa, 512 );
         cubehashInit( &x12_ctx.cubehash, 512, 16, 32 );
         sph_shavite512_init( &x12_ctx.shavite );
         init_sd( &x12_ctx.simd, 512 );
         sph_hamsi512_init( &x12_ctx.hamsi );
-//        sph_fugue512_init( &x13_ctx.fugue );
 };
 
 void x12hash(void *output, const void *input)
@@ -108,12 +103,12 @@ void x12hash(void *output, const void *input)
         
         //---groetl----
 
-#ifdef NO_AES_NI
-        sph_groestl512 (&ctx.groestl, hash, 64);
-        sph_groestl512_close(&ctx.groestl, hash);
-#else
+#if defined(__AES__)
         update_and_final_groestl( &ctx.groestl, (char*)hash,
                                   (const char*)hash, 512 );
+#else
+        sph_groestl512 (&ctx.groestl, hash, 64);
+        sph_groestl512_close(&ctx.groestl, hash);
 #endif
 
         //---skein4---
@@ -153,29 +148,24 @@ void x12hash(void *output, const void *input)
 
         //11---echo---
 
-#ifdef NO_AES_NI
-        sph_echo512(&ctx.echo, hash, 64);
-        sph_echo512_close(&ctx.echo, hashB);
-#else
+#if defined(__AES__)
         update_final_echo ( &ctx.echo, (BitSequence *)hashB,
                             (const BitSequence *)hash, 512 );
+#else
+        sph_echo512(&ctx.echo, hash, 64);
+        sph_echo512_close(&ctx.echo, hashB);
 #endif
 
         // 12 Hamsi
 	sph_hamsi512(&ctx.hamsi, hashB, 64);
 	sph_hamsi512_close(&ctx.hamsi, hash);
 
-/*
-        // 13 Fugue
-	sph_fugue512(&ctx.fugue, hash, 64);
-	sph_fugue512_close(&ctx.fugue, hashB);
-*/
         asm volatile ("emms");
 	memcpy(output, hashB, 32);
 }
 
-int scanhash_x12(int thr_id, struct work *work, uint32_t max_nonce,
-                               uint64_t *hashes_done)
+int scanhash_x12( struct work *work, uint32_t max_nonce,
+                               uint64_t *hashes_done, struct thr_info *mythr )
 {
         uint32_t endiandata[20] __attribute__((aligned(64)));
         uint32_t hash64[8] __attribute__((aligned(64)));
@@ -183,6 +173,7 @@ int scanhash_x12(int thr_id, struct work *work, uint32_t max_nonce,
         uint32_t *ptarget = work->target;
 	uint32_t n = pdata[19] - 1;
 	const uint32_t first_nonce = pdata[19];
+   int thr_id = mythr->id;  // thr_id arg is deprecated
 	const uint32_t Htarg = ptarget[7];
 
 	uint64_t htmax[] = {

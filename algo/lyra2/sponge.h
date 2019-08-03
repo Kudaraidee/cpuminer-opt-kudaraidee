@@ -23,7 +23,7 @@
 #define SPONGE_H_
 
 #include <stdint.h>
-#include "avxdefs.h"
+#include "simd-utils.h"
 
 #if defined(__GNUC__)
 #define ALIGN __attribute__ ((aligned(32)))
@@ -48,6 +48,10 @@ static inline uint64_t rotr64( const uint64_t w, const unsigned c ){
     return ( w >> c ) | ( w << ( 64 - c ) );
 }
 
+// serial data is only 32 bytes so AVX2 is the limit for that dimension.
+// However, 2 way parallel looks trivial to code for AVX512 except for
+// a data dependency with rowa.
+
 #if defined __AVX2__
 // only available with avx2
 
@@ -55,7 +59,7 @@ static inline uint64_t rotr64( const uint64_t w, const unsigned c ){
 // returns void, updates all args
 #define G_4X64(a,b,c,d) \
    a = _mm256_add_epi64( a, b ); \
-   d = mm256_ror_64( _mm256_xor_si256( d, a), 32 ); \
+   d = mm256_ror_64( _mm256_xor_si256( d, a ), 32 ); \
    c = _mm256_add_epi64( c, d ); \
    b = mm256_ror_64( _mm256_xor_si256( b, c ), 24 ); \
    a = _mm256_add_epi64( a, b ); \
@@ -65,13 +69,13 @@ static inline uint64_t rotr64( const uint64_t w, const unsigned c ){
 
 #define LYRA_ROUND_AVX2( s0, s1, s2, s3 ) \
    G_4X64( s0, s1, s2, s3 ); \
-   s1 = mm256_ror256_1x64( s1); \
+   s1 = mm256_ror_1x64( s1); \
    s2 = mm256_swap_128( s2 ); \
-   s3 = mm256_rol256_1x64( s3 ); \
+   s3 = mm256_rol_1x64( s3 ); \
    G_4X64( s0, s1, s2, s3 ); \
-   s1 = mm256_rol256_1x64( s1 ); \
+   s1 = mm256_rol_1x64( s1 ); \
    s2 = mm256_swap_128( s2 ); \
-   s3 = mm256_ror256_1x64( s3 );
+   s3 = mm256_ror_1x64( s3 );
 
 #define LYRA_12_ROUNDS_AVX2( s0, s1, s2, s3 ) \
    LYRA_ROUND_AVX2( s0, s1, s2, s3 ) \
@@ -87,31 +91,31 @@ static inline uint64_t rotr64( const uint64_t w, const unsigned c ){
    LYRA_ROUND_AVX2( s0, s1, s2, s3 ) \
    LYRA_ROUND_AVX2( s0, s1, s2, s3 ) \
 
-#elif defined(__SSE4_2__)
+#elif defined(__SSE2__)
 
 // process 2 columns in parallel
 // returns void, all args updated
 #define G_2X64(a,b,c,d) \
    a = _mm_add_epi64( a, b ); \
-   d = mm_ror_64( _mm_xor_si128( d, a), 32 ); \
+   d = mm128_ror_64( _mm_xor_si128( d, a), 32 ); \
    c = _mm_add_epi64( c, d ); \
-   b = mm_ror_64( _mm_xor_si128( b, c ), 24 ); \
+   b = mm128_ror_64( _mm_xor_si128( b, c ), 24 ); \
    a = _mm_add_epi64( a, b ); \
-   d = mm_ror_64( _mm_xor_si128( d, a ), 16 ); \
+   d = mm128_ror_64( _mm_xor_si128( d, a ), 16 ); \
    c = _mm_add_epi64( c, d ); \
-   b = mm_ror_64( _mm_xor_si128( b, c ), 63 );
+   b = mm128_ror_64( _mm_xor_si128( b, c ), 63 );
 
 #define LYRA_ROUND_AVX(s0,s1,s2,s3,s4,s5,s6,s7) \
    G_2X64( s0, s2, s4, s6 ); \
    G_2X64( s1, s3, s5, s7 ); \
-   mm_ror256_1x64( s2, s3 ); \
-   mm_swap_128( s4, s5 ); \
-   mm_rol256_1x64( s6, s7 ); \
+   mm128_ror1x64_256( s2, s3 ); \
+   mm128_swap128_256( s4, s5 ); \
+   mm128_rol1x64_256( s6, s7 ); \
    G_2X64( s0, s2, s4, s6 ); \
    G_2X64( s1, s3, s5, s7 ); \
-   mm_rol256_1x64( s2, s3 ); \
-   mm_swap_128( s4, s5 ); \
-   mm_ror256_1x64( s6, s7 );
+   mm128_rol1x64_256( s2, s3 ); \
+   mm128_swap128_256( s4, s5 ); \
+   mm128_ror1x64_256( s6, s7 );
 
 #define LYRA_12_ROUNDS_AVX(s0,s1,s2,s3,s4,s5,s6,s7) \
    LYRA_ROUND_AVX(s0,s1,s2,s3,s4,s5,s6,s7) \
@@ -128,7 +132,7 @@ static inline uint64_t rotr64( const uint64_t w, const unsigned c ){
    LYRA_ROUND_AVX(s0,s1,s2,s3,s4,s5,s6,s7) \
 
 
-#endif // AVX2
+#endif // AVX2 else SSE2
 
 // Scalar
 //Blake2b's G function
@@ -166,7 +170,8 @@ void reducedSqueezeRow0(uint64_t* state, uint64_t* row, uint64_t nCols);
 
 //---- Absorbs
 void absorbBlock(uint64_t *state, const uint64_t *in);
-void absorbBlockBlake2Safe(uint64_t *state, const uint64_t *in);
+void absorbBlockBlake2Safe( uint64_t *state, const uint64_t *in,
+                            const uint64_t nBlocks, const uint64_t block_len );
 
 //---- Duplexes
 void reducedDuplexRow1(uint64_t *state, uint64_t *rowIn, uint64_t *rowOut, uint64_t nCols);

@@ -7,7 +7,6 @@
 #include <string.h>
 #include <float.h>
 #include <math.h>
-#include "algo/sha/sph_sha2.h"
 #include "algo/keccak/sph_keccak.h"
 #include "algo/haval/sph-haval.h"
 #include "algo/tiger/sph_tiger.h"
@@ -20,110 +19,94 @@
 #define EPS1 DBL_EPSILON
 #define EPS2 3.0e-11
 
-inline double exp_n(double xt)
+inline double exp_n( double xt )
 {
-    if(xt < -700.0)
+    if ( xt < -700.0 )
         return 0;
-    else if(xt > 700.0)
+    else if ( xt > 700.0 )
         return 1e200;
-    else if(xt > -0.8e-8 && xt < 0.8e-8)
-        return (1.0 + xt);
+    else if ( xt > -0.8e-8 && xt < 0.8e-8 )
+        return ( 1.0 + xt );
     else
-        return exp(xt);
+        return exp( xt );
 }
 
-inline double exp_n2(double x1, double x2)
+inline double exp_n2( double x1, double x2 )
 {
-    double p1 = -700., p2 = -37., p3 = -0.8e-8, p4 = 0.8e-8, p5 = 37., p6 = 700.;
+    double p1 = -700., p2 = -37., p3 = -0.8e-8, p4 = 0.8e-8,
+           p5 = 37., p6 = 700.;
     double xt = x1 - x2;
-    if (xt < p1+1.e-200)
+    if ( xt < p1+1.e-200 )
         return 1.;
-    else if (xt > p1 && xt < p2 + 1.e-200)
+    else if ( xt > p1 && xt < p2 + 1.e-200 )
         return ( 1. - exp(xt) );
-    else if (xt > p2 && xt < p3 + 1.e-200)
-        return ( 1. / (1. + exp(xt)) );
-    else if (xt > p3 && xt < p4)
+    else if ( xt > p2 && xt < p3 + 1.e-200 )
+        return ( 1. / ( 1. + exp(xt) ) );
+    else if ( xt > p3 && xt < p4 )
         return ( 1. / (2. + xt) );
-    else if (xt > p4 - 1.e-200 && xt < p5)
-        return ( exp(-xt) / (1. + exp(-xt)) );
-    else if (xt > p5 - 1.e-200 && xt < p6)
+    else if ( xt > p4 - 1.e-200 && xt < p5 )
+        return ( exp(-xt) / ( 1. + exp(-xt) ) );
+    else if ( xt > p5 - 1.e-200 && xt < p6 )
         return ( exp(-xt) );
-    else if (xt > p6 - 1.e-200)
+    else if ( xt > p6 - 1.e-200 )
         return 0.;
 }
 
-double swit2_(double wvnmb)
+double swit2_( double wvnmb )
 {
-    return pow( (5.55243*(exp_n(-0.3*wvnmb/15.762) - exp_n(-0.6*wvnmb/15.762)))*wvnmb, 0.5) 
-	  / 1034.66 * pow(sin(wvnmb/65.), 2.);
+    return pow( ( 5.55243 * ( exp_n( -0.3 * wvnmb / 15.762 )
+                - exp_n( -0.6 * wvnmb / 15.762 ) ) ) * wvnmb, 0.5 ) 
+	        / 1034.66 * pow( sin( wvnmb / 65. ), 2. );
 }
 
-
-double GaussianQuad_N2(const double x1, const double x2)
+double GaussianQuad_N2( const double x1, const double x2 )
 {
-    double s=0.0;
+    double s = 0.0;
     double x[6], w[6];
     //gauleg(a2, b2, x, w);
     
     double z1, z, xm, xl, pp, p3, p2, p1;
-    xm=0.5*(x2+x1);
-    xl=0.5*(x2-x1);
-    for(int i=1;i<=3;i++)
+    xm = 0.5 * ( x2 + x1 );
+    xl = 0.5 * ( x2 - x1 );
+    for( int i = 1; i <= 3; i++ )
     {
-		z = (i == 1) ? 0.909632 : -0.0;
-		z = (i == 2) ? 0.540641 : z;
-	    do
+      z = (i == 2) ? 0.540641 : ( (i == 1) ? 0.909632 : -0.0 );
+      do
 	    {
-			p1 = z;
-			p2 = 1;
-			p3 = 0;
-			
-			p3=1;
-			p2=z;
-			p1=((3.0 * z * z) - 1) / 2;
-			
-			p3=p2;
-			p2=p1;
-			p1=((5.0 * z * p2) - (2.0 * z)) / 3;
-			
-			p3=p2;
-			p2=p1;
-			p1=((7.0 * z * p2) - (3.0 * p3)) / 4;
-			
-			p3=p2;
-			p2=p1;
-			p1=((9.0 * z * p2) - (4.0 * p3)) / 5;
-		    
-		    pp=5*(z*p1-p2)/(z*z-1.0);
-		    z1=z;
-		    z=z1-p1/pp;
-	    } while (fabs(z-z1) > 3.0e-11);
+			p1 = ( ( 3.0 * z * z ) - 1 ) / 2;
+			p2 = p1;
+         p1 = ( ( 5.0 * z * p2 ) - ( 2.0 * z ) ) / 3;
+			p3 = p2;
+			p2 = p1;
+			p1 = ( ( 7.0 * z * p2 ) - ( 3.0 * p3 ) ) / 4;
+			p3 = p2;
+			p2 = p1;
+			p1 = ( ( 9.0 * z * p2 ) - ( 4.0 * p3 ) ) / 5;
+         pp = 5 * ( z * p1 - p2 ) / ( z * z - 1.0 );
+		   z1 = z;
+		   z = z1 - p1 / pp;
+	    } while ( fabs( z - z1 ) > 3.0e-11 );
 	    
-	    x[i]=xm-xl*z;
-	    x[5+1-i]=xm+xl*z;
-	    w[i]=2.0*xl/((1.0-z*z)*pp*pp);
-	    w[5+1-i]=w[i];
+	    x[i]       = xm - xl * z;
+	    x[ 5+1-i ] = xm + xl * z;
+	    w[i]       = 2.0 * xl / ( ( 1.0 - z * z ) * pp * pp );
+	    w[ 5+1-i ] = w [i];
     }
     
-    for(int j=1; j<=5; j++) s += w[j]*swit2_(x[j]);
+    for( int j = 1; j <= 5; j++ ) s += w[j] * swit2_( x[j] );
     
     return s;
 }
 
-uint32_t sw2_(int nnounce)
+uint32_t sw2_( int nnounce )
 {
-    double wmax = ((sqrt((double)(nnounce))*(1.+EPSa))/450+100);
-    return ((uint32_t)(GaussianQuad_N2(0., wmax)*(1.+EPSa)*1.e6));
+    double wmax = ( ( sqrt( (double)(nnounce) ) * ( 1.+EPSa ) ) / 450+100 );
+    return ( (uint32_t)( GaussianQuad_N2( 0., wmax ) * ( 1.+EPSa ) * 1.e6 ) );
 }
 
 typedef struct {
-#ifndef USE_SPH_SHA
     SHA256_CTX               sha256;
     SHA512_CTX               sha512;
-#else
-    sph_sha256_context       sha256;
-    sph_sha512_context       sha512;
-#endif
     sph_keccak512_context    keccak;
     sph_whirlpool_context    whirlpool;
     sph_haval256_5_context   haval;
@@ -135,13 +118,8 @@ m7m_ctx_holder m7m_ctx;
 
 void init_m7m_ctx()
 {
-#ifndef USE_SPH_SHA
     SHA256_Init( &m7m_ctx.sha256 );
     SHA512_Init( &m7m_ctx.sha512 );
-#else
-    sph_sha256_init( &m7m_ctx.sha256 );
-    sph_sha512_init( &m7m_ctx.sha512 );
-#endif
     sph_keccak512_init( &m7m_ctx.keccak );
     sph_whirlpool_init( &m7m_ctx.whirlpool );
     sph_haval256_5_init( &m7m_ctx.haval );
@@ -155,8 +133,8 @@ void init_m7m_ctx()
 #define NM7M 5
 #define SW_DIVS 5
 #define M7_MIDSTATE_LEN 76
-int scanhash_m7m_hash( int thr_id, struct work* work,
-                       uint64_t max_nonce, unsigned long *hashes_done )
+int scanhash_m7m_hash( struct work* work, uint64_t max_nonce,
+                       unsigned long *hashes_done, struct thr_info *mythr )
 {
     uint32_t *pdata = work->data;
     uint32_t *ptarget = work->target;
@@ -165,6 +143,7 @@ int scanhash_m7m_hash( int thr_id, struct work* work,
     uint32_t hash[8] __attribute__((aligned(64)));
     uint8_t bhash[7][64] __attribute__((aligned(64)));
     uint32_t n = pdata[19] - 1;
+    int thr_id = mythr->id;  // thr_id arg is deprecated
     uint32_t usw_, mpzscale;
     const uint32_t first_nonce = pdata[19];
     char data_str[161], hash_str[65], target_str[65];
@@ -176,28 +155,18 @@ int scanhash_m7m_hash( int thr_id, struct work* work,
 
     m7m_ctx_holder ctx1, ctx2 __attribute__ ((aligned (64)));
     memcpy( &ctx1, &m7m_ctx, sizeof(m7m_ctx) );
-#ifndef USE_SPH_SHA
     SHA256_CTX         ctxf_sha256;
-#else
-    sph_sha256_context ctxf_sha256;
-#endif
 
     memcpy(data, pdata, 80);
 
-#ifndef USE_SPH_SHA
     SHA256_Update(  &ctx1.sha256,    data, M7_MIDSTATE_LEN );
     SHA512_Update(  &ctx1.sha512,    data, M7_MIDSTATE_LEN );
-#else
-    sph_sha256(     &ctx1.sha256,    data, M7_MIDSTATE_LEN );
-    sph_sha512(     &ctx1.sha512,    data, M7_MIDSTATE_LEN );
-#endif
     sph_keccak512(  &ctx1.keccak,    data, M7_MIDSTATE_LEN );
     sph_whirlpool(  &ctx1.whirlpool, data, M7_MIDSTATE_LEN );
     sph_haval256_5( &ctx1.haval,     data, M7_MIDSTATE_LEN );
     sph_tiger(      &ctx1.tiger,     data, M7_MIDSTATE_LEN );
     sph_ripemd160(  &ctx1.ripemd,    data, M7_MIDSTATE_LEN );
 
-// the following calculations can be performed once and the results shared
     mpz_t magipi, magisw, product, bns0, bns1;
     mpf_t magifpi, magifpi0, mpt1, mpt2, mptmp, mpten;
     
@@ -222,22 +191,12 @@ int scanhash_m7m_hash( int thr_id, struct work* work,
 
         memcpy( &ctx2, &ctx1, sizeof(m7m_ctx) );
 
-// with 4 way can a single midstate be shared among lanes?
-// do sinlge round of midstate and inyerleave for final
-
-#ifndef USE_SPH_SHA
         SHA256_Update(  &ctx2.sha256, data_p64, 80 - M7_MIDSTATE_LEN );
         SHA256_Final( (unsigned char*) (bhash[0]), &ctx2.sha256 );
 
         SHA512_Update(  &ctx2.sha512, data_p64, 80 - M7_MIDSTATE_LEN );
         SHA512_Final( (unsigned char*) (bhash[1]), &ctx2.sha512 );
-#else
-        sph_sha256( &ctx2.sha256, data_p64, 80 - M7_MIDSTATE_LEN );
-        sph_sha256_close( &ctx2.sha256, (void*)(bhash[0]) );
 
-        sph_sha512( &ctx2.sha512, data_p64, 80 - M7_MIDSTATE_LEN );
-        sph_sha512_close( &ctx2.sha512, (void*)(bhash[1]) );
-#endif
         sph_keccak512( &ctx2.keccak, data_p64, 80 - M7_MIDSTATE_LEN );
         sph_keccak512_close( &ctx2.keccak, (void*)(bhash[2]) );
 
@@ -253,57 +212,48 @@ int scanhash_m7m_hash( int thr_id, struct work* work,
         sph_ripemd160( &ctx2.ripemd, data_p64, 80 - M7_MIDSTATE_LEN );
         sph_ripemd160_close( &ctx2.ripemd, (void*)(bhash[6]) );
 
-// 4 way serial
-	mpz_import(bns0, a, -1, p, -1, 0, bhash[0]);
+        mpz_import(bns0, a, -1, p, -1, 0, bhash[0]);
         mpz_set(bns1, bns0);
-	mpz_set(product, bns0);
-	for ( i=1; i < 7; i++ )
+	     mpz_set(product, bns0);
+	     for ( i=1; i < 7; i++ )
         {
-	    mpz_import(bns0, a, -1, p, -1, 0, bhash[i]);
-	    mpz_add(bns1, bns1, bns0);
-            mpz_mul(product, product, bns0);
+	        mpz_import(bns0, a, -1, p, -1, 0, bhash[i]);
+	        mpz_add(bns1, bns1, bns0);
+           mpz_mul(product, product, bns0);
         }
         mpz_mul(product, product, bns1);
 
-	mpz_mul(product, product, product);
+        mpz_mul(product, product, product);
         bytes = mpz_sizeinbase(product, 256);
         mpz_export((void *)bdata, NULL, -1, 1, 0, 0, product);
 
-#ifndef USE_SPH_SHA
         SHA256_Init( &ctxf_sha256 );
         SHA256_Update(  &ctxf_sha256, bdata, bytes );
         SHA256_Final( (unsigned char*) hash, &ctxf_sha256 );
-#else
-        sph_sha256_init( &ctxf_sha256 );
-        sph_sha256( &ctxf_sha256, bdata, bytes );
-        sph_sha256_close( &ctxf_sha256, (void*)(hash) );
-#endif
 
-// do once and share
         digits=(int)((sqrt((double)(n/2))*(1.+EPS))/9000+75);
         mp_bitcnt_t prec = (long int)(digits*BITS_PER_DIGIT+16);
-	mpf_set_prec_raw(magifpi, prec);
-	mpf_set_prec_raw(mptmp, prec);
-	mpf_set_prec_raw(mpt1, prec);
-	mpf_set_prec_raw(mpt2, prec);
+        mpf_set_prec_raw(magifpi, prec);
+        mpf_set_prec_raw(mptmp, prec);
+        mpf_set_prec_raw(mpt1, prec);
+        mpf_set_prec_raw(mpt2, prec);
 
         usw_ = sw2_(n/2);
-	mpzscale = 1;
+	     mpzscale = 1;
         mpz_set_ui(magisw, usw_);
 	    
         for ( i = 0; i < 5; i++ )
         {	
             mpf_set_d(mpt1, 0.25*mpzscale);
-	    mpf_sub(mpt1, mpt1, mpt2);
+	         mpf_sub(mpt1, mpt1, mpt2);
             mpf_abs(mpt1, mpt1);
             mpf_div(magifpi, magifpi0, mpt1);
             mpf_pow_ui(mptmp, mpten, digits >> 1);
             mpf_mul(magifpi, magifpi, mptmp);
-	    mpz_set_f(magipi, magifpi);
+	         mpz_set_f(magipi, magifpi);
             mpz_add(magipi,magipi,magisw);
             mpz_add(product,product,magipi);
-// share magipi, product and do serial			
-	    mpz_import(bns0, b, -1, p, -1, 0, (void*)(hash));
+	         mpz_import(bns0, b, -1, p, -1, 0, (void*)(hash));
             mpz_add(bns1, bns1, bns0);
             mpz_mul(product,product,bns1);
             mpz_cdiv_q (product, product, bns0);
@@ -312,28 +262,21 @@ int scanhash_m7m_hash( int thr_id, struct work* work,
             mpzscale=bytes;
             mpz_export(bdata, NULL, -1, 1, 0, 0, product);
 
-#ifndef USE_SPH_SHA
             SHA256_Init( &ctxf_sha256 );
             SHA256_Update(  &ctxf_sha256, bdata, bytes );
             SHA256_Final( (unsigned char*) hash, &ctxf_sha256 );
-#else
-            sph_sha256_init( &ctxf_sha256 );
-            sph_sha256( &ctxf_sha256, bdata, bytes );
-            sph_sha256_close( &ctxf_sha256, (void*)(hash) );
-#endif
-	}
+        }
 
-// this is the scanhash part
-	const unsigned char *hash_ = (const unsigned char *)hash;
-	const unsigned char *target_ = (const unsigned char *)ptarget;
-	for ( i = 31; i >= 0; i-- )
+        const unsigned char *hash_ = (const unsigned char *)hash;
+        const unsigned char *target_ = (const unsigned char *)ptarget;
+        for ( i = 31; i >= 0; i-- )
         {
-	      if ( hash_[i] != target_[i] )
-              {
-		rc = hash_[i] < target_[i];
-		break;
-	      }
-	}
+	        if ( hash_[i] != target_[i] )
+           {
+		        rc = hash_[i] < target_[i];
+		        break;
+	        }
+        }
         if ( unlikely(rc) )
         {
             if ( opt_debug )
@@ -346,16 +289,15 @@ int scanhash_m7m_hash( int thr_id, struct work* work,
                     hash_str,
                     target_str);
             }
-            work_set_target_ratio( work, hash );
             pdata[19] = data[19];
-            goto out;
-	  }
+            submit_solution( work, hash, mythr );
+        }
     } while (n < max_nonce && !work_restart[thr_id].restart);
 
      pdata[19] = n;
 
-// do this in hashm7m
-out:
+// can this be skipped after finding a share? Seems to work ok.
+//out:
      mpf_set_prec_raw(magifpi, prec0);
      mpf_set_prec_raw(magifpi0, prec0);
      mpf_set_prec_raw(mptmp, prec0);
@@ -370,7 +312,7 @@ out:
      mpz_clears(magipi, magisw, product, bns0, bns1, NULL);
 
     *hashes_done = n - first_nonce + 1;
-    return rc;
+    return 0;
 }
 
 bool register_m7m_algo( algo_gate_t *gate )

@@ -135,8 +135,8 @@ unsigned char GetNfactor(unsigned int nTimestamp, unsigned int ntime) {
 }
 
 
-int scanhash_scryptjane( int thr_id, struct work *work, uint32_t max_nonce,
-                         uint64_t *hashes_done)
+int scanhash_scryptjane( struct work *work, uint32_t max_nonce,
+                         uint64_t *hashes_done, struct thr_info *mythr )
 {
 	scrypt_aligned_alloc YX, V;
 	uint8_t *X, *Y;
@@ -150,6 +150,7 @@ int scanhash_scryptjane( int thr_id, struct work *work, uint32_t max_nonce,
 	uint32_t _ALIGN(64) endiandata[20];
 	const uint32_t first_nonce = pdata[19];
 	uint32_t nonce = first_nonce;
+   int thr_id = mythr->id;  // thr_id arg is deprecated
 
 	if (opt_benchmark)
 		ptarget[7] = 0x00ff;
@@ -243,20 +244,20 @@ bool register_scryptjane_algo( algo_gate_t* gate )
     gate->get_max64  = (void*)&get_max64_0x40LL;
 
     // figure out if arg in N or Nfactor
-    if ( !opt_scrypt_n )
+    if ( !opt_param_n )
     {
       applog( LOG_ERR, "The N factor must be specified in the form algo:nf");
       return false;
     }
-    else if ( opt_scrypt_n < 32 )
+    else if ( opt_param_n < 32 )
     {
       // arg is Nfactor, calculate N
-      sj_N = 1 << ( opt_scrypt_n + 1 );
+      sj_N = 1 << ( opt_param_n + 1 );
     }
     else
     {
       // arg is N
-      sj_N = opt_scrypt_n;
+      sj_N = opt_param_n;
     }
     return true;
 }

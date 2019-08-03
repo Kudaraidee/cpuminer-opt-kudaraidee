@@ -382,8 +382,8 @@ void yescrypthash(void *output, const void *input)
 	yescrypt_hash((char*) input, (char*) output, 80);
 }
 
-int scanhash_yescrypt( int thr_id, struct work *work, uint32_t max_nonce,
-                       uint64_t *hashes_done )
+int scanhash_yescrypt( struct work *work, uint32_t max_nonce,
+                       uint64_t *hashes_done, struct thr_info *mythr )
 {
         uint32_t _ALIGN(64) vhash[8];
         uint32_t _ALIGN(64) endiandata[20];
@@ -393,20 +393,21 @@ int scanhash_yescrypt( int thr_id, struct work *work, uint32_t max_nonce,
         const uint32_t Htarg = ptarget[7];
         const uint32_t first_nonce = pdata[19];
         uint32_t n = first_nonce;
+        int thr_id = mythr->id;  // thr_id arg is deprecated
 
         for (int k = 0; k < 19; k++)
                 be32enc(&endiandata[k], pdata[k]);
 
         do {
-                be32enc(&endiandata[19], n);
-                yescrypt_hash((char*) endiandata, (char*) vhash, 80);
-                if (vhash[7] < Htarg && fulltest(vhash, ptarget)) {
-                        work_set_target_ratio( work, vhash );
-                        *hashes_done = n - first_nonce + 1;
-                        pdata[19] = n;
-                        return true;
-                }
-                n++;
+           be32enc(&endiandata[19], n);
+           yescrypt_hash((char*) endiandata, (char*) vhash, 80);
+           if (vhash[7] < Htarg && fulltest(vhash, ptarget ) 
+               && !opt_benchmark )
+           {
+               pdata[19] = n;
+               submit_solution( work, vhash, mythr );
+           }
+           n++;
         } while (n < max_nonce && !work_restart[thr_id].restart);
 
         *hashes_done = n - first_nonce + 1;
@@ -437,11 +438,32 @@ bool register_yescrypt_algo( algo_gate_t* gate )
 {
    yescrypt_gate_base( gate );
    gate->get_max64  = (void*)&yescrypt_get_max64;
-   yescrypt_client_key = NULL;
-   yescrypt_client_key_len = 0;
-   YESCRYPT_N = 2048;
-   YESCRYPT_R = 8;
+
+   if ( opt_param_n )  YESCRYPT_N = opt_param_n;
+   else                YESCRYPT_N = 2048;
+
+   if ( opt_param_r )  YESCRYPT_R = opt_param_r;
+   else                YESCRYPT_R = 8;
+ 
+   if ( opt_param_key ) 
+   {   
+     yescrypt_client_key = opt_param_key;
+     yescrypt_client_key_len = strlen( opt_param_key );
+   }
+   else
+   {   
+     yescrypt_client_key = NULL;
+     yescrypt_client_key_len = 0;
+   }
+
    YESCRYPT_P = 1;
+
+   applog(LOG_NOTICE,"Yescrypt parameters: N= %d, R= %d.", YESCRYPT_N,
+                                                           YESCRYPT_R );
+   if ( yescrypt_client_key )
+     applog(LOG_NOTICE,"Key= ""%s"", len= %d.\n", yescrypt_client_key, 
+                                                  yescrypt_client_key_len );
+
    return true;
 }
 

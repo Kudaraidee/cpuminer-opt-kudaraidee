@@ -22,7 +22,7 @@
 #include "algo/whirlpool/sph_whirlpool.h"
 
 #include "algo/luffa/luffa_for_sse2.h" 
-#include "algo/cubehash/sse2/cubehash_sse2.h"
+#include "algo/cubehash/cubehash_sse2.h"
 #include "algo/simd/nist.h"
 #include "algo/blake/sse2/blake.c"
 #include "algo/bmw/sse2/bmw.c"
@@ -186,8 +186,8 @@ void x15hash(void *output, const void *input)
 	memcpy(output, hashB, 32);
 }
 
-int scanhash_x15(int thr_id, struct work *work,
-                    uint32_t max_nonce, uint64_t *hashes_done)
+int scanhash_x15( struct work *work, uint32_t max_nonce,
+                  uint64_t *hashes_done, struct thr_info *mythr )
 {
         uint32_t endiandata[20] __attribute__((aligned(64)));
         uint32_t hash64[8] __attribute__((aligned(64)));
@@ -196,6 +196,7 @@ int scanhash_x15(int thr_id, struct work *work,
 	uint32_t n = pdata[19] - 1;
 	const uint32_t first_nonce = pdata[19];
 	const uint32_t Htarg = ptarget[7];
+   int thr_id = mythr->id;  // thr_id arg is deprecated
 
 	uint64_t htmax[] = {
 		0,
@@ -245,9 +246,7 @@ int scanhash_x15(int thr_id, struct work *work,
 				if (!(hash64[7] & mask)) {
 					printf("[%d]",thr_id);
 					if (fulltest(hash64, ptarget)) {
-                                                work_set_target_ratio( work, hash64 );
-						*hashes_done = n - first_nonce + 1;
-						return true;
+                   submit_solution( work, hash64, mythr );
 					}
 				}
 #endif

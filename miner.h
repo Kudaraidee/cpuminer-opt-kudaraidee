@@ -6,18 +6,6 @@
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 #define MAX_CPUS 16
 
-//#ifndef NO_AES_NI
- #ifndef __AES__
-  #define NO_AES_NI
- #endif
-//#endif
-
-//#if defined(FOUR_WAY) && defined(__AVX2__)
-// keep this until all algos remove reference to HASH_4WAY
-//#if defined(__AVX2__)
-//  #define HASH_4WAY
-//#endif
-
 #ifdef _MSC_VER
 
 #undef USE_ASM  /* to fix */
@@ -94,6 +82,8 @@ enum {
 	LOG_BLUE = 0x10,
 };
 #endif
+
+extern bool is_power_of_2( int n );
 
 static inline bool is_windows(void)
 {
@@ -310,6 +300,7 @@ struct thr_api {
 #define CL_WHT  "\x1B[01;37m" /* white */
 
 void   applog(int prio, const char *fmt, ...);
+void   applog2(int prio, const char *fmt, ...);
 void   restart_threads(void);
 extern json_t *json_rpc_call( CURL *curl, const char *url, const char *userpass,
                 	const char *rpc_req, int *curl_err, int flags );
@@ -323,16 +314,54 @@ int    varint_encode( unsigned char *p, uint64_t n );
 size_t address_to_script( unsigned char *out, size_t outsz, const char *addr );
 int    timeval_subtract( struct timeval *result, struct timeval *x,
                            struct timeval *y);
+
+// Segwit BEGIN
+extern void memrev(unsigned char *p, size_t len);
+// Segwit END
+
+// Bitcoin formula for converting difficulty to an equivalent
+// number of hashes.
+//
+//     https://en.bitcoin.it/wiki/Difficulty
+//
+//     hash = diff * 2**32
+//
+// diff_to_hash = 2**32 = 0x100000000 = 4294967296 = exp32;
+
+#define EXP16 65536.
+#define EXP32 4294967296.
+extern const long double exp32;  // 2**32
+extern const long double exp48;  // 2**48
+extern const long double exp64;  // 2**64
+extern const long double exp96;  // 2**96
+extern const long double exp128; // 2**128
+extern const long double exp160; // 2**160
+
 bool   fulltest( const uint32_t *hash, const uint32_t *target );
-void   work_set_target( struct work* work, double diff );
-double target_to_diff( uint32_t* target );
-extern void diff_to_target(uint32_t *target, double diff);
+bool   valid_hash( const void*, const void* );
+
+double hash_to_diff( const void* );
+extern void diff_to_hash( uint32_t*, const double );
 
 double hash_target_ratio( uint32_t* hash, uint32_t* target );
-void   work_set_target_ratio( struct work* work, uint32_t* hash );
+void   work_set_target_ratio( struct work* work, const void *hash );
 
+struct thr_info {
+        int id;
+        pthread_t pth;
+        pthread_attr_t attr;
+        struct thread_q *q;
+        struct cpu_info cpu;
+};
+
+//int test_hash_and_submit( struct work *work, const void *hash,
+//                           struct thr_info *thr );
+
+bool submit_solution( struct work *work, const void *hash,
+                      struct thr_info *thr );
 
 void   get_currentalgo( char* buf, int sz );
+/*
 bool   has_sha();
 bool   has_aes_ni();
 bool   has_avx1();
@@ -349,35 +378,30 @@ void   cpu_getmodelid(char *outbuf, size_t maxsz);
 void   cpu_brand_string( char* s );
 
 float cpu_temp( int core );
+*/
 
-struct work {
+struct work
+{
+   uint32_t target[8] __attribute__ ((aligned (64)));
 	uint32_t data[48] __attribute__ ((aligned (64)));
-	uint32_t target[8];
-
 	double targetdiff;
-	double shareratio;
 	double sharediff;
-
+   double stratum_diff;
 	int height;
 	char *txs;
 	char *workid;
-
 	char *job_id;
 	size_t xnonce2_len;
 	unsigned char *xnonce2;
-   // x16rt
-   uint32_t merkleroothash[8];
-   uint32_t witmerkleroothash[8];
-   uint32_t denom10[8];
-   uint32_t denom100[8];
-   uint32_t denom1000[8];
-   uint32_t denom10000[8];
-
+   bool sapling;
+   bool stale;
 } __attribute__ ((aligned (64)));
 
-struct stratum_job {
-	char *job_id;
+struct stratum_job
+{
 	unsigned char prevhash[32];
+   unsigned char final_sapling_hash[32];
+   char *job_id;
 	size_t coinbase_size;
 	unsigned char *coinbase;
 	unsigned char *xnonce2;
@@ -388,7 +412,7 @@ struct stratum_job {
 	unsigned char ntime[4];
 	double diff;
    bool clean;
-   // for x16rt
+   // for x16rt-veil
    unsigned char extra[64];
    unsigned char denom10[32];
    unsigned char denom100[32];
@@ -420,7 +444,8 @@ struct stratum_ctx {
 	struct work work __attribute__ ((aligned (64)));
 	pthread_mutex_t work_lock;
 
-	int bloc_height;
+   int block_height;
+   bool new_job;  
 } __attribute__ ((aligned (64)));
 
 bool stratum_socket_full(struct stratum_ctx *sctx, int timeout);
@@ -432,25 +457,13 @@ bool stratum_subscribe(struct stratum_ctx *sctx);
 bool stratum_authorize(struct stratum_ctx *sctx, const char *user, const char *pass);
 bool stratum_handle_method(struct stratum_ctx *sctx, const char *s);
 
-/* rpc 2.0 (xmr) */
+extern bool lowdiff_debug;
 
 
-extern bool jsonrpc_2;
+
 extern bool aes_ni_supported;
-extern char rpc2_id[64];
-extern char *rpc2_blob;
-extern size_t rpc2_bloblen;
-extern uint32_t rpc2_target;
-extern char *rpc2_job_id;
 extern char *rpc_user;
 extern char *short_url;
-
-json_t *json_rpc2_call(CURL *curl, const char *url, const char *userpass, const char *rpc_req, int *curl_err, int flags);
-bool rpc2_login(CURL *curl);
-bool rpc2_login_decode(const json_t *val);
-bool rpc2_workio_login(CURL *curl);
-bool rpc2_stratum_job(struct stratum_ctx *sctx, json_t *params);
-bool rpc2_job_decode(const json_t *job, struct work *work);
 
 struct thread_q;
 
@@ -471,6 +484,9 @@ void print_hash_tests(void);
 
 void scale_hash_for_display ( double* hashrate, char* units );
 
+void report_summary_log( bool force );
+
+/*
 struct thr_info {
         int id;
         pthread_t pth;
@@ -478,6 +494,7 @@ struct thr_info {
         struct thread_q *q;
         struct cpu_info cpu;
 };
+*/
 
 struct work_restart {
         volatile uint8_t restart;
@@ -508,7 +525,6 @@ enum algos {
         ALGO_ARGON2D500,
         ALGO_ARGON2D4096,
         ALGO_AXIOM,       
-        ALGO_BASTION,
         ALGO_BLAKE,       
         ALGO_BLAKE2B,
         ALGO_BLAKE2S,     
@@ -516,16 +532,10 @@ enum algos {
         ALGO_BMW,        
         ALGO_BMW512,
         ALGO_C11,         
-        ALGO_CRYPTOLIGHT, 
-        ALGO_CRYPTONIGHT,
-        ALGO_CRYPTONIGHTV7, 
         ALGO_DECRED,
         ALGO_DEEP,
         ALGO_DMD_GR,
-        ALGO_DROP,        
-        ALGO_FRESH,       
         ALGO_GROESTL,     
-        ALGO_HEAVY,
         ALGO_HEX,
         ALGO_HMQ1725,
         ALGO_HODL,
@@ -533,29 +543,29 @@ enum algos {
         ALGO_KECCAK,
         ALGO_KECCAKC,
         ALGO_LBRY,
-        ALGO_LUFFA,       
         ALGO_LYRA2H,
         ALGO_LYRA2RE,       
         ALGO_LYRA2REV2,   
         ALGO_LYRA2REV3,
-	     ALGO_LYRA2Z,
+        ALGO_LYRA2Z,
         ALGO_LYRA2Z330,
-        ALGO_M7M,
+	ALGO_M7M,
+        ALGO_MINOTAUR,
         ALGO_MYR_GR,      
         ALGO_NEOSCRYPT,
         ALGO_NIST5,       
         ALGO_PENTABLAKE,  
         ALGO_PHI1612,
-	     ALGO_PHI2,
-        ALGO_PLUCK,       
+        ALGO_PHI2,
         ALGO_POLYTIMOS,
+        ALGO_POWER2B,
         ALGO_QUARK,
         ALGO_QUBIT,       
         ALGO_SCRYPT,
-        ALGO_SCRYPTJANE,
         ALGO_SHA256D,
         ALGO_SHA256Q,
         ALGO_SHA256T,
+        ALGO_SHA3D,
         ALGO_SHAVITE3,    
         ALGO_SKEIN,       
         ALGO_SKEIN2,      
@@ -578,18 +588,23 @@ enum algos {
         ALGO_X14,        
         ALGO_X15,       
         ALGO_X16R,
+        ALGO_X16RV2,
         ALGO_X16RT,
         ALGO_X16RT_VEIL,
         ALGO_X16S,
         ALGO_X17,
         ALGO_X21S,
+        ALGO_X22I,
+        ALGO_X25X,
         ALGO_XEVAN,
         ALGO_YESCRYPT,
         ALGO_YESCRYPTR8,
+        ALGO_YESCRYPTR8G,
         ALGO_YESCRYPTR16,
         ALGO_YESCRYPTR32,
         ALGO_YESPOWER,
         ALGO_YESPOWERR16,
+        ALGO_YESPOWER_B2B,
         ALGO_ZR5,
         ALGO_COUNT
 };
@@ -602,7 +617,6 @@ static const char* const algo_names[] = {
         "argon2d500",
         "argon2d4096",
         "axiom",
-        "bastion",
         "blake",
         "blake2b",
         "blake2s",
@@ -610,16 +624,10 @@ static const char* const algo_names[] = {
         "bmw",
         "bmw512",
         "c11",
-        "cryptolight",
-        "cryptonight",
-        "cryptonightv7",
         "decred",
         "deep",
         "dmd-gr",
-        "drop",
-        "fresh",
         "groestl",
-        "heavy",
         "hex",
         "hmq1725",
         "hodl",
@@ -627,29 +635,29 @@ static const char* const algo_names[] = {
         "keccak",
         "keccakc",
         "lbry",
-        "luffa",
         "lyra2h",
         "lyra2re",
         "lyra2rev2",
         "lyra2rev3",
-	     "lyra2z",
+        "lyra2z",
         "lyra2z330",
         "m7m",
-        "myr-gr",
+        "minotaur",
+	"myr-gr",
         "neoscrypt",
         "nist5",
         "pentablake",
         "phi1612",
         "phi2",
-	     "pluck",
         "polytimos",
+        "power2b",
         "quark",
         "qubit",
         "scrypt",
-        "scryptjane",
         "sha256d",
         "sha256q",
         "sha256t",
+        "sha3d",
         "shavite3",
         "skein",
         "skein2",
@@ -672,18 +680,23 @@ static const char* const algo_names[] = {
         "x14",
         "x15",
         "x16r",
+        "x16rv2",
         "x16rt",
         "x16rt-veil",
         "x16s",
         "x17",
         "x21s",
+        "x22i",
+        "x25x",
         "xevan",
         "yescrypt",
         "yescryptr8",
+        "yescryptr8g",
         "yescryptr16",
         "yescryptr32",
         "yespower",
         "yespowerr16",
+        "yespower-b2b",
         "zr5",
         "\0"
 };
@@ -695,7 +708,6 @@ extern bool opt_debug;
 extern bool opt_debug_diff;
 extern bool opt_benchmark;
 extern bool opt_protocol;
-extern bool opt_showdiff;
 extern bool opt_extranonce;
 extern bool opt_quiet;
 extern bool opt_redirect;
@@ -726,15 +738,17 @@ extern uint32_t opt_work_size;
 extern double *thr_hashrates;
 extern double global_hashrate;
 extern double stratum_diff;
+extern bool opt_reset_on_stale;
 extern double net_diff;
 extern double net_hashrate;
-extern int opt_pluck_n;
 extern int opt_param_n;
 extern int opt_param_r;
 extern char* opt_param_key;
 extern double opt_diff_factor;
+extern double opt_target_factor;
 extern bool opt_randomize;
 extern bool allow_mininginfo;
+extern pthread_rwlock_t g_work_lock;
 extern time_t g_work_time;
 extern bool opt_stratum_stats;
 extern int num_cpus;
@@ -744,14 +758,14 @@ extern bool opt_hash_meter;
 extern uint32_t accepted_share_count;
 extern uint32_t rejected_share_count;
 extern uint32_t solved_block_count;
-extern pthread_mutex_t rpc2_job_lock;
-extern pthread_mutex_t rpc2_login_lock;
 extern pthread_mutex_t applog_lock;
 extern pthread_mutex_t stats_lock;
-
+extern bool opt_sapling;
+extern const int pk_buffer_size_max;
+extern int pk_buffer_size;
 
 static char const usage[] = "\
-Usage: " PACKAGE_NAME " [OPTIONS]\n\
+Usage: cpuminer [OPTIONS]\n\
 Options:\n\
   -a, --algo=ALGO       specify the algorithm to use\n\
                           allium        Garlicoin (GRLC)\n\
@@ -761,7 +775,6 @@ Options:\n\
                           argon2d500    argon2d-dyn, Dynamic (DYN)\n\
                           argon2d4096   argon2d-uis, Unitus (UIS)\n\
                           axiom         Shabal-256 MemoHash\n\
-                          bastion\n\
                           blake         blake256r14 (SFR)\n\
                           blake2b       Blake2b 256\n\
                           blake2s       Blake-2 S\n\
@@ -769,16 +782,10 @@ Options:\n\
                           bmw           BMW 256\n\
                           bmw512        BMW 512\n\
                           c11           Chaincoin\n\
-                          cryptolight   Cryptonight-light\n\
-                          cryptonight   Cryptonote legacy\n\
-                          cryptonightv7 variant 7, Monero (XMR)\n\
                           decred        Blake256r14dcr\n\
                           deep          Deepcoin (DCN)\n\
                           dmd-gr        Diamond\n\
-                          drop          Dropcoin\n\
-                          fresh         Fresh\n\
                           groestl       Groestl coin\n\
-                          heavy         Heavy\n\
                           hex           x16r-hex\n\
                           hmq1725       Espers\n\
                           hodl          Hodlcoin\n\
@@ -786,31 +793,31 @@ Options:\n\
                           keccak        Maxcoin\n\
                           keccakc       Creative Coin\n\
                           lbry          LBC, LBRY Credits\n\
-                          luffa         Luffa\n\
                           lyra2h        Hppcoin\n\
                           lyra2re       lyra2\n\
                           lyra2rev2     lyrav2\n\
                           lyra2rev3     lyrav2v3, Vertcoin\n\
-                          lyra2z        Zcoin (XZC)\n\
-                          lyra2z330     Lyra2 330 rows, Zoin (ZOI)\n\
+                          lyra2z\n\
+                          lyra2z330     Lyra2 330 rows\n\
                           m7m           Magi (XMG)\n\
                           myr-gr        Myriad-Groestl\n\
-                          neoscrypt     NeoScrypt(128, 2, 1)\n\
+                          minotaur      Ringcoin (RNG)\n\
+			  neoscrypt     NeoScrypt(128, 2, 1)\n\
                           nist5         Nist5\n\
                           pentablake    5 x blake512\n\
-                          phi1612       phi, LUX coin (original algo)\n\
-                          phi2          LUX (new algo)\n\
-			                 pluck         Pluck:128 (Supcoin)\n\
+                          phi1612       phi\n\
+                          phi2\n\
                           polytimos\n\
+                          power2b       MicroBitcoin (MBC)\n\
                           quark         Quark\n\
                           qubit         Qubit\n\
                           scrypt        scrypt(1024, 1, 1) (default)\n\
                           scrypt:N      scrypt(N, 1, 1)\n\
-                          scryptjane:nf\n\
                           sha256d       Double SHA-256\n\
                           sha256q       Quad SHA-256, Pyrite (PYE)\n\
                           sha256t       Triple SHA-256, Onecoin (OC)\n\
-			                 shavite3      Shavite3\n\
+			                 sha3d         Double Keccak256 (BSHA3)\n\
+                          shavite3      Shavite3\n\
                           skein         Skein+Sha (Skeincoin)\n\
                           skein2        Double Skein (Woodcoin)\n\
                           skunk         Signatum (SIGT)\n\
@@ -831,23 +838,28 @@ Options:\n\
                           x13sm3        hsr (Hshare)\n\
                           x14           X14\n\
                           x15           X15\n\
-                          x16r          Ravencoin (RVN)\n\
+                          x16r\n\
+                          x16rv2\n\
                           x16rt         Gincoin (GIN)\n\
                           x16rt-veil    Veil (VEIL)\n\
-                          x16s          Pigeoncoin (PGN)\n\
+                          x16s\n\
                           x17\n\
                           x21s\n\
+                          x22i\n\
+                          x25x\n\
                           xevan         Bitsend (BSD)\n\
                           yescrypt      Globalboost-Y (BSTY)\n\
                           yescryptr8    BitZeny (ZNY)\n\
+                          yescryptr8g   Koto (KOTO)\n\
                           yescryptr16   Eli\n\
                           yescryptr32   WAVI\n\
                           yespower      Cryply\n\
                           yespowerr16   Yenten (YTN)\n\
+                          yespower-b2b  generic yespower + blake2b\n\
                           zr5           Ziftr\n\
   -N, --param-n         N parameter for scrypt based algos\n\
-  -R, --patam-r         R parameter for scrypt based algos\n\
-  -K, --param-key       Key parameter for algos that use it\n\
+  -R, --param-r         R parameter for scrypt based algos\n\
+  -K, --param-key       Key (pers) parameter for algos that use it\n\
   -o, --url=URL         URL of mining server\n\
   -O, --userpass=U:P    username:password pair for mining server\n\
   -u, --user=USERNAME   username for mining server\n\
@@ -863,10 +875,10 @@ Options:\n\
   -s, --scantime=N      upper bound on time spent scanning current work when\n\
                           long polling is unavailable, in seconds (default: 5)\n\
       --randomize       Randomize scan range start to reduce duplicates\n\
+      --reset-on-stale  Workaround reset stratum if too many stale shares\n\
   -f, --diff-factor     Divide req. difficulty by this factor (std is 1.0)\n\
   -m, --diff-multiplier Multiply difficulty by this factor (std is 1.0)\n\
       --hash-meter      Display thread hash rates\n\
-      --hide-diff       Do not display changes in difficulty\n\
       --coinbase-addr=ADDR  payout address for solo mining\n\
       --coinbase-sig=TEXT  data to insert in the coinbase when possible\n\
       --no-longpoll     disable long polling support\n\
@@ -886,7 +898,6 @@ Options:\n\
 "\
   -B, --background      run the miner in the background\n\
       --benchmark       run in offline benchmark mode\n\
-      --cputest         debug hashes from cpu algorithms\n\
       --cpu-affinity    set process affinity to cpu core(s), mask 0x3 for cores 0 and 1\n\
       --cpu-priority    set process priority (default: 0 idle, 2 normal to 5 highest)\n\
   -b, --api-bind        IP/Port for the miner API (default: 127.0.0.1:4048)\n\
@@ -930,7 +941,6 @@ static struct option const options[] = {
         { "diff", 1, NULL, 'f' }, // deprecated (alias)
         { "diff-multiplier", 1, NULL, 'm' },
         { "hash-meter", 0, NULL, 1014 },
-        { "hide-diff", 0, NULL, 1013 },
         { "help", 0, NULL, 'h' },
         { "key", 1, NULL, 'K' },
         { "no-gbt", 0, NULL, 1011 },
@@ -953,6 +963,7 @@ static struct option const options[] = {
         { "retries", 1, NULL, 'r' },
         { "retry-pause", 1, NULL, 1025 },
         { "randomize", 0, NULL, 1024 },
+        { "reset-on-stale", 0, NULL, 1026 },
         { "scantime", 1, NULL, 's' },
 #ifdef HAVE_SYSLOG_H
         { "syslog", 0, NULL, 'S' },

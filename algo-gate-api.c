@@ -90,39 +90,174 @@ void algo_not_implemented()
 }
 
 // default null functions
-
+// deprecated, use generic as default
 int null_scanhash()
 {
    applog(LOG_WARNING,"SWERR: undefined scanhash function in algo_gate");
    return 0;
 }
 
-void null_hash()
+// Default generic scanhash can be used in many cases.
+int scanhash_generic( struct work *work, uint32_t max_nonce,
+                      uint64_t *hashes_done, struct thr_info *mythr )
+{
+   uint32_t edata[20] __attribute__((aligned(64)));
+   uint32_t hash[8] __attribute__((aligned(64)));
+   uint32_t *pdata = work->data;
+   uint32_t *ptarget = work->target;
+   const uint32_t first_nonce = pdata[19];
+   const uint32_t last_nonce = max_nonce - 1;
+   uint32_t n = first_nonce;
+   const int thr_id = mythr->id;
+   const bool bench = opt_benchmark;
+
+   mm128_bswap32_80( edata, pdata );
+   do
+   {
+      edata[19] = n;
+      if ( likely( algo_gate.hash( hash, edata, thr_id ) ) )
+      if ( unlikely( valid_hash( hash, ptarget ) && !bench ) )
+      {
+         pdata[19] = bswap_32( n );
+         submit_solution( work, hash, mythr );
+      }
+      n++;
+   } while ( n < last_nonce && !work_restart[thr_id].restart );
+   *hashes_done = n - first_nonce;
+   pdata[19] = n;
+   return 0;
+}
+
+#if defined(__AVX2__)
+
+//int scanhash_4way_64_64( struct work *work, uint32_t max_nonce,
+//                      uint64_t *hashes_done, struct thr_info *mythr )
+
+//int scanhash_4way_64_640( struct work *work, uint32_t max_nonce,
+//                      uint64_t *hashes_done, struct thr_info *mythr )
+
+int scanhash_4way_64in_32out( struct work *work, uint32_t max_nonce,
+                      uint64_t *hashes_done, struct thr_info *mythr )
+{
+   uint32_t hash32[8*4] __attribute__ ((aligned (64)));
+   uint32_t vdata[20*4] __attribute__ ((aligned (64)));
+   uint32_t lane_hash[8] __attribute__ ((aligned (64)));
+   uint32_t *hash32_d7 = &(hash32[ 7*4 ]);
+   uint32_t *pdata = work->data;
+   const uint32_t *ptarget = work->target;
+   const uint32_t first_nonce = pdata[19];
+   const uint32_t last_nonce = max_nonce - 4;
+   __m256i  *noncev = (__m256i*)vdata + 9;
+   uint32_t n = first_nonce;
+   const int thr_id = mythr->id;
+   const uint32_t targ32_d7 = ptarget[7];
+   const bool bench = opt_benchmark;
+
+   mm256_bswap32_intrlv80_4x64( vdata, pdata );
+   *noncev = mm256_intrlv_blend_32(
+                   _mm256_set_epi32( n+3, 0, n+2, 0, n+1, 0, n, 0 ), *noncev );
+   do
+   {
+      if ( likely( algo_gate.hash( hash32, vdata, thr_id ) ) )
+      for ( int lane = 0; lane < 4; lane++ )
+      if ( unlikely( hash32_d7[ lane ] <= targ32_d7 && !bench ) )
+      {
+         extr_lane_4x32( lane_hash, hash32, lane, 256 );
+         if ( valid_hash( lane_hash, ptarget ) )
+         {
+            pdata[19] = bswap_32( n + lane );
+            submit_solution( work, lane_hash, mythr );
+         }
+      }
+      *noncev = _mm256_add_epi32( *noncev,
+                                  m256_const1_64( 0x0000000400000000 ) );
+      n += 4;
+   } while ( likely( ( n <= last_nonce ) && !work_restart[thr_id].restart ) );
+   pdata[19] = n;
+   *hashes_done = n - first_nonce;
+   return 0;
+}
+
+//int scanhash_8way_32_32( struct work *work, uint32_t max_nonce,
+//                      uint64_t *hashes_done, struct thr_info *mythr )
+
+#endif
+
+#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+
+//int scanhash_8way_64_64( struct work *work, uint32_t max_nonce,
+//                      uint64_t *hashes_done, struct thr_info *mythr )
+
+//int scanhash_8way_64_640( struct work *work, uint32_t max_nonce,
+//                      uint64_t *hashes_done, struct thr_info *mythr )
+
+int scanhash_8way_64in_32out( struct work *work, uint32_t max_nonce,
+                      uint64_t *hashes_done, struct thr_info *mythr )
+{
+   uint32_t hash32[8*8] __attribute__ ((aligned (128)));
+   uint32_t vdata[20*8] __attribute__ ((aligned (64)));
+   uint32_t lane_hash[8] __attribute__ ((aligned (64)));
+   uint32_t *hash32_d7 = &(hash32[7*8]);
+   uint32_t *pdata = work->data;
+   const uint32_t *ptarget = work->target;
+   const uint32_t first_nonce = pdata[19];
+   const uint32_t last_nonce = max_nonce - 8;
+   __m512i  *noncev = (__m512i*)vdata + 9;
+   uint32_t n = first_nonce;
+   const int thr_id = mythr->id;
+   const uint32_t targ32_d7 = ptarget[7];
+   const bool bench = opt_benchmark;
+
+   mm512_bswap32_intrlv80_8x64( vdata, pdata );
+   *noncev = mm512_intrlv_blend_32(
+              _mm512_set_epi32( n+7, 0, n+6, 0, n+5, 0, n+4, 0,
+                                n+3, 0, n+2, 0, n+1, 0, n,   0 ), *noncev );
+   do
+   {
+      if ( likely( algo_gate.hash( hash32, vdata, thr_id ) ) )
+      for ( int lane = 0; lane < 8; lane++ )
+      if ( unlikely( ( hash32_d7[ lane ] <= targ32_d7 ) && !bench ) )
+      {
+         extr_lane_8x32( lane_hash, hash32, lane, 256 );
+         if ( likely( valid_hash( lane_hash, ptarget ) ) )
+         {
+            pdata[19] = bswap_32( n + lane );
+            submit_solution( work, lane_hash, mythr );
+         }
+      }
+      *noncev = _mm512_add_epi32( *noncev,
+                                  m512_const1_64( 0x0000000800000000 ) );
+      n += 8;
+   } while ( likely( ( n < last_nonce ) && !work_restart[thr_id].restart ) );
+   pdata[19] = n;
+   *hashes_done = n - first_nonce;
+   return 0;
+}
+
+//int scanhash_16way_32_32( struct work *work, uint32_t max_nonce,
+//                      uint64_t *hashes_done, struct thr_info *mythr )
+
+#endif
+
+
+
+int null_hash()
 {
    applog(LOG_WARNING,"SWERR: null_hash unsafe null function");
-};
-void null_hash_suw()
-{
-  applog(LOG_WARNING,"SWERR: null_hash_suw unsafe null function");
+   return 0;
 };
 
 void init_algo_gate( algo_gate_t* gate )
 {
    gate->miner_thread_init       = (void*)&return_true;
-   gate->scanhash                = (void*)&null_scanhash;
+   gate->scanhash                = (void*)&scanhash_generic;
    gate->hash                    = (void*)&null_hash;
-   gate->hash_suw                = (void*)&null_hash_suw;
    gate->get_new_work            = (void*)&std_get_new_work;
-   gate->get_nonceptr            = (void*)&std_get_nonceptr;
    gate->work_decode             = (void*)&std_le_work_decode;
    gate->decode_extra_data       = (void*)&do_nothing;
-   gate->wait_for_diff           = (void*)&std_wait_for_diff;
-   gate->get_max64               = (void*)&get_max64_0x1fffffLL;
    gate->gen_merkle_root         = (void*)&sha256d_gen_merkle_root;
-   gate->stratum_gen_work        = (void*)&std_stratum_gen_work;
    gate->build_stratum_request   = (void*)&std_le_build_stratum_request;
    gate->malloc_txs_request      = (void*)&std_malloc_txs_request;
-   gate->set_target              = (void*)&std_set_target;
    gate->submit_getwork_result   = (void*)&std_le_submit_getwork_result;
    gate->build_block_header      = (void*)&std_build_block_header;
    gate->build_extraheader       = (void*)&std_build_extraheader;
@@ -132,7 +267,6 @@ void init_algo_gate( algo_gate_t* gate )
    gate->resync_threads          = (void*)&do_nothing;
    gate->do_this_thread          = (void*)&return_true;
    gate->longpoll_rpc_call       = (void*)&std_longpoll_rpc_call;
-   gate->stratum_handle_response = (void*)&std_stratum_handle_response;
    gate->get_work_data_size      = (void*)&std_get_work_data_size;
    gate->optimizations           = EMPTY_SET;
    gate->ntime_index             = STD_NTIME_INDEX;
@@ -165,23 +299,16 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_ARGON2D500:    register_argon2d_dyn_algo   ( gate ); break;
     case ALGO_ARGON2D4096:   register_argon2d4096_algo   ( gate ); break;
     case ALGO_AXIOM:         register_axiom_algo         ( gate ); break;
-    case ALGO_BASTION:       register_bastion_algo       ( gate ); break;
     case ALGO_BLAKE:         register_blake_algo         ( gate ); break;
     case ALGO_BLAKE2B:       register_blake2b_algo       ( gate ); break;
     case ALGO_BLAKE2S:       register_blake2s_algo       ( gate ); break;
     case ALGO_BLAKECOIN:     register_blakecoin_algo     ( gate ); break;
     case ALGO_BMW512:        register_bmw512_algo        ( gate ); break;
     case ALGO_C11:           register_c11_algo           ( gate ); break;
-    case ALGO_CRYPTOLIGHT:   register_cryptolight_algo   ( gate ); break;
-    case ALGO_CRYPTONIGHT:   register_cryptonight_algo   ( gate ); break;
-    case ALGO_CRYPTONIGHTV7: register_cryptonightv7_algo ( gate ); break;
     case ALGO_DECRED:        register_decred_algo        ( gate ); break;
     case ALGO_DEEP:          register_deep_algo          ( gate ); break;
     case ALGO_DMD_GR:        register_dmd_gr_algo        ( gate ); break;
-    case ALGO_DROP:          register_drop_algo          ( gate ); break;
-    case ALGO_FRESH:         register_fresh_algo         ( gate ); break;
     case ALGO_GROESTL:       register_groestl_algo       ( gate ); break;
-    case ALGO_HEAVY:         register_heavy_algo         ( gate ); break;
     case ALGO_HEX:           register_hex_algo           ( gate ); break;
     case ALGO_HMQ1725:       register_hmq1725_algo       ( gate ); break;
     case ALGO_HODL:          register_hodl_algo          ( gate ); break;
@@ -189,7 +316,6 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_KECCAK:        register_keccak_algo        ( gate ); break;
     case ALGO_KECCAKC:       register_keccakc_algo       ( gate ); break;
     case ALGO_LBRY:          register_lbry_algo          ( gate ); break;
-    case ALGO_LUFFA:         register_luffa_algo         ( gate ); break;
     case ALGO_LYRA2H:        register_lyra2h_algo        ( gate ); break;
     case ALGO_LYRA2RE:       register_lyra2re_algo       ( gate ); break;
     case ALGO_LYRA2REV2:     register_lyra2rev2_algo     ( gate ); break;
@@ -197,21 +323,22 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_LYRA2Z:        register_lyra2z_algo        ( gate ); break;
     case ALGO_LYRA2Z330:     register_lyra2z330_algo     ( gate ); break;
     case ALGO_M7M:           register_m7m_algo           ( gate ); break;
+    case ALGO_MINOTAUR:      register_minotaur_algo      ( gate ); break;
     case ALGO_MYR_GR:        register_myriad_algo        ( gate ); break;
     case ALGO_NEOSCRYPT:     register_neoscrypt_algo     ( gate ); break;
     case ALGO_NIST5:         register_nist5_algo         ( gate ); break;
     case ALGO_PENTABLAKE:    register_pentablake_algo    ( gate ); break;
     case ALGO_PHI1612:       register_phi1612_algo       ( gate ); break;
     case ALGO_PHI2:          register_phi2_algo          ( gate ); break;
-    case ALGO_PLUCK:         register_pluck_algo         ( gate ); break;
     case ALGO_POLYTIMOS:     register_polytimos_algo     ( gate ); break;
+    case ALGO_POWER2B:       register_power2b_algo       ( gate ); break;
     case ALGO_QUARK:         register_quark_algo         ( gate ); break;
     case ALGO_QUBIT:         register_qubit_algo         ( gate ); break;
     case ALGO_SCRYPT:        register_scrypt_algo        ( gate ); break;
-    case ALGO_SCRYPTJANE:    register_scryptjane_algo    ( gate ); break;
     case ALGO_SHA256D:       register_sha256d_algo       ( gate ); break;
     case ALGO_SHA256Q:       register_sha256q_algo       ( gate ); break;
     case ALGO_SHA256T:       register_sha256t_algo       ( gate ); break;
+    case ALGO_SHA3D:         register_sha3d_algo         ( gate ); break;
     case ALGO_SHAVITE3:      register_shavite_algo       ( gate ); break;
     case ALGO_SKEIN:         register_skein_algo         ( gate ); break;
     case ALGO_SKEIN2:        register_skein2_algo        ( gate ); break;
@@ -234,23 +361,27 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_X14:           register_x14_algo           ( gate ); break;
     case ALGO_X15:           register_x15_algo           ( gate ); break;
     case ALGO_X16R:          register_x16r_algo          ( gate ); break;
+    case ALGO_X16RV2:        register_x16rv2_algo        ( gate ); break;
     case ALGO_X16RT:         register_x16rt_algo         ( gate ); break;
     case ALGO_X16RT_VEIL:    register_x16rt_veil_algo    ( gate ); break;
     case ALGO_X16S:          register_x16s_algo          ( gate ); break;
     case ALGO_X17:           register_x17_algo           ( gate ); break;
     case ALGO_X21S:          register_x21s_algo          ( gate ); break;
+    case ALGO_X22I:          register_x22i_algo          ( gate ); break;
+    case ALGO_X25X:          register_x25x_algo          ( gate ); break;
     case ALGO_XEVAN:         register_xevan_algo         ( gate ); break;
-/*    case ALGO_YESCRYPT:     register_yescrypt_05_algo     ( gate ); break;
-     case ALGO_YESCRYPTR8:   register_yescryptr8_05_algo   ( gate ); break;
-     case ALGO_YESCRYPTR16:  register_yescryptr16_05_algo  ( gate ); break;
-     case ALGO_YESCRYPTR32:  register_yescryptr32_05_algo  ( gate ); break;
-*/
-    case ALGO_YESCRYPT:      register_yescrypt_algo      ( gate ); break;
-    case ALGO_YESCRYPTR8:    register_yescryptr8_algo    ( gate ); break;
-    case ALGO_YESCRYPTR16:   register_yescryptr16_algo   ( gate ); break;
-    case ALGO_YESCRYPTR32:   register_yescryptr32_algo   ( gate ); break;
+    case ALGO_YESCRYPT:      register_yescrypt_05_algo   ( gate ); break;
+//    case ALGO_YESCRYPT:      register_yescrypt_algo      ( gate ); break;
+    case ALGO_YESCRYPTR8:    register_yescryptr8_05_algo ( gate ); break;
+//    case ALGO_YESCRYPTR8:    register_yescryptr8_algo    ( gate ); break;
+    case ALGO_YESCRYPTR8G:   register_yescryptr8g_algo   ( gate ); break;
+    case ALGO_YESCRYPTR16:   register_yescryptr16_05_algo( gate ); break;
+//    case ALGO_YESCRYPTR16:   register_yescryptr16_algo   ( gate ); break;
+    case ALGO_YESCRYPTR32:   register_yescryptr32_05_algo( gate ); break;
+//    case ALGO_YESCRYPTR32:   register_yescryptr32_algo   ( gate ); break;
     case ALGO_YESPOWER:      register_yespower_algo      ( gate ); break;
     case ALGO_YESPOWERR16:   register_yespowerr16_algo   ( gate ); break;
+    case ALGO_YESPOWER_B2B:  register_yespower_b2b_algo  ( gate ); break;
     case ALGO_ZR5:           register_zr5_algo           ( gate ); break;
    default:
       applog(LOG_ERR,"FAIL: algo_gate registration failed, unknown algo %s.\n", algo_names[opt_algo] );
@@ -269,30 +400,6 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
 // restore warnings
 #pragma GCC diagnostic pop
 
-// override std defaults with jr2 defaults
-bool register_json_rpc2( algo_gate_t *gate )
-{
-  applog(LOG_WARNING,"\nCryptonight algorithm and variants are no longer");
-  applog(LOG_WARNING,"supported by cpuminer-opt. Shares submitted will");
-  applog(LOG_WARNING,"likely be rejected. Proceed at your own risk.\n");
-
-  gate->wait_for_diff           = (void*)&do_nothing;
-  gate->get_new_work            = (void*)&jr2_get_new_work;
-  gate->get_nonceptr            = (void*)&jr2_get_nonceptr;
-  gate->stratum_gen_work        = (void*)&jr2_stratum_gen_work;
-  gate->build_stratum_request   = (void*)&jr2_build_stratum_request;
-  gate->submit_getwork_result   = (void*)&jr2_submit_getwork_result;
-  gate->longpoll_rpc_call       = (void*)&jr2_longpoll_rpc_call;
-  gate->work_decode             = (void*)&jr2_work_decode;
-  gate->stratum_handle_response = (void*)&jr2_stratum_handle_response;
-  gate->nonce_index             = JR2_NONCE_INDEX;
-  jsonrpc_2 = true;   // still needed
-  opt_extranonce = false;
-//  have_gbt = false;
-  return true;
- }
-
-// run the alternate hash function for a specific algo
 void exec_hash_function( int algo, void *output, const void *pdata )
 {
   algo_gate_t gate;   
@@ -312,39 +419,37 @@ void exec_hash_function( int algo, void *output, const void *pdata )
 const char* const algo_alias_map[][2] =
 {
 //   alias                proper
-  { "argon2d-crds",      "argon2d250"   },
-  { "argon2d-dyn",       "argon2d500"   },
-  { "argon2d-uis",       "argon2d4096"  },
-  { "bitcore",           "timetravel10" },
-  { "bitzeny",           "yescryptr8"   },
-  { "blake256r8",        "blakecoin"    },
-  { "blake256r8vnl",     "vanilla"      },
-  { "blake256r14",       "blake"        },
-  { "blake256r14dcr",    "decred"       },
-  { "cryptonote",        "cryptonight"  },
-  { "cryptonight-light", "cryptolight"  },
-  { "diamond",           "dmd-gr"       },
-  { "droplp",            "drop"         },
-  { "espers",            "hmq1725"      },
-  { "flax",              "c11"          },
-  { "hsr",               "x13sm3"       },
-  { "jackpot",           "jha"          },
-  { "jane",              "scryptjane"   }, 
-  { "lyra2",             "lyra2re"      },
-  { "lyra2v2",           "lyra2rev2"    },
-  { "lyra2v3",           "lyra2rev3"    },
-  { "myrgr",             "myr-gr"       },
-  { "myriad",            "myr-gr"       },
-  { "neo",               "neoscrypt"    },
-  { "phi",               "phi1612"      },
-//  { "sia",               "blake2b"      },
-  { "sib",               "x11gost"      },
-  { "timetravel8",       "timetravel"   },
-  { "veil",              "x16rt-veil"   },
-  { "x16r-hex",          "hex"          },
-  { "yenten",            "yescryptr16"  },
-  { "ziftr",             "zr5"          },
-  { NULL,                NULL           }   
+  { "argon2d-crds",      "argon2d250"     },
+  { "argon2d-dyn",       "argon2d500"     },
+  { "argon2d-uis",       "argon2d4096"    },
+  { "bcd",               "x13bcd"         },
+  { "bitcore",           "timetravel10"   },
+  { "bitzeny",           "yescryptr8"     },
+  { "blake256r8",        "blakecoin"      },
+  { "blake256r8vnl",     "vanilla"        },
+  { "blake256r14",       "blake"          },
+  { "blake256r14dcr",    "decred"         },
+  { "diamond",           "dmd-gr"         },
+  { "espers",            "hmq1725"        },
+  { "flax",              "c11"            },
+  { "hsr",               "x13sm3"         },
+  { "jackpot",           "jha"            },
+  { "jane",              "scryptjane"     }, 
+  { "lyra2",             "lyra2re"        },
+  { "lyra2v2",           "lyra2rev2"      },
+  { "lyra2v3",           "lyra2rev3"      },
+  { "myrgr",             "myr-gr"         },
+  { "myriad",            "myr-gr"         },
+  { "neo",               "neoscrypt"      },
+  { "phi",               "phi1612"        },
+  { "scryptn2",          "scrypt:1048576" },
+  { "sib",               "x11gost"        },
+  { "timetravel8",       "timetravel"     },
+  { "veil",              "x16rt-veil"     },
+  { "x16r-hex",          "hex"            },
+  { "yenten",            "yescryptr16"    },
+  { "ziftr",             "zr5"            },
+  { NULL,                NULL             }   
 };
 
 // if arg is a valid alias for a known algo it is updated with the proper
@@ -357,48 +462,11 @@ void get_algo_alias( char** algo_or_alias )
     if ( !strcasecmp( *algo_or_alias, algo_alias_map[i][ ALIAS ] ) )
     {
       // found valid alias, return proper name
-      *algo_or_alias = (char* const)( algo_alias_map[i][ PROPER ] );
+      *algo_or_alias = (char*)( algo_alias_map[i][ PROPER ] );
       return;
     }
 }
 
 #undef ALIAS
 #undef PROPER
-
-bool submit_solution( struct work *work, void *hash,
-                      struct thr_info *thr )
-{
-     work_set_target_ratio( work, hash );
-     if ( submit_work( thr, work ) )
-     {
-         if ( !opt_quiet )
-            applog( LOG_BLUE, "Share %d submitted by thread %d, job %s.",
-                    accepted_share_count + rejected_share_count + 1,
-                    thr->id, work->job_id );
-         return true;
-     }
-     else
-          applog( LOG_WARNING, "Failed to submit share." );
-     return false;
-}
-
-bool submit_lane_solution( struct work *work, void *hash,
-                           struct thr_info *thr, int lane )
-{
-     work_set_target_ratio( work, hash );
-     if ( submit_work( thr, work ) )
-     {
-         if ( !opt_quiet )
-//            applog( LOG_BLUE, "Share %d submitted by thread %d, lane %d.",
-//                    accepted_share_count + rejected_share_count + 1,
-//                    thr->id, lane );
-            applog( LOG_BLUE, "Share %d submitted by thread %d, lane %d, job %s.",
-                    accepted_share_count + rejected_share_count + 1, thr->id,
-                    lane, work->job_id );
-         return true;
-     }
-     else
-          applog( LOG_WARNING, "Failed to submit share." );
-     return false;
-}
 

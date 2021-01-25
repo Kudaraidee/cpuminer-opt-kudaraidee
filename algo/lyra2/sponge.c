@@ -89,6 +89,9 @@ inline void initState( uint64_t State[/*16*/] )
  *
  * @param v     A 1024-bit (16 uint64_t) array to be processed by Blake2b's G function
  */
+
+#if !defined(__AVX512F__) && !defined(__AVX2__) && !defined(__SSE2__)
+
 inline static void blake2bLyra( uint64_t *v )
 {
     ROUND_LYRA(0);
@@ -113,6 +116,8 @@ inline static void reducedBlake2bLyra( uint64_t *v )
 {
     ROUND_LYRA(0);
 }
+
+#endif
 
 /**
  * Performs a squeeze operation, using Blake2b's G function as the
@@ -263,10 +268,9 @@ inline void absorbBlockBlake2Safe( uint64_t *State, const uint64_t *In,
 #if defined (__AVX2__)
 
   register __m256i state0, state1, state2, state3;
-  const __m256i zero = m256_zero;
 
-  state0 = zero;
-  state1 = zero;
+  state0 = 
+  state1 = m256_zero;
   state2 = m256_const_64( 0xa54ff53a5f1d36f1ULL, 0x3c6ef372fe94f82bULL,
                           0xbb67ae8584caa73bULL, 0x6a09e667f3bcc908ULL );
   state3 = m256_const_64( 0x5be0cd19137e2179ULL, 0x1f83d9abfb41bd6bULL,
@@ -290,12 +294,11 @@ inline void absorbBlockBlake2Safe( uint64_t *State, const uint64_t *In,
 #elif defined (__SSE2__)
 
   __m128i state0, state1, state2, state3, state4, state5, state6, state7;
-  const __m128i zero = m128_zero;
 
-  state0 = zero;
-  state1 = zero;
-  state2 = zero;
-  state3 = zero;
+  state0 = 
+  state1 =
+  state2 =
+  state3 = m128_zero;
   state4 = m128_const_64( 0xbb67ae8584caa73bULL, 0x6a09e667f3bcc908ULL );
   state5 = m128_const_64( 0xa54ff53a5f1d36f1ULL, 0x3c6ef372fe94f82bULL );
   state6 = m128_const_64( 0x9b05688c2b3e6c1fULL, 0x510e527fade682d1ULL );
@@ -377,7 +380,10 @@ inline void reducedSqueezeRow0( uint64_t* State, uint64_t* rowOut,
     {
        _mm_prefetch( out -  9, _MM_HINT_T0 );
        _mm_prefetch( out - 11, _MM_HINT_T0 );
-                   
+
+//printf("S RSR0 col= %d, out= %x\n",i,out);
+
+
        out[0] = state0;
        out[1] = state1;
        out[2] = state2;
@@ -708,11 +714,34 @@ inline void reducedDuplexRowSetup( uint64_t *State, uint64_t *rowIn,
        out[1] = _mm256_xor_si256( state1, in[1] );
        out[2] = _mm256_xor_si256( state2, in[2] );
 
+/*
+printf("s duplexsetup col= %d\n",i); 
+uint64_t * o = (uint64_t*)out;
+printf("S out %016lx %016lx %016lx %016lx\n",o[0],o[1],o[2],o[3]);
+printf("S out %016lx %016lx %016lx %016lx\n",o[4],o[5],o[6],o[7]);
+printf("S out %016lx %016lx %016lx %016lx\n",o[8],o[9],o[10],o[11]);
+printf("S out %016lx %016lx %016lx %016lx\n",o[12],o[13],o[14],o[15]);
+printf("S out %016lx %016lx %016lx %016lx\n",o[16],o[17],o[18],o[19]);
+printf("S out %016lx %016lx %016lx %016lx\n",o[20],o[21],o[22],o[23]);
+*/
+
        //M[row*][col] = M[row*][col] XOR rotW(rand)
        t0 = _mm256_permute4x64_epi64( state0, 0x93 );
        t1 = _mm256_permute4x64_epi64( state1, 0x93 );
        t2 = _mm256_permute4x64_epi64( state2, 0x93 );
 
+/*
+uint64_t *t = (uint64_t*)&t0;
+printf("S t0 %016lx %016lx %016lx %016lx\n",t[0],t[1],t[2],t[3]);
+
+o = (uint64_t*)inout;
+printf("S inout0 %016lx %016lx %016lx %016lx\n",o[0],o[1],o[2],o[3]);
+printf("S inout0 %016lx %016lx %016lx %016lx\n",o[4],o[5],o[6],o[7]);
+printf("S inout0 %016lx %016lx %016lx %016lx\n",o[8],o[9],o[10],o[11]);
+printf("S inout0 %016lx %016lx %016lx %016lx\n",o[12],o[13],o[14],o[15]);
+printf("S inout0 %016lx %016lx %016lx %016lx\n",o[16],o[17],o[18],o[19]);
+printf("S inout0 %016lx %016lx %016lx %016lx\n",o[20],o[21],o[22],o[23]);
+*/       
        inout[0] = _mm256_xor_si256( inout[0],
                                     _mm256_blend_epi32( t0, t2, 0x03 ) );
        inout[1] = _mm256_xor_si256( inout[1],
@@ -720,7 +749,17 @@ inline void reducedDuplexRowSetup( uint64_t *State, uint64_t *rowIn,
        inout[2] = _mm256_xor_si256( inout[2],
                                     _mm256_blend_epi32( t2, t1, 0x03 ) );
 
-       //Inputs: next column (i.e., next block in sequence)
+/*
+o = (uint64_t*)inout;
+printf("S inout1 %016lx %016lx %016lx %016lx\n",o[0],o[1],o[2],o[3]);
+printf("S inout1 %016lx %016lx %016lx %016lx\n",o[4],o[5],o[6],o[7]);
+printf("S inout1 %016lx %016lx %016lx %016lx\n",o[8],o[9],o[10],o[11]);
+printf("S inout1 %016lx %016lx %016lx %016lx\n",o[12],o[13],o[14],o[15]);
+printf("S inout1 %016lx %016lx %016lx %016lx\n",o[16],o[17],o[18],o[19]);
+printf("S inout1 %016lx %016lx %016lx %016lx\n",o[20],o[21],o[22],o[23]);
+*/
+
+//Inputs: next column (i.e., next block in sequence)
        in    += BLOCK_LEN_M256I;
        inout += BLOCK_LEN_M256I;
        //Output: goes to previous column
@@ -950,6 +989,22 @@ inline void reducedDuplexRow( uint64_t *State, uint64_t *rowIn,
       _mm_prefetch( out   + 11, _MM_HINT_T0 );
       _mm_prefetch( inout +  9, _MM_HINT_T0 );
       _mm_prefetch( inout + 11, _MM_HINT_T0 );
+
+/*
+uint64_t *io = (uint64_t*)inout;
+uint64_t *ii = (uint64_t*)in;
+
+printf("RDRS1 col= %d\n", i);
+printf("RDRS1 IO %016lx %016lx %016lx %016lx\n",io[0],io[1],io[2],io[3]);
+printf("RDRS1 IO %016lx %016lx %016lx %016lx\n",io[4],io[5],io[6],io[7]);
+printf("RDRS1 IO %016lx %016lx %016lx %016lx\n",io[8],io[9],io[10],io[11]);
+printf("RDRS1 IO %016lx %016lx %016lx %016lx\n",io[12],io[13],io[14],io[15]);
+printf("RDRS1 IN %016lx %016lx %016lx %016lx\n",ii[0],ii[1],ii[2],ii[3]);
+printf("RDRS1 IN %016lx %016lx %016lx %016lx\n",ii[4],ii[5],ii[6],ii[7]);
+printf("RDRS1 IN %016lx %016lx %016lx %016lx\n",ii[8],ii[9],ii[10],ii[11]);
+printf("RDRS1 IN %016lx %016lx %016lx %016lx\n",ii[12],ii[13],ii[14],ii[15]);
+*/
+
 
       //Absorbing "M[prev] [+] M[row*]"
       state0 = _mm256_xor_si256( state0,

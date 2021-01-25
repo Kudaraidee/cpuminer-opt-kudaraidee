@@ -18,19 +18,9 @@ dist_man_MANS	= cpuminer.1
 cpuminer_SOURCES = \
   cpu-miner.c \
   util.c \
-  uint256.cpp \
   api.c \
   sysinfos.c \
   algo-gate-api.c\
-  crypto/oaes_lib.c \
-  crypto/c_keccak.c \
-  crypto/c_groestl.c \
-  crypto/c_blake256.c \
-  crypto/c_jh.c \
-  crypto/c_skein.c \
-  crypto/hash.c \
-  crypto/aesb.c \
-  crypto/magimath.cpp \
   algo/argon2/argon2a/argon2a.c \
   algo/argon2/argon2a/ar2/argon2.c \
   algo/argon2/argon2a/ar2/opt.c \
@@ -77,31 +67,29 @@ cpuminer_SOURCES = \
   algo/bmw/bmw512-gate.c \
   algo/bmw/bmw512.c \
   algo/bmw/bmw512-4way.c \
-  algo/cryptonight/cryptolight.c \
-  algo/cryptonight/cryptonight-common.c\
-  algo/cryptonight/cryptonight-aesni.c\
-  algo/cryptonight/cryptonight.c\
-  algo/cubehash/sph_cubehash.c \
   algo/cubehash/cubehash_sse2.c\
   algo/cubehash/cube-hash-2way.c \
   algo/echo/sph_echo.c \
+  algo/echo/echo-hash-4way.c \
   algo/echo/aes_ni/hash.c\
   algo/gost/sph_gost.c \
+  algo/groestl/groestl-gate.c \
+  algo/groestl/groestl512-hash-4way.c \
+  algo/groestl/groestl256-hash-4way.c \
   algo/groestl/sph_groestl.c \
   algo/groestl/groestl.c \
+  algo/groestl/groestl-4way.c \
   algo/groestl/myrgr-gate.c \
   algo/groestl/myrgr-4way.c \
   algo/groestl/myr-groestl.c \
   algo/groestl/aes_ni/hash-groestl.c \
   algo/groestl/aes_ni/hash-groestl256.c \
   algo/fugue/sph_fugue.c \
+  algo/fugue/fugue-aesni.c \
   algo/hamsi/sph_hamsi.c \
   algo/hamsi/hamsi-hash-4way.c \
   algo/haval/haval.c \
   algo/haval/haval-hash-4way.c \
-  algo/heavy/sph_hefty1.c \
-  algo/heavy/heavy.c \
-  algo/heavy/bastion.c \
   algo/hodl/aes.c \
   algo/hodl/hodl-gate.c \
   algo/hodl/hodl-wolf.c \
@@ -117,13 +105,15 @@ cpuminer_SOURCES = \
   algo/keccak/keccak-hash-4way.c \
   algo/keccak/keccak-4way.c\
   algo/keccak/keccak-gate.c \
-  algo/keccak/sse2/keccak.c \
-  algo/luffa/sph_luffa.c \
-  algo/luffa/luffa.c \
+  algo/keccak/sha3d-4way.c \
+  algo/keccak/sha3d.c \
+  algo/lanehash/lane.c \
   algo/luffa/luffa_for_sse2.c \
   algo/luffa/luffa-hash-2way.c \
   algo/lyra2/lyra2.c \
   algo/lyra2/sponge.c \
+  algo/lyra2/sponge-2way.c \
+  algo/lyra2/lyra2-hash-2way.c \
   algo/lyra2/lyra2-gate.c \
   algo/lyra2/lyra2rev2.c \
   algo/lyra2/lyra2rev2-4way.c \
@@ -139,13 +129,14 @@ cpuminer_SOURCES = \
   algo/lyra2/allium.c \
   algo/lyra2/phi2-4way.c \
   algo/lyra2/phi2.c \
-  algo/m7m.c \
+  algo//m7m/m7m.c \
+  algo/m7m/magimath.cpp \
   algo/nist5/nist5-gate.c \
   algo/nist5/nist5-4way.c \
   algo/nist5/nist5.c \
   algo/nist5/zr5.c \
+  algo/panama/panama-hash-4way.c \
   algo/panama/sph_panama.c \
-  algo/radiogatun/sph_radiogatun.c \
   algo/quark/quark-gate.c \
   algo/quark/quark.c \
   algo/quark/quark-4way.c \
@@ -168,13 +159,12 @@ cpuminer_SOURCES = \
   algo/ripemd/lbry-4way.c \
   algo/scrypt/scrypt.c \
   algo/scrypt/neoscrypt.c \
-  algo/scrypt/pluck.c \
-  algo/scryptjane/scrypt-jane.c \
   algo/sha/sph_sha2.c \
   algo/sha/sph_sha2big.c \
   algo/sha/sha256-hash-4way.c \
   algo/sha/sha512-hash-4way.c \
-  algo/sha/sha256_hash_11way.c \
+  algo/sha/hmac-sha256-hash.c \
+  algo/sha/hmac-sha256-hash-4way.c \
   algo/sha/sha2.c \
   algo/sha/sha256t-gate.c \
   algo/sha/sha256t-4way.c \
@@ -186,8 +176,8 @@ cpuminer_SOURCES = \
   algo/shavite/sph_shavite.c \
   algo/shavite/sph-shavite-aesni.c \
   algo/shavite/shavite-hash-2way.c \
+  algo/shavite/shavite-hash-4way.c \
   algo/shavite/shavite.c \
-  algo/simd/sph_simd.c \
   algo/simd/nist.c \
   algo/simd/vector.c \
   algo/simd/simd-hash-2way.c \
@@ -198,9 +188,9 @@ cpuminer_SOURCES = \
   algo/skein/skein-gate.c \
   algo/skein/skein2.c \
   algo/skein/skein2-4way.c \
-  algo/skein/skein2-gate.c \
   algo/sm3/sm3.c \
   algo/sm3/sm3-hash-4way.c \
+  algo/swifftx/swifftx.c \
   algo/tiger/sph_tiger.c \
   algo/whirlpool/sph_whirlpool.c \
   algo/whirlpool/whirlpool-hash-4way.c \
@@ -225,7 +215,6 @@ cpuminer_SOURCES = \
   algo/x11/timetravel10-gate.c \
   algo/x11/timetravel10.c \
   algo/x11/timetravel10-4way.c \
-  algo/x11/fresh.c \
   algo/x11/x11evo.c \
   algo/x11/x11evo-4way.c \
   algo/x11/x11evo-gate.c \
@@ -244,7 +233,6 @@ cpuminer_SOURCES = \
   algo/x13/skunk-gate.c \
   algo/x13/skunk-4way.c \
   algo/x13/skunk.c \
-  algo/x13/drop.c \
   algo/x13/x13bcd-4way.c \
   algo/x13/x13bcd.c \
   algo/x14/x14-gate.c \
@@ -263,11 +251,14 @@ cpuminer_SOURCES = \
   algo/x16/x16r-gate.c \
   algo/x16/x16r.c \
   algo/x16/x16r-4way.c \
+  algo/x16/x16rv2.c \
+  algo/x16/x16rv2-4way.c \
   algo/x16/x16rt.c \
   algo/x16/x16rt-4way.c \
   algo/x16/hex.c \
   algo/x16/x21s-4way.c \
   algo/x16/x21s.c \
+  algo/x16/minotaur.c \
   algo/x17/x17-gate.c \
   algo/x17/x17.c \
   algo/x17/x17-4way.c \
@@ -277,12 +268,17 @@ cpuminer_SOURCES = \
   algo/x17/sonoa-gate.c \
   algo/x17/sonoa-4way.c \
   algo/x17/sonoa.c \
-  algo/x20/x20r.c \
+  algo/x22/x22i-4way.c \
+  algo/x22/x22i.c \
+  algo/x22/x22i-gate.c \
+  algo/x22/x25x.c \
+  algo/x22/x25x-4way.c \
   algo/yescrypt/yescrypt.c \
-  algo/yescrypt/sha256_Y.c \
   algo/yescrypt/yescrypt-best.c \
-  algo/yespower/yespower.c \
-  algo/yespower/sha256_p.c \
+  algo/yespower/yespower-gate.c \
+  algo/yespower/yespower-blake2b.c \
+  algo/yespower/crypto/blake2b-yp.c \
+  algo/yespower/yescrypt-r8g.c \
   algo/yespower/yespower-opt.c
 
 disable_flags =

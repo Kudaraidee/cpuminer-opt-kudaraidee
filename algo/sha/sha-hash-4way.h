@@ -41,13 +41,9 @@
 #define SHA2_HASH_4WAY_H__ 1
 
 #include <stddef.h>
-#include "sph_types.h"
 #include "simd-utils.h"
 
 #if defined(__SSE2__)
-//#if defined(__SSE4_2__)
-
-//#define SPH_SIZE_sha256   256
 
 // SHA-256 4 way
 
@@ -56,11 +52,15 @@ typedef struct {
    __m128i val[8];
    uint32_t count_high, count_low;
    bool initialized;
-} sha256_4way_context;
+} sha256_4way_context __attribute__ ((aligned (64)));
 
 void sha256_4way_init( sha256_4way_context *sc );
-void sha256_4way( sha256_4way_context *sc, const void *data, size_t len );
+void sha256_4way_update( sha256_4way_context *sc, const void *data,
+                         size_t len );
 void sha256_4way_close( sha256_4way_context *sc, void *dst );
+void sha256_4way_full( void *dst, const void *data, size_t len );
+
+#endif  // SSE2
 
 #if defined (__AVX2__)
 
@@ -71,13 +71,34 @@ typedef struct {
    __m256i val[8];
    uint32_t count_high, count_low;
    bool initialized;
-} sha256_8way_context;
+} sha256_8way_context __attribute__ ((aligned (128)));
 
 void sha256_8way_init( sha256_8way_context *sc );
-void sha256_8way( sha256_8way_context *sc, const void *data, size_t len );
+void sha256_8way_update( sha256_8way_context *sc, const void *data, size_t len );
 void sha256_8way_close( sha256_8way_context *sc, void *dst );
+void sha256_8way_full( void *dst, const void *data, size_t len );
 
-//#define SPH_SIZE_sha512   512
+#endif  // AVX2
+
+#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+
+// SHA-256 16 way
+
+typedef struct {
+   __m512i buf[64>>2];
+   __m512i val[8];
+   uint32_t count_high, count_low;
+   bool initialized;
+} sha256_16way_context __attribute__ ((aligned (128)));
+
+void sha256_16way_init( sha256_16way_context *sc );
+void sha256_16way_update( sha256_16way_context *sc, const void *data, size_t len );
+void sha256_16way_close( sha256_16way_context *sc, void *dst );
+void sha256_16way_full( void *dst, const void *data, size_t len );
+
+#endif // AVX512
+
+#if defined (__AVX2__)
 
 // SHA-512 4 way
 
@@ -86,30 +107,33 @@ typedef struct {
    __m256i val[8];
    uint64_t count;
    bool initialized;
-} sha512_4way_context;
+} sha512_4way_context __attribute__ ((aligned (128)));
 
 void sha512_4way_init( sha512_4way_context *sc);
-void sha512_4way( sha512_4way_context *sc, const void *data, size_t len );
+void sha512_4way_update( sha512_4way_context *sc, const void *data,
+                         size_t len );
 void sha512_4way_close( sha512_4way_context *sc, void *dst );
+void sha512_4way_full( void *dst, const void *data, size_t len );
 
-// SHA-256 11 way hybrid
-// Combines AVX2, MMX and scalar data to do 8 + 2 + 1 parallel.
+#endif  // AVX2
+
+#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+
+// SHA-512 8 way
+
 typedef struct {
-   __m256i  bufx[64>>2];
-   __m256i  valx[8];
-   __m64    bufy[64>>2];
-   __m64    valy[8];
-   uint32_t bufz[64>>2];
-   uint32_t valz[8];
-   uint32_t count_high, count_low;
-} sha256_11way_context;
+   __m512i buf[128>>3];
+   __m512i val[8];
+   uint64_t count;
+   bool initialized;
+} sha512_8way_context __attribute__ ((aligned (128)));
 
-void sha256_11way_init( sha256_11way_context *ctx );
-void sha256_11way_update( sha256_11way_context *ctx, const void *datax,
-	                 const void *datay, const void *dataz, size_t len );
-void sha256_11way_close( sha256_11way_context *ctx, void *dstx, void *dstyx,
-	                 void *dstz  );
+void sha512_8way_init( sha512_8way_context *sc);
+void sha512_8way_update( sha512_8way_context *sc, const void *data, 
+                         size_t len );
+void sha512_8way_close( sha512_8way_context *sc, void *dst );
+void sha512_8way_full( void *dst, const void *data, size_t len );
 
-#endif  // __AVX2__
-#endif  // __SSE2__
+#endif  // AVX512
+
 #endif  // SHA256_4WAY_H__

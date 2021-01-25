@@ -184,10 +184,10 @@ static BLAKE2_INLINE __m128i fBlaMka(__m128i x, __m128i y) {
 
 #include <immintrin.h>
 
-#define  rotr32  mm256_swap32_64
-#define  rotr24  mm256_ror3x8_64
-#define  rotr16  mm256_ror1x16_64
-#define  rotr63( x ) mm256_rol_64( x, 1 )
+#define  rotr32( x )  mm256_ror_64( x, 32 )
+#define  rotr24( x )  mm256_ror_64( x, 24 )
+#define  rotr16( x )  mm256_ror_64( x, 16 )
+#define  rotr63( x )  mm256_rol_64( x,  1 )
 
 //#define rotr32(x)   _mm256_shuffle_epi32(x, _MM_SHUFFLE(2, 3, 0, 1))
 //#define rotr24(x)   _mm256_shuffle_epi8(x, _mm256_setr_epi8(3, 4, 5, 6, 7, 0, 1, 2, 11, 12, 13, 14, 15, 8, 9, 10, 3, 4, 5, 6, 7, 0, 1, 2, 11, 12, 13, 14, 15, 8, 9, 10))
@@ -427,14 +427,14 @@ static __m512i muladd(__m512i x, __m512i y)
 #define SWAP_QUARTERS(A0, A1) \
     do { \
         SWAP_HALVES(A0, A1); \
-        A0 = _mm512_permutexvar_epi64(_mm512_setr_epi64(0, 1, 4, 5, 2, 3, 6, 7), A0); \
-        A1 = _mm512_permutexvar_epi64(_mm512_setr_epi64(0, 1, 4, 5, 2, 3, 6, 7), A1); \
+        A0 = _mm512_shuffle_i64x2( A0, A0, 0xd8 ); \
+        A1 = _mm512_shuffle_i64x2( A1, A1, 0xd8 ); \
     } while((void)0, 0)
 
 #define UNSWAP_QUARTERS(A0, A1) \
     do { \
-        A0 = _mm512_permutexvar_epi64(_mm512_setr_epi64(0, 1, 4, 5, 2, 3, 6, 7), A0); \
-        A1 = _mm512_permutexvar_epi64(_mm512_setr_epi64(0, 1, 4, 5, 2, 3, 6, 7), A1); \
+        A0 = _mm512_shuffle_i64x2( A0, A0, 0xd8 ); \
+        A1 = _mm512_shuffle_i64x2( A1, A1, 0xd8 ); \
         SWAP_HALVES(A0, A1); \
     } while((void)0, 0)
 

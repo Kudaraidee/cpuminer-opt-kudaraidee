@@ -298,6 +298,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_ARGON2D250:    register_argon2d_crds_algo  ( gate ); break;
     case ALGO_ARGON2D500:    register_argon2d_dyn_algo   ( gate ); break;
     case ALGO_ARGON2D4096:   register_argon2d4096_algo   ( gate ); break;
+    case ALGO_ARGON2D16000:  register_argon2d_bcrs_algo  ( gate ); break;
     case ALGO_AXIOM:         register_axiom_algo         ( gate ); break;
     case ALGO_BLAKE:         register_blake_algo         ( gate ); break;
     case ALGO_BLAKE2B:       register_blake2b_algo       ( gate ); break;
@@ -422,6 +423,7 @@ const char* const algo_alias_map[][2] =
   { "argon2d-crds",      "argon2d250"     },
   { "argon2d-dyn",       "argon2d500"     },
   { "argon2d-uis",       "argon2d4096"    },
+  { "argon2d-bcrs",      "argon2d16000"    },
   { "bcd",               "x13bcd"         },
   { "bitcore",           "timetravel10"   },
   { "bitzeny",           "yescryptr8"     },

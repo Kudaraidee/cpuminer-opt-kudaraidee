@@ -303,3 +303,16 @@ bool register_yespower_b2b_algo( algo_gate_t* gate )
   return true;
 };
 
+bool register_yespowersugar_algo( algo_gate_t* gate )
+{
+  yespower_params.version = YESPOWER_1_0;
+  yespower_params.N       = 2048;
+  yespower_params.r       = 32;
+  yespower_params.pers    = "Satoshi Nakamoto 31/Oct/2008 Proof-of-work is essentially one-CPU-one-vote";
+  yespower_params.perslen = 74;
+  gate->optimizations = SSE2_OPT | SHA_OPT;
+  gate->scanhash      = (void*)&scanhash_yespower;
+  gate->hash          = (void*)&yespower_hash;
+  opt_target_factor = 65536.0;
+  return true;
+ };

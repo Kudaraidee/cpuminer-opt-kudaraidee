@@ -382,6 +382,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
 //    case ALGO_YESCRYPTR32:   register_yescryptr32_algo   ( gate ); break;
     case ALGO_YESPOWER:      register_yespower_algo      ( gate ); break;
     case ALGO_YESPOWERR16:   register_yespowerr16_algo   ( gate ); break;
+    case ALGO_YESPOWERSUGAR:   register_yespowersugar_algo   ( gate ); break;
     case ALGO_YESPOWER_B2B:  register_yespower_b2b_algo  ( gate ); break;
     case ALGO_ZR5:           register_zr5_algo           ( gate ); break;
    default:
@@ -449,7 +450,8 @@ const char* const algo_alias_map[][2] =
   { "timetravel8",       "timetravel"     },
   { "veil",              "x16rt-veil"     },
   { "x16r-hex",          "hex"            },
-  { "yenten",            "yescryptr16"    },
+  { "yenten",            "yespowerr16"    },
+  { "yespowersugar",     "yespowersugar"  },
   { "ziftr",             "zr5"            },
   { NULL,                NULL             }   
 };

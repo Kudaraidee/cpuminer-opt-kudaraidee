@@ -55,16 +55,18 @@ Supported Algorithms
                           allium        Garlicoin
                           anime         Animecoin
                           argon2        Argon2 coin (AR2)
-                          argon2d250    
+                          argon2d250
                           argon2d500
                           argon2d4096
-                          blake         Blake-256
-                          blake2b       Blake2-512
-                          blake2s       Blake2-256
+                          argon2d16000
+                          blake         Blake-256 (SFR)
+                          blake2b       Blake2b-512
+                          blake2s       Blake-2 S
                           blakecoin     blake256r8
                           bmw           BMW 256
                           bmw512        BMW 512
-                          c11           
+                          c11           Chaincoin
+                          cpupower      CPUchain
                           decred
                           deep          Deepcoin (DCN)
                           dmd-gr        Diamond-Groestl
@@ -142,6 +144,7 @@ Supported Algorithms
                           yescryptr32   WAVI
                           yespower      Cryply
                           yespowerr16   Yenten (YTN)
+                          yespowersugar Suagrchain (SUGAR)
                           yespower-b2b  generic yespower + blake2b
                           zr5           Ziftr
 
@@ -150,11 +153,7 @@ parameters:
 
 scryptn2: --algo scrypt --param-n 1048576
 
-cpupower: --algo yespower --param-key "CPUpower: The number of CPU working or available for proof-of-work mining"
-
 power2b: --algo yespower-b2b --param-n 2048 --param-r 32 --param-key "Now I am become Death, the destroyer of worlds"
-
-sugarchain: --algo yespower --param-n 2048 -param-r 32 --param-key "Satoshi Nakamoto 31/Oct/2008 Proof-of-work is essentially one-CPU-one-vote"
 
 yespoweriots: --algo yespower --param-n 2048 --param-key "Iots is committed to the development of IOT"
 

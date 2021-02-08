@@ -369,3 +369,17 @@ bool register_yespowersugar_algo( algo_gate_t* gate )
   opt_target_factor = 65536.0;
   return true;
  };
+
+bool register_cpupower_algo( algo_gate_t* gate )
+{
+  yespower_params.version = YESPOWER_1_0;
+  yespower_params.N       = 2048;
+  yespower_params.r       = 32;
+  yespower_params.pers    = "CPUpower: The number of CPU working or available for proof-of-work mining";
+  yespower_params.perslen = 73;
+  gate->optimizations = SSE2_OPT | AVX2_OPT | NEON_OPT;
+  gate->scanhash      = (void*)&scanhash_yespower;
+  gate->hash          = (void*)&yespower_hash;
+  opt_target_factor = 65536.0;
+  return true;
+ };

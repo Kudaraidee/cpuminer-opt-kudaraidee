@@ -306,6 +306,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_BLAKECOIN:     register_blakecoin_algo     ( gate ); break;
     case ALGO_BMW512:        register_bmw512_algo        ( gate ); break;
     case ALGO_C11:           register_c11_algo           ( gate ); break;
+    case ALGO_CPUPOWER:		 register_cpupower_algo   	 ( gate ); break;
     case ALGO_DECRED:        register_decred_algo        ( gate ); break;
     case ALGO_DEEP:          register_deep_algo          ( gate ); break;
     case ALGO_DMD_GR:        register_dmd_gr_algo        ( gate ); break;
@@ -432,6 +433,7 @@ const char* const algo_alias_map[][2] =
   { "blake256r8vnl",     "vanilla"        },
   { "blake256r14",       "blake"          },
   { "blake256r14dcr",    "decred"         },
+  { "cpupower",          "cpupower"       },
   { "diamond",           "dmd-gr"         },
   { "espers",            "hmq1725"        },
   { "flax",              "c11"            },

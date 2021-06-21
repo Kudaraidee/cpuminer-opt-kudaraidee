@@ -16,7 +16,7 @@ jobs:
     - name: distclean
       run: make distclean || echo clean && rm -f config.status 
     - name: autogen
-      run: ./autogen
+      run: set -e && aclocal && autoheader && automake --foreign --add-missing --force-missing --copy && autoconf
      - name: configure
       run: ./configure --with-curl CFLAGS="-O3 -march=native -Wall"
     - name: make

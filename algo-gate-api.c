@@ -382,6 +382,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_YESCRYPTR32:   register_yescryptr32_05_algo( gate ); break;
 //    case ALGO_YESCRYPTR32:   register_yescryptr32_algo   ( gate ); break;
     case ALGO_YESPOWER:      register_yespower_algo      ( gate ); break;
+    case ALGO_YESPOWERARWN:   register_yespowerarwn_algo   ( gate ); break;
     case ALGO_YESPOWERR16:   register_yespowerr16_algo   ( gate ); break;
     case ALGO_YESPOWERSUGAR:   register_yespowersugar_algo   ( gate ); break;
     case ALGO_YESPOWER_B2B:  register_yespower_b2b_algo  ( gate ); break;
@@ -453,6 +454,7 @@ const char* const algo_alias_map[][2] =
   { "veil",              "x16rt-veil"     },
   { "x16r-hex",          "hex"            },
   { "yenten",            "yespowerr16"    },
+  { "yespowerarwn",     "yespowerarwn"  },
   { "yespowersugar",     "yespowersugar"  },
   { "ziftr",             "zr5"            },
   { NULL,                NULL             }   

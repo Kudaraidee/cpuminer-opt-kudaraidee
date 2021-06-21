@@ -13,13 +13,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: distclean
+      run: make distclean || echo clean && rm -f config.status 
     - name: autogen
       run: ./autogen.sh 
      - name: configure
       run: CFLAGS="-O3 -march=native -Wall" ./configure --with-curl
     - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+      run: make -j 4
+    - name: strip cpuminer
+      run: strip -s cpuminer
+    

@@ -15,7 +15,7 @@ jobs:
     - name: git clone
       run: git clone https://github.com/Kudaraidee/cpuminer-opt-kudaraidee
     - name: cpuminer-opt-kudaraidee
-      run: cd cpuminer-opt-kudaraidee
+      run: cd cpuminer-opt-kudaraidee && chmod +x *.sh
     - name: autogen
       run: ./autogen.sh 
     - name: configure

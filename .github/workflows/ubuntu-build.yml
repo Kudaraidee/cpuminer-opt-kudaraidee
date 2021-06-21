@@ -13,8 +13,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: distclean
-      run: make distclean 
      - name: configure
       run: ./configure --with-curl CFLAGS="-O3 -march=native -Wall"
     - name: make

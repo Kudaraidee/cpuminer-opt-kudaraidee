@@ -151,7 +151,6 @@ Supported Algorithms
                           yescryptr16   Eli
                           yescryptr32   WAVI
                           yespower      Cryply
-                          yespowerarwn      Arowanacoin(ARWN)
                           yespowerr16   Yenten (YTN)
                           yespowersugar Suagrchain (SUGAR)
                           yespower-b2b  generic yespower + blake2b

@@ -12,6 +12,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: git clone
+      run: git clone https://github.com/Kudaraidee/cpuminer-opt-kudaraidee
+    - name: cpuminer-opt-kudaraidee
+      run: cd cpuminer-opt-kudaraidee
     - name: autogen
       run: ./autogen.sh 
     - name: configure

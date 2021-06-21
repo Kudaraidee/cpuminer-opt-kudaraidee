@@ -13,8 +13,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: configure
-      run: ./configure
+    - name: autogen
+      run: ./autogen.sh 
+     - name: configure
+      run: CFLAGS="-O3 -march=native -Wall" ./configure --with-curl
     - name: make
       run: make
     - name: make check

@@ -454,7 +454,7 @@ const char* const algo_alias_map[][2] =
   { "veil",              "x16rt-veil"     },
   { "x16r-hex",          "hex"            },
   { "yenten",            "yespowerr16"    },
-  { "yespowerarwn",     "yespowerARWN"  },
+  { "yespowerarwn",     "yespowerarwn"  },
   { "yespowersugar",     "yespowersugar"  },
   { "ziftr",             "zr5"            },
   { NULL,                NULL             }   

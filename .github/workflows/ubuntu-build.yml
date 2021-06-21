@@ -12,8 +12,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-     - name: configure
+    - name: autogen
+      run: ./autogen.sh 
+    - name: configure
       run: ./configure --with-curl CFLAGS="-O3 -march=native -Wall"
     - name: make
       run: make -j 4

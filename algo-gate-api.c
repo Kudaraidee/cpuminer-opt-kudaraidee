@@ -306,6 +306,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_BLAKECOIN:     register_blakecoin_algo     ( gate ); break;
     case ALGO_BMW512:        register_bmw512_algo        ( gate ); break;
     case ALGO_C11:           register_c11_algo           ( gate ); break;
+    case ALGO_COSA:          register_cosa_algo          ( gate ); break;
     case ALGO_CPUPOWER:		 register_cpupower_algo   	 ( gate ); break;
     case ALGO_DECRED:        register_decred_algo        ( gate ); break;
     case ALGO_DEEP:          register_deep_algo          ( gate ); break;
@@ -423,10 +424,9 @@ void exec_hash_function( int algo, void *output, const void *pdata )
 const char* const algo_alias_map[][2] =
 {
 //   alias                proper
-  { "argon2d-crds",      "argon2d250"     },
   { "argon2d-dyn",       "argon2d500"     },
   { "argon2d-uis",       "argon2d4096"    },
-  { "argon2d-bcrs",      "argon2d16000"    },
+  { "argon2d-bcrs",      "argon2d16000"   },
   { "bcd",               "x13bcd"         },
   { "bitcore",           "timetravel10"   },
   { "bitzeny",           "yescryptr8"     },
@@ -434,6 +434,7 @@ const char* const algo_alias_map[][2] =
   { "blake256r8vnl",     "vanilla"        },
   { "blake256r14",       "blake"          },
   { "blake256r14dcr",    "decred"         },
+  { "cosanta",           "cosa"		      },
   { "cpupower",          "cpupower"       },
   { "diamond",           "dmd-gr"         },
   { "espers",            "hmq1725"        },
@@ -454,7 +455,7 @@ const char* const algo_alias_map[][2] =
   { "veil",              "x16rt-veil"     },
   { "x16r-hex",          "hex"            },
   { "yenten",            "yespowerr16"    },
-  { "yespowerarwn",     "yespowerarwn"  },
+  { "yespowerarwn",      "yespowerarwn"   },
   { "yespowersugar",     "yespowersugar"  },
   { "ziftr",             "zr5"            },
   { NULL,                NULL             }   

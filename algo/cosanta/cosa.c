@@ -25,7 +25,7 @@
 #include "algo/gost/sph_gost.h"
 #include "algo/lyra2/lyra2.h"
 
-void cosahash(void *output, const void *input)
+void cosahash(void *output, const void *input, int thr_id )
 {
 	unsigned char _ALIGN(128) hash[128],hashB[128],hashC[128],hashD[128];
 
@@ -140,6 +140,7 @@ int scanhash_cosa( struct work *work, uint32_t max_nonce,
 	const uint32_t Htarg = ptarget[7];
 	const uint32_t first_nonce = pdata[19];
 	uint32_t nonce = first_nonce;
+	int thr_id = mythr->id;
 	volatile uint8_t *restart = &(work_restart[thr_id].restart);
 
 	if (opt_benchmark)

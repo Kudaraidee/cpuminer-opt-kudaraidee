@@ -129,7 +129,8 @@ void cosahash(void *output, const void *input)
 	memcpy(output, hashD, 32);
 }
 
-int scanhash_cosa(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
+int scanhash_cosa( struct work *work, uint32_t max_nonce,
+	           uint64_t *hashes_done, struct thr_info *mythr )
 {
 	uint32_t _ALIGN(64) hash[8];
 	uint32_t _ALIGN(64) endiandata[20];

@@ -133,7 +133,7 @@ void cosahash(void *output, const void *input, int thr_id )
 	sph_gost512(&ctx_gost, (const void*) hashB, 64);
 	sph_gost512_close(&ctx_gost, (void*) hashC);
 
-	LYRA2(hashD, 32, hashC, 80, hashC, 80, 2, 66, 66);
+	LYRA2Z(hashD, 32, hashC, 80, hashC, 80, 2, 66, 66);
 
 	memcpy(output, hashD, 32);
 }

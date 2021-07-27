@@ -1,7 +1,5 @@
 #include "cosa-gate.h"
 
-#if !defined(COSA_8WAY) && !defined(COSA_4WAY)
-
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -171,5 +169,3 @@ void cosa_hash( void *output, const void *input, int thr_id )
 	
 	return 1;
 }
-
-#endif

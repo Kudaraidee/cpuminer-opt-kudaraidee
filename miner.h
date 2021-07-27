@@ -533,6 +533,7 @@ enum algos {
         ALGO_BMW,        
         ALGO_BMW512,
         ALGO_C11,         
+        ALGO_COSA,         
         ALGO_CPUPOWER,         
         ALGO_DECRED,
         ALGO_DEEP,
@@ -629,6 +630,7 @@ static const char* const algo_names[] = {
         "bmw",
         "bmw512",
         "c11",
+        "cosa",
         "cpupower",
         "decred",
         "deep",
@@ -791,6 +793,7 @@ Options:\n\
                           bmw           BMW 256\n\
                           bmw512        BMW 512\n\
                           c11           Chaincoin\n\
+                          cosa          Cosanta\n\
                           cpupower      CPUchain\n\
                           decred        Blake256r14dcr\n\
                           deep          Deepcoin (DCN)\n\

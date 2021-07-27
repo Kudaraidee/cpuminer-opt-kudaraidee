@@ -73,8 +73,9 @@ Supported Algorithms
                           blake2s       Blake-2 S
                           blakecoin     blake256r8
                           bmw           BMW 256
-                          bmw512        BMW 512
+                          bmw512        BMW 512 cosanta
                           c11           Chaincoin
+                          cosa   	    Cosanta
                           cpupower      CPUchain
                           decred
                           deep          Deepcoin (DCN)

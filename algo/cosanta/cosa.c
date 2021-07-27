@@ -1,5 +1,7 @@
 #include "cosa-gate.h"
 
+#if !defined(X17_8WAY) && !defined(X17_4WAY)
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -166,4 +168,8 @@ void cosa_hash( void *output, const void *input, int thr_id )
 	LYRA2Z(lyra2z_matrix, hashD, 32, hashC, 80, hashC, 80, 2, 66, 66);
 
 	memcpy(output, hashD, 32);
+	
+	return 1;
 }
+
+#endif

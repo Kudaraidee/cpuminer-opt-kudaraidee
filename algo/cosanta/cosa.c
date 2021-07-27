@@ -70,7 +70,7 @@ union _cosa_context_overlay
 };
 typedef union _cosa_context_overlay cosa_context_overlay;
 
-void cosa_hash( void *output, const void *input )
+void cosa_hash( void *state, const void *input, int thr_id )
 {
 	unsigned char _ALIGN(128) hash[128],hashB[128],hashC[128],hashD[128];
 	

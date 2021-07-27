@@ -37,7 +37,7 @@ bool lyra2z_thread_init()
    return lyra2z_matrix;
 }
 
-void cosahash( void *state, const void *input )
+void cosahash( void *output, const void *input )
 {
 	unsigned char _ALIGN(128) hash[128],hashB[128],hashC[128],hashD[128];
 

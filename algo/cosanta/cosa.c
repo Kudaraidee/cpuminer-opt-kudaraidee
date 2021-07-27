@@ -7,13 +7,8 @@
 
 #include "algo/blake/sph_blake.h"
 #include "algo/bmw/sph_bmw.h"
-#if defined(__AES__)
-  #include "algo/echo/aes_ni/hash_api.h"
-  #include "algo/groestl/aes_ni/hash-groestl.h"
-#else
-  #include "algo/groestl/sph_groestl.h"
-  #include "algo/echo/sph_echo.h"
-#endif
+#include "algo/groestl/sph_groestl.h"
+#include "algo/echo/sph_echo.h"
 #include "algo/jh/sph_jh.h"
 #include "algo/keccak/sph_keccak.h"
 #include "algo/skein/sph_skein.h"
@@ -36,13 +31,9 @@ void cosahash(void *output, const void *input, int thr_id )
 
 	sph_blake512_context     ctx_blake;
 	sph_bmw512_context       ctx_bmw;
-	#if defined(__AES__)
-    hashState_groestl        ctx_groestl;
-    hashState_echo           ctx_echo;
-#else
     sph_groestl512_context   ctx_groestl;
     sph_echo512_context      ctx_echo;
-#endif
+	sph_jh512_context        ctx_jh;
 	sph_keccak512_context    ctx_keccak;
 	sph_skein512_context     ctx_skein;
 	sph_luffa512_context     ctx_luffa;

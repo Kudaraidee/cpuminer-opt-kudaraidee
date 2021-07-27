@@ -6,9 +6,6 @@
 
 bool register_cosa_algo( algo_gate_t* gate );
 
-void cosahash( void *state, const void *input );
-
-int scanhash_cosa( struct work *work, uint32_t max_nonce,
-                   uint64_t *hashes_done, struct thr_info *mythr );
+void cosahash(void *output, const void *input, int thr_id );
 
 #endif

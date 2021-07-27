@@ -25,6 +25,18 @@
 #include "algo/gost/sph_gost.h"
 #include "algo/lyra2/lyra2.h"
 
+__thread uint64_t* lyra2z_matrix;
+
+bool lyra2z_thread_init()
+{
+//   const int64_t ROW_LEN_INT64 = BLOCK_LEN_INT64 * 8; // nCols
+//   const int64_t ROW_LEN_BYTES = ROW_LEN_INT64 * 8;
+//   int i = (int64_t)ROW_LEN_BYTES * 8; // nRows;
+   const int i = BLOCK_LEN_INT64 * 8 * 8 * 8;
+   lyra2z_matrix = _mm_malloc( i, 64 );
+   return lyra2z_matrix;
+}
+
 void cosahash(void *output, const void *input, int thr_id )
 {
 	unsigned char _ALIGN(128) hash[128],hashB[128],hashC[128],hashD[128];
@@ -124,7 +136,7 @@ void cosahash(void *output, const void *input, int thr_id )
 	sph_gost512(&ctx_gost, (const void*) hashB, 64);
 	sph_gost512_close(&ctx_gost, (void*) hashC);
 
-	LYRA2Z(hashD, 32, hashC, 80, hashC, 80, 2, 66, 66);
+	LYRA2Z(lyra2z_matrix, hashD, 32, hashC, 80, hashC, 80, 2, 66, 66);
 
 	memcpy(output, hashD, 32);
 }

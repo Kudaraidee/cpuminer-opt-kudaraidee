@@ -21,7 +21,7 @@
 #include "algo/shabal/sph_shabal.h"
 #include "algo/whirlpool/sph_whirlpool.h"
 #include "algo/sha/sph_sha2.h"
-#include "algo/haval/sph_haval.h"
+#include "algo/haval/sph-haval.h"
 #include "algo/gost/sph_gost.h"
 #include "algo/lyra2/lyra2.h"
 

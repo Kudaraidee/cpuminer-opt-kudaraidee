@@ -6,6 +6,6 @@
 
 bool register_cosa_algo( algo_gate_t* gate );
 
-void cosahash(void *output, const void *input, int thr_id );
+void cosa_hash(void *output, const void *input, int thr_id );
 
 #endif

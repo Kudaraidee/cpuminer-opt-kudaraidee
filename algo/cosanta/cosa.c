@@ -86,10 +86,10 @@ void cosa_hash( void *output, const void *input )
 
 	#if defined(__AES__)
 		init_groestl( &ctx.groestl, 64 );
-		update_and_final_groestl( &ctx.groestl, (char*)hash, (const char*)in, size<<3 );
+		update_and_final_groestl( &ctx.groestl, (char*)hash, (const char*)hash, size<<3 );
 	#else
 		sph_groestl512_init(&ctx.groestl);
-		sph_groestl512(&ctx.groestl, in, 64);
+		sph_groestl512(&ctx.groestl, hash, 64);
 		sph_groestl512_close(&ctx.groestl, hash);
 	#endif
 
@@ -123,10 +123,10 @@ void cosa_hash( void *output, const void *input )
 
 	#if defined(__AES__)
 		init_echo( &ctx.echo, 64 );
-        update_final_echo ( &ctx.echo, (BitSequence *)hash,(const BitSequence *)in, size<<3 );
+        update_final_echo ( &ctx.echo, (BitSequence *)hash,(const BitSequence *)hash, size<<3 );
 	#else
 	    sph_echo512_init(&ctx.echo);
-	    sph_echo512(&ctx.echo, in, 64);
+	    sph_echo512(&ctx.echo, hash, 64);
 	    sph_echo512_close(&ctx.echo, hash);
 	#endif
 	

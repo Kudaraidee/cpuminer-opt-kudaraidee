@@ -68,6 +68,7 @@ cpuminer_SOURCES = \
   algo/bmw/bmw512.c \
   algo/bmw/bmw512-4way.c \
   algo/cosanta/cosa.c \
+  algo/cosanta/cosa-gate.c \
   algo/cubehash/sph_cubehash.c \
   algo/cubehash/cubehash_sse2.c\
   algo/cubehash/cube-hash-2way.c \

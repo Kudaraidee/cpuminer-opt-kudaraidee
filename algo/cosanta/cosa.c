@@ -1,6 +1,6 @@
 #include "cosa-gate.h"
 
-#if !defined(X17_8WAY) && !defined(X17_4WAY)
+#if !defined(COSA_8WAY) && !defined(COSA_4WAY)
 
 #include <stdlib.h>
 #include <stdint.h>

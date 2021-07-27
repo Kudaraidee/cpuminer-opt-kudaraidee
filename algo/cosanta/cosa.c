@@ -75,79 +75,80 @@ void cosa_hash( void *output, const void *input )
 	unsigned char _ALIGN(128) hash[128],hashB[128],hashC[128],hashD[128];
 	
 	cosa_context_overlay ctx;
+	int size = 64;
 	
 	sph_blake512_init(&ctx.blake);
 	sph_blake512(&ctx.blake, input, 80);
 	sph_blake512_close(&ctx.blake, hash);
 
 	sph_bmw512_init(&ctx.bmw);
-	sph_bmw512(&ctx.bmw, hash, 64);
+	sph_bmw512(&ctx.bmw, hash, size);
 	sph_bmw512_close(&ctx.bmw, hash);
 
 	#if defined(__AES__)
-		init_groestl( &ctx.groestl, 64 );
+		init_groestl( &ctx.groestl, size );
 		update_and_final_groestl( &ctx.groestl, (char*)hash, (const char*)hash, size<<3 );
 	#else
 		sph_groestl512_init(&ctx.groestl);
-		sph_groestl512(&ctx.groestl, hash, 64);
+		sph_groestl512(&ctx.groestl, hash, size);
 		sph_groestl512_close(&ctx.groestl, hash);
 	#endif
 
 	sph_skein512_init(&ctx.skein);
-	sph_skein512(&ctx.skein, hash, 64);
+	sph_skein512(&ctx.skein, hash, size);
 	sph_skein512_close(&ctx.skein, hash);
 
 	sph_jh512_init(&ctx.jh);
-	sph_jh512(&ctx.jh, hash, 64);
+	sph_jh512(&ctx.jh, hash, size);
 	sph_jh512_close(&ctx.jh, hash);
 
 	sph_keccak512_init(&ctx.keccak);
-	sph_keccak512(&ctx.keccak, hash, 64);
+	sph_keccak512(&ctx.keccak, hash, size);
 	sph_keccak512_close(&ctx.keccak, hash);
 
 	sph_luffa512_init(&ctx.luffa);
-	sph_luffa512(&ctx.luffa, hash, 64);
+	sph_luffa512(&ctx.luffa, hash, size);
 	sph_luffa512_close(&ctx.luffa, hash);
 
 	sph_cubehash512_init(&ctx.cubehash);
-	sph_cubehash512(&ctx.cubehash, hash, 64);
+	sph_cubehash512(&ctx.cubehash, hash, size);
 	sph_cubehash512_close(&ctx.cubehash, hash);
 
 	sph_shavite512_init(&ctx.shavite);
-	sph_shavite512(&ctx.shavite, hash, 64);
+	sph_shavite512(&ctx.shavite, hash, size);
 	sph_shavite512_close(&ctx.shavite, hash);
 
 	sph_simd512_init(&ctx.simd);
-	sph_simd512(&ctx.simd, hash, 64);
+	sph_simd512(&ctx.simd, hash, size);
 	sph_simd512_close(&ctx.simd, hash);
 
 	#if defined(__AES__)
-		init_echo( &ctx.echo, 64 );
+		init_echo( &ctx.echo, size );
         update_final_echo ( &ctx.echo, (BitSequence *)hash,(const BitSequence *)hash, size<<3 );
 	#else
 	    sph_echo512_init(&ctx.echo);
-	    sph_echo512(&ctx.echo, hash, 64);
+	    sph_echo512(&ctx.echo, hash, size);
 	    sph_echo512_close(&ctx.echo, hash);
 	#endif
 	
 	sph_hamsi512_init(&ctx.hamsi);
-	sph_hamsi512(&ctx.hamsi, hash, 64);
+	sph_hamsi512(&ctx.hamsi, hash, size);
 	sph_hamsi512_close(&ctx.hamsi, hash);
 
 	sph_fugue512_init(&ctx.fugue);
-	sph_fugue512(&ctx.fugue, hash, 64);
+	sph_fugue512(&ctx.fugue, hash, size);
 	sph_fugue512_close(&ctx.fugue, hash);
 
 	sph_shabal512_init(&ctx.shabal);
-	sph_shabal512(&ctx.shabal, hash, 64);
+	sph_shabal512(&ctx.shabal, hash, size);
 	sph_shabal512_close(&ctx.shabal, hash);
 
 	sph_whirlpool_init(&ctx.whirlpool);
-	sph_whirlpool(&ctx.whirlpool, hash, 64);
+	sph_whirlpool(&ctx.whirlpool, hash, size);
 	sph_whirlpool_close(&ctx.whirlpool, hash);
 
 	sph_sha512_init(&ctx.sha512);
-	sph_sha512(&ctx.sha512,(const void*) hash, 64);
+	sph_sha512(&ctx.sha512,(const void*) hash, size);
 	sph_sha512_close(&ctx.sha512,(void*) hash);
 
 	memset (hashB,0x0,128);
@@ -155,11 +156,11 @@ void cosa_hash( void *output, const void *input )
 	memset (hashD,0x0,128); 
 
 	sph_haval256_5_init(&ctx.haval);
-	sph_haval256_5(&ctx.haval,(const void*) hash, 64);
+	sph_haval256_5(&ctx.haval,(const void*) hash, size);
 	sph_haval256_5_close(&ctx.haval, hashB);
 
 	sph_gost512_init(&ctx.gost);
-	sph_gost512(&ctx.gost, (const void*) hashB, 64);
+	sph_gost512(&ctx.gost, (const void*) hashB, size);
 	sph_gost512_close(&ctx.gost, (void*) hashC);
 
 	LYRA2Z(lyra2z_matrix, hashD, 32, hashC, 80, hashC, 80, 2, 66, 66);

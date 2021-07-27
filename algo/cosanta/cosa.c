@@ -74,7 +74,7 @@ void cosa_hash( void *output, const void *input )
 {
 	unsigned char _ALIGN(128) hash[128],hashB[128],hashC[128],hashD[128];
 	
-	x20r_context_overlay ctx;
+	cosa_context_overlay ctx;
 	
 	sph_blake512_init(&ctx.blake);
 	sph_blake512(&ctx.blake, input, 80);

@@ -67,15 +67,25 @@ cpuminer_SOURCES = \
   algo/bmw/bmw512-gate.c \
   algo/bmw/bmw512.c \
   algo/bmw/bmw512-4way.c \
-  algo/cosanta/cosa.c \
-  algo/cosanta/cosa-gate.c \
   algo/cubehash/sph_cubehash.c \
   algo/cubehash/cubehash_sse2.c\
   algo/cubehash/cube-hash-2way.c \
   algo/echo/sph_echo.c \
   algo/echo/echo-hash-4way.c \
-  algo/echo/aes_ni/hash.c\
+  algo/echo/aes_ni/hash.c \
   algo/gost/sph_gost.c \
+  algo/gr/cryptonote/crypto/aesb.c \
+  algo/gr/cryptonote/crypto/hash.c \
+  algo/gr/cryptonote/crypto/c_skein.c \
+  algo/gr/cryptonote/cryptonight.c \
+  algo/gr/cryptonote/cryptonight_dark.c \
+  algo/gr/cryptonote/cryptonight_dark_lite.c \
+  algo/gr/cryptonote/cryptonight_fast.c \
+  algo/gr/cryptonote/cryptonight_lite.c \
+  algo/gr/cryptonote/cryptonight_soft_shell.c \
+  algo/gr/cryptonote/cryptonight_turtle.c \
+  algo/gr/cryptonote/cryptonight_turtle_lite.c \
+  algo/gr/gr-gate.c \
   algo/groestl/groestl-gate.c \
   algo/groestl/groestl512-hash-4way.c \
   algo/groestl/groestl256-hash-4way.c \

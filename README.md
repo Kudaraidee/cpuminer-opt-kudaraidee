@@ -80,6 +80,7 @@ Supported Algorithms
                           decred
                           deep          Deepcoin (DCN)
                           dmd-gr        Diamond-Groestl
+                          gr       		Ghostrider
                           groestl       Groestl coin
                           hex           x16r-hex
                           hmq1725       Espers

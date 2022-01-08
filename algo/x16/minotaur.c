@@ -18,6 +18,8 @@
 #include "algo/shabal/sph_shabal.h"
 #include "algo/whirlpool/sph_whirlpool.h"
 #include "algo/sha/sph_sha2.h"
+#include "algo/yespower/yespower.h"
+
 #if defined(__AES__)
   #include "algo/echo/aes_ni/hash_api.h"
   #include "algo/groestl/aes_ni/hash-groestl.h"
@@ -30,6 +32,8 @@
 
 // Config
 #define MINOTAUR_ALGO_COUNT	16
+
+static const yespower_params_t yespower_params = {YESPOWER_1_0, 2048, 8, "et in arcadia ego", 17};
 
 typedef struct TortureNode TortureNode;
 typedef struct TortureGarden TortureGarden;
@@ -71,8 +75,9 @@ static void get_hash( void *output, const void *input, TortureGarden *garden,
 	              unsigned int algo )
 {    
 	unsigned char hash[64] __attribute__ ((aligned (64)));
-
-    switch (algo) {
+	memset(hash, 0, sizeof(hash));			// Doesn't affect Minotaur as all hash outputs are 64 bytes; required for MinotaurX due to yespower's 32 byte output.
+    
+	switch (algo) {
         case 0:
             sph_blake512_init(&garden->blake);
             sph_blake512(&garden->blake, input, 64);
@@ -164,6 +169,9 @@ static void get_hash( void *output, const void *input, TortureGarden *garden,
             sph_whirlpool(&garden->whirlpool, input, 64);
             sph_whirlpool_close(&garden->whirlpool, hash);          
             break;
+		// NB: The CPU-hard gate must be case MINOTAUR_ALGO_COUNT.
+        case 16:
+            yespower_tls(input, 64, &yespower_params, (yespower_binary_t*)hash);
     }
 
     memcpy(output, hash, 64);

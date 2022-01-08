@@ -554,6 +554,7 @@ enum algos {
         ALGO_LYRA2Z330,
 	ALGO_M7M,
         ALGO_MINOTAUR,
+        ALGO_MINOTAURX,
         ALGO_MYR_GR,      
         ALGO_NEOSCRYPT,
         ALGO_NIST5,       
@@ -651,7 +652,8 @@ static const char* const algo_names[] = {
         "lyra2z330",
         "m7m",
         "minotaur",
-	"myr-gr",
+		"minotaurx",
+		"myr-gr",
         "neoscrypt",
         "nist5",
         "pentablake",
@@ -815,7 +817,8 @@ Options:\n\
                           m7m           Magi (XMG)\n\
                           myr-gr        Myriad-Groestl\n\
                           minotaur      Ringcoin (RNG)\n\
-			  neoscrypt     NeoScrypt(128, 2, 1)\n\
+						  minotaurx     Litecoin Cash (LCC)\n\
+				neoscrypt     NeoScrypt(128, 2, 1)\n\
                           nist5         Nist5\n\
                           pentablake    5 x blake512\n\
                           phi1612       phi\n\

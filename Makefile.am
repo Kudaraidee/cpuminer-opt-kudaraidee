@@ -274,6 +274,7 @@ cpuminer_SOURCES = \
   algo/x16/x21s-4way.c \
   algo/x16/x21s.c \
   algo/x16/minotaur.c \
+  algo/x16/minotaurx.c \
   algo/x17/x17-gate.c \
   algo/x17/x17.c \
   algo/x17/x17-4way.c \

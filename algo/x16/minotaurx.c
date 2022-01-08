@@ -1,4 +1,4 @@
-// Minotaur hash
+// MinotaurX hash
 
 #include "algo-gate-api.h"
 #include <stdlib.h>
@@ -18,6 +18,8 @@
 #include "algo/shabal/sph_shabal.h"
 #include "algo/whirlpool/sph_whirlpool.h"
 #include "algo/sha/sph_sha2.h"
+#include "algo/yespower/yespower.h"
+
 #if defined(__AES__)
   #include "algo/echo/aes_ni/hash_api.h"
   #include "algo/groestl/aes_ni/hash-groestl.h"
@@ -30,6 +32,8 @@
 
 // Config
 #define MINOTAUR_ALGO_COUNT	16
+
+static const yespower_params_t yespower_params = {YESPOWER_1_0, 2048, 8, "et in arcadia ego", 17};
 
 typedef struct TortureNode TortureNode;
 typedef struct TortureGarden TortureGarden;
@@ -67,12 +71,13 @@ struct TortureGarden
 } __attribute__ ((aligned (64)));
 
 // Get a 64-byte hash for given 64-byte input, using given TortureGarden contexts and given algo index
-static void get_hash( void *output, const void *input, TortureGarden *garden,
+static void get_hashx( void *output, const void *input, TortureGarden *garden,
 	              unsigned int algo )
 {    
 	unsigned char hash[64] __attribute__ ((aligned (64)));
-
-    switch (algo) {
+	memset(hash, 0, sizeof(hash));			// Doesn't affect Minotaur as all hash outputs are 64 bytes; required for MinotaurX due to yespower's 32 byte output.
+    
+	switch (algo) {
         case 0:
             sph_blake512_init(&garden->blake);
             sph_blake512(&garden->blake, input, 64);
@@ -164,6 +169,9 @@ static void get_hash( void *output, const void *input, TortureGarden *garden,
             sph_whirlpool(&garden->whirlpool, input, 64);
             sph_whirlpool_close(&garden->whirlpool, hash);          
             break;
+		// NB: The CPU-hard gate must be case MINOTAUR_ALGO_COUNT.
+        case 16:
+            yespower_tls(input, 64, &yespower_params, (yespower_binary_t*)hash);
     }
 
     memcpy(output, hash, 64);
@@ -224,7 +232,7 @@ bool initialize_torture_garden()
 }
 
 // Produce a 32-byte hash from 80-byte input data
-int minotaur_hash( void *output, const void *input, int thr_id )
+int minotaurx_hash( void *output, const void *input, int thr_id )
 {    
     unsigned char hash[64] __attribute__ ((aligned (64)));
 
@@ -249,7 +257,7 @@ int minotaur_hash( void *output, const void *input, int thr_id )
 
     while ( node )
     {
-      get_hash( hash, hash, &garden, node->algo );
+      get_hashx( hash, hash, &garden, node->algo );
       node = node->child[ hash[63] & 1 ];
     }
 
@@ -257,7 +265,7 @@ int minotaur_hash( void *output, const void *input, int thr_id )
     return 1;
 }
 
-int scanhash_minotaur( struct work *work, uint32_t max_nonce,
+int scanhash_minotaurx( struct work *work, uint32_t max_nonce,
                       uint64_t *hashes_done, struct thr_info *mythr )
 {
    uint32_t edata[20] __attribute__((aligned(64)));
@@ -291,10 +299,10 @@ int scanhash_minotaur( struct work *work, uint32_t max_nonce,
    return 0;
 }
 
-bool register_minotaur_algo( algo_gate_t* gate )
+bool register_minotaurx_algo( algo_gate_t* gate )
 {
-  gate->scanhash = (void*)&scanhash_minotaur;
-  gate->hash      = (void*)&minotaur_hash;
+  gate->scanhash = (void*)&scanhash_minotaurx;
+  gate->hash      = (void*)&minotaurx_hash;
   gate->optimizations = SSE2_OPT | AES_OPT | AVX2_OPT | AVX512_OPT;
   gate->miner_thread_init = (void*)&initialize_torture_garden;
   return true;

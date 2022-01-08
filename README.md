@@ -75,7 +75,6 @@ Supported Algorithms
                           bmw           BMW 256
                           bmw512        BMW 512 
                           c11           Chaincoin
-                          cosa   	    Cosanta
                           cpupower      CPUchain
                           decred
                           deep          Deepcoin (DCN)

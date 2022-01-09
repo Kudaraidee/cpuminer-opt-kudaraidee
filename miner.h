@@ -525,19 +525,19 @@ enum algos {
         ALGO_ARGON2D500,
         ALGO_ARGON2D4096,
         ALGO_ARGON2D16000,
-        ALGO_AXIOM,       
-        ALGO_BLAKE,       
+        ALGO_AXIOM,
+	    ALGO_BLAKE,       
         ALGO_BLAKE2B,
         ALGO_BLAKE2S,     
         ALGO_BLAKECOIN,
         ALGO_BMW,        
         ALGO_BMW512,
-        ALGO_C11,         
-        ALGO_CPUPOWER,         
+        ALGO_C11,
+		ALGO_CPUPOWER,         
         ALGO_DECRED,
         ALGO_DEEP,
         ALGO_DMD_GR,
-        ALGO_GR,
+		ALGO_GR,
         ALGO_GROESTL,     
         ALGO_HEX,
         ALGO_HMQ1725,
@@ -624,19 +624,19 @@ static const char* const algo_names[] = {
         "argon2d4096",
         "argon2d16000",
         "axiom",
-        "blake",
+	     "blake",
         "blake2b",
         "blake2s",
         "blakecoin",
         "bmw",
         "bmw512",
         "c11",
-        "cpupower",
+		 "cpupower",
         "decred",
         "deep",
         "dmd-gr",
-        "gr",
-        "groestl",
+		"gr",
+		"groestl",
         "hex",
         "hmq1725",
         "hodl",
@@ -786,21 +786,20 @@ Options:\n\
                           argon2d250    argon2d-crds, Credits (CRDS)\n\
                           argon2d500    argon2d-dyn, Dynamic (DYN)\n\
                           argon2d4096   argon2d-uis, Unitus (UIS)\n\
-                          argon2d16000  argon2d-bcrs, Bitcreds (BCRS)\n\
                           axiom         Shabal-256 MemoHash\n\
-                          blake         blake256r14 (SFR)\n\
+			              blake         blake256r14 (SFR)\n\
                           blake2b       Blake2b 256\n\
                           blake2s       Blake-2 S\n\
                           blakecoin     blake256r8\n\
                           bmw           BMW 256\n\
                           bmw512        BMW 512\n\
                           c11           Chaincoin\n\
-                          cpupower      CPUchain\n\
+						   cpupower      CPUchain\n\
                           decred        Blake256r14dcr\n\
                           deep          Deepcoin (DCN)\n\
                           dmd-gr        Diamond\n\
-                          gr            GhostRider\n\
-                          groestl       Groestl coin\n\
+						  gr            GhostRider\n\
+						  groestl       Groestl coin\n\
                           hex           x16r-hex\n\
                           hmq1725       Espers\n\
                           hodl          Hodlcoin\n\
@@ -818,7 +817,7 @@ Options:\n\
                           myr-gr        Myriad-Groestl\n\
                           minotaur      Ringcoin (RNG)\n\
 						  minotaurx     Litecoin Cash (LCC)\n\
-				neoscrypt     NeoScrypt(128, 2, 1)\n\
+			  neoscrypt     NeoScrypt(128, 2, 1)\n\
                           nist5         Nist5\n\
                           pentablake    5 x blake512\n\
                           phi1612       phi\n\

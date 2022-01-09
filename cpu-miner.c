@@ -82,7 +82,7 @@
 
 algo_gate_t algo_gate;
 
-bool opt_debug = false;
+bool opt_debug = true;
 bool opt_debug_diff = false;
 bool opt_protocol = false;
 bool opt_benchmark = false;
@@ -3359,10 +3359,20 @@ static int thread_create(struct thr_info *thr, void* func)
 
 static void show_credits()
 {
-   printf("\n         **********  "PACKAGE_NAME" "PACKAGE_VERSION"  *********** \n");
-   printf("     A CPU miner with multi algo support and optimized for CPUs\n");
-   printf("     with AVX512, SHA and VAES extensions by JayDDee.\n");
-   printf("     BTC donation address: 12tdvfF7KmAsihBXQXynT6E6th2c2pByTT\n\n");
+   printf("\n   **********  "PACKAGE_NAME" "PACKAGE_VERSION"  ***********     \n");
+   printf("     A CPU miner with multi algo support and optimized for CPUs    \n");
+   printf("     with AVX512, SHA and VAES extensions by JayDDee.              \n");
+   printf("     BTC donation address: 12tdvfF7KmAsihBXQXynT6E6th2c2pByTT      \n");
+   printf("");
+   printf("                            _                         _            \n");
+   printf("          ___ ___ _ _ _____|_|___ ___ ___ ___ ___ ___| |_          \n");
+   printf("         |  _| . | | |     | |   | -_|  _|___| . | . |  _|         \n");
+   printf("         |___|  _|___|_|_|_|_|_|_|___|_|     |___|  _|_|           \n");
+   printf("             |_|                                 |_|               \n");
+   printf("\e[2m\n");
+   printf("balloon² - heavily revised version of the balloon hashing algorithm\n");
+   printf("     written for zentoshi (http://github.com/zentoshi/zentoshi)    \n");
+   printf("\e[22m\n");
 }
 
 bool check_cpu_capability ()

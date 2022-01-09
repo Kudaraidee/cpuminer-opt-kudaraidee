@@ -42,8 +42,7 @@ bool register_gr_algo( algo_gate_t* gate )
   gate->scanhash         = (void*)&scanhash_gr;
   gate->hash             = (void*)&gr_hash;
   gate->optimizations    = SSE2_OPT | AES_OPT | AVX2_OPT;
-  gate->get_max64        = (void*)&gr_get_max64;
-  gate->set_target       = (void*)&scrypt_set_target;
+  
   return true;
 };
 

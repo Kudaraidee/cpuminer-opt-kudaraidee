@@ -20,7 +20,13 @@ cpuminer_SOURCES = \
   util.c \
   api.c \
   sysinfos.c \
-  algo-gate-api.c\
+  algo-gate-api.c \
+  crypto/oaes_lib.c \
+  crypto/c_keccak.c \
+  crypto/c_groestl.c \
+  crypto/c_blake256.c \
+  crypto/c_jh.c \
+  crypto/magimath.cpp \
   algo/argon2/argon2a/argon2a.c \
   algo/argon2/argon2a/ar2/argon2.c \
   algo/argon2/argon2a/ar2/opt.c \
@@ -67,13 +73,11 @@ cpuminer_SOURCES = \
   algo/bmw/bmw512-gate.c \
   algo/bmw/bmw512.c \
   algo/bmw/bmw512-4way.c \
-  algo/cubehash/sph_cubehash.c \
   algo/cubehash/cubehash_sse2.c\
   algo/cubehash/cube-hash-2way.c \
   algo/echo/sph_echo.c \
   algo/echo/echo-hash-4way.c \
   algo/echo/aes_ni/hash.c \
-  algo/gost/sph_gost.c \
   algo/gr/cryptonote/crypto/aesb.c \
   algo/gr/cryptonote/crypto/hash.c \
   algo/gr/cryptonote/crypto/c_skein.c \
@@ -86,6 +90,7 @@ cpuminer_SOURCES = \
   algo/gr/cryptonote/cryptonight_turtle.c \
   algo/gr/cryptonote/cryptonight_turtle_lite.c \
   algo/gr/gr-gate.c \
+  algo/gost/sph_gost.c \
   algo/groestl/groestl-gate.c \
   algo/groestl/groestl512-hash-4way.c \
   algo/groestl/groestl256-hash-4way.c \
@@ -121,7 +126,6 @@ cpuminer_SOURCES = \
   algo/keccak/sha3d-4way.c \
   algo/keccak/sha3d.c \
   algo/lanehash/lane.c \
-  algo/luffa/sph_luffa.c \
   algo/luffa/luffa_for_sse2.c \
   algo/luffa/luffa-hash-2way.c \
   algo/lyra2/lyra2.c \
@@ -192,7 +196,6 @@ cpuminer_SOURCES = \
   algo/shavite/shavite-hash-2way.c \
   algo/shavite/shavite-hash-4way.c \
   algo/shavite/shavite.c \
-  algo/simd/sph_simd.c \
   algo/simd/nist.c \
   algo/simd/vector.c \
   algo/simd/simd-hash-2way.c \

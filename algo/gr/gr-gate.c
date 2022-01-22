@@ -3,34 +3,34 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include "algo/blake/sph_blake.h"
-#include "algo/bmw/sph_bmw.h"
-#include "algo/groestl/sph_groestl.h"
-#include "algo/jh/sph_jh.h"
-#include "algo/keccak/sph_keccak.h"
-#include "algo/skein/sph_skein.h"
-#include "algo/luffa/sph_luffa.h"
-#include "algo/cubehash/sph_cubehash.h"
-#include "algo/shavite/sph_shavite.h"
-#include "algo/simd/sph_simd.h"
-#include "algo/echo/sph_echo.h"
-#include "algo/hamsi/sph_hamsi.h"
-#include "algo/fugue/sph_fugue.h"
-#include "algo/shabal/sph_shabal.h"
-#include "algo/whirlpool/sph_whirlpool.h"
-#include "algo/sha/sph_sha2.h"
-#include "algo/tiger/sph_tiger.h"
-#include "algo/lyra2/lyra2.h"
-#include "algo/haval/sph-haval.h"
-#include "algo/gost/sph_gost.h"
-#include "algo/gr/cryptonote/cryptonight_dark.h"
-#include "algo/gr/cryptonote/cryptonight_dark_lite.h"
-#include "algo/gr/cryptonote/cryptonight_fast.h"
-#include "algo/gr/cryptonote/cryptonight.h"
-#include "algo/gr/cryptonote/cryptonight_lite.h"
-#include "algo/gr/cryptonote/cryptonight_soft_shell.h"
-#include "algo/gr/cryptonote/cryptonight_turtle.h"
-#include "algo/gr/cryptonote/cryptonight_turtle_lite.h"
+#include "../blake/sph_blake.h"
+#include "../bmw/sph_bmw.h"
+#include "../groestl/sph_groestl.h"
+#include "../jh/sph_jh.h"
+#include "../keccak/sph_keccak.h"
+#include "../skein/sph_skein.h"
+#include "../luffa/sph_luffa.h"
+#include "../cubehash/sph_cubehash.h"
+#include "../shavite/sph_shavite.h"
+#include "../simd/sph_simd.h"
+#include "../echo/sph_echo.h"
+#include "../hamsi/sph_hamsi.h"
+#include "../fugue/sph_fugue.h"
+#include "../shabal/sph_shabal.h"
+#include "../whirlpool/sph_whirlpool.h"
+#include "../sha/sph_sha2.h"
+#include "../tiger/sph_tiger.h"
+#include "../lyra2/lyra2.h"
+#include "../haval/sph-haval.h"
+#include "../gost/sph_gost.h"
+#include "cryptonote/cryptonight_dark.h"
+#include "cryptonote/cryptonight_dark_lite.h"
+#include "cryptonote/cryptonight_fast.h"
+#include "cryptonote/cryptonight.h"
+#include "cryptonote/cryptonight_lite.h"
+#include "cryptonote/cryptonight_soft_shell.h"
+#include "cryptonote/cryptonight_turtle.h"
+#include "cryptonote/cryptonight_turtle_lite.h"
 
 int64_t gr_get_max64()
 {
@@ -42,7 +42,6 @@ bool register_gr_algo( algo_gate_t* gate )
   gate->scanhash         = (void*)&scanhash_gr;
   gate->hash             = (void*)&gr_hash;
   gate->optimizations    = SSE2_OPT | AES_OPT | AVX2_OPT;
-  
   return true;
 };
 

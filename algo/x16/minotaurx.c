@@ -33,8 +33,6 @@
 // Config
 #define MINOTAUR_ALGO_COUNT	16
 
-static const yespower_params_t yespower_params = {YESPOWER_1_0, 2048, 8, "et in arcadia ego", 17};
-
 typedef struct TortureNode TortureNode;
 typedef struct TortureGarden TortureGarden;
 
@@ -72,7 +70,7 @@ struct TortureGarden
 
 // Get a 64-byte hash for given 64-byte input, using given TortureGarden contexts and given algo index
 static void get_hashx( void *output, const void *input, TortureGarden *garden,
-	              unsigned int algo )
+	              unsigned int algo, int thr_id )
 {    
 	unsigned char hash[64] __attribute__ ((aligned (64)));
 	memset(hash, 0, sizeof(hash));			// Doesn't affect Minotaur as all hash outputs are 64 bytes; required for MinotaurX due to yespower's 32 byte output.
@@ -171,7 +169,8 @@ static void get_hashx( void *output, const void *input, TortureGarden *garden,
             break;
 		// NB: The CPU-hard gate must be case MINOTAUR_ALGO_COUNT.
         case 16:
-            yespower_tls(input, 64, &yespower_params, (yespower_binary_t*)hash);
+			yespower_params_t yespower_params = {  YESPOWER_1_0, 2048, 8, (const uint8_t *) "et in arcadia ego", yespower_params.perslen = 17 };
+            yespower_tls(input, 64, &yespower_params, (yespower_binary_t*)hash ,thr_id);
     }
 
     memcpy(output, hash, 64);
@@ -179,7 +178,7 @@ static void get_hashx( void *output, const void *input, TortureGarden *garden,
 
 static __thread TortureGarden garden;
 
-bool initialize_torture_garden()
+bool initialize_torture_gardenx()
 {
     // Create torture garden nodes. Note that both sides of 19 and 20 lead to 21, and 21 has no children (to make traversal complete).
 
@@ -257,7 +256,7 @@ int minotaurx_hash( void *output, const void *input, int thr_id )
 
     while ( node )
     {
-      get_hashx( hash, hash, &garden, node->algo );
+      get_hashx( hash, hash, &garden, node->algo ,thr_id);
       node = node->child[ hash[63] & 1 ];
     }
 
@@ -304,6 +303,6 @@ bool register_minotaurx_algo( algo_gate_t* gate )
   gate->scanhash = (void*)&scanhash_minotaurx;
   gate->hash      = (void*)&minotaurx_hash;
   gate->optimizations = SSE2_OPT | AES_OPT | AVX2_OPT | AVX512_OPT;
-  gate->miner_thread_init = (void*)&initialize_torture_garden;
+  gate->miner_thread_init = (void*)&initialize_torture_gardenx;
   return true;
 };

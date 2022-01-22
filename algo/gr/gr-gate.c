@@ -32,16 +32,12 @@
 #include "cryptonote/cryptonight_turtle.h"
 #include "cryptonote/cryptonight_turtle_lite.h"
 
-int64_t gr_get_max64()
-{
-   return 0x7ffLL;
-}
-
 bool register_gr_algo( algo_gate_t* gate )
 {
   gate->scanhash         = (void*)&scanhash_gr;
   gate->hash             = (void*)&gr_hash;
   gate->optimizations    = SSE2_OPT | AES_OPT | AVX2_OPT;
+  opt_target_factor = 65536.0;
   return true;
 };
 

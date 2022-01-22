@@ -250,6 +250,8 @@ int minotaurx_hash( void *output, const void *input, int thr_id )
     // Assign algos to torture garden nodes based on initial hash
     for ( int i = 0; i < 22; i++ )
         garden.nodes[i].algo = hash[i] % MINOTAUR_ALGO_COUNT;
+	
+		garden.nodes[21].algo = MINOTAUR_ALGO_COUNT;
 
     // Send the initial hash through the torture garden
     TortureNode *node = &garden.nodes[0];

@@ -157,7 +157,7 @@ Supported Algorithms
                           yespowerarwn  Arowanacoin(ARWN)
                           yespowerr16   Yenten (YTN)
                           yespowersugar Suagrchain (SUGAR)
-						   yespowerurx   UraniumX (URX)
+				   yespowerurx   UraniumX (URX)
                           yespower-b2b  generic yespower + blake2b
                           zr5           Ziftr
 
@@ -171,6 +171,7 @@ yespoweriots: --algo yespower --param-n 2048 --param-key "Iots is committed to t
 yespowerlitb: --algo yespower --param-n 2048 --param-r 32 --param-key "LITBpower: The number of LITB working or available for proof-of-work mini"
 
 yespoweric: --algo yespower --param-n 2048 --param-r 32 --param-key "IsotopeC" 
+
 
 yespowerltncg: --algo yespower --param-n 2048 --param-r 32 --param-key "LTNCGYES"
 

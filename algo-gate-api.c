@@ -383,6 +383,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_YESPOWERARWN: rc = register_yespowerarwn_algo  ( gate ); break;
     case ALGO_YESPOWERR16:  rc = register_yespowerr16_algo   ( gate ); break;
     case ALGO_YESPOWERSUGAR: rc = register_yespowersugar_algo( gate ); break;
+    case ALGO_YESPOWERURX:   rc = register_yespowerurx_algo  ( gate ); break;
     case ALGO_YESPOWER_B2B: rc = register_yespower_b2b_algo  ( gate ); break;
     case ALGO_ZR5:          rc = register_zr5_algo           ( gate ); break;
    default:
@@ -420,6 +421,10 @@ void exec_hash_function( int algo, void *output, const void *pdata )
 const char* const algo_alias_map[][2] =
 {
 //   alias                proper
+  { "argon2d-dyn",       "argon2d500"     },
+  { "argon2d-uis",       "argon2d4096"    },
+  { "argon2d-crds",      "argon2d250" 	  },
+  { "argon2d-bcrs",      "argon2d16000"   },
   { "bcd",               "x13bcd"         },
   { "bitcore",           "timetravel10"   },
   { "bitzeny",           "yescryptr8"     },
@@ -444,7 +449,10 @@ const char* const algo_alias_map[][2] =
   { "timetravel8",       "timetravel"     },
   { "veil",              "x16rt-veil"     },
   { "x16r-hex",          "hex"            },
-  { "yenten",            "yescryptr16"    },
+  { "yenten",            "yespowerr16"    },
+  { "yespowerarwn",      "yespowerarwn"   },
+  { "yespowersugar",     "yespowersugar"  },
+  { "yespowerurx",     	 "yespowerurx"    },
   { "ziftr",             "zr5"            },
   { NULL,                NULL             }   
 };

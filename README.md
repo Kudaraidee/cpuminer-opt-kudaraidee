@@ -157,7 +157,7 @@ Supported Algorithms
                           yespowerarwn  Arowanacoin(ARWN)
                           yespowerr16   Yenten (YTN)
                           yespowersugar Suagrchain (SUGAR)
-	yespowerurx   UraniumX (URX)
+		yespowerurx   UraniumX (URX)
                           yespower-b2b  generic yespower + blake2b
                           zr5           Ziftr
 

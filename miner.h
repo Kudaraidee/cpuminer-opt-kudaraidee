@@ -631,7 +631,7 @@ static const char* const algo_names[] = {
         "bmw",
         "bmw512",
         "c11",
-		 "cpupower",
+		"cpupower",
         "decred",
         "deep",
         "dmd-gr",
@@ -787,19 +787,19 @@ Options:\n\
                           argon2d500    argon2d-dyn, Dynamic (DYN)\n\
                           argon2d4096   argon2d-uis, Unitus (UIS)\n\
                           axiom         Shabal-256 MemoHash\n\
-			              blake         blake256r14 (SFR)\n\
+			  blake         blake256r14 (SFR)\n\
                           blake2b       Blake2b 256\n\
                           blake2s       Blake-2 S\n\
                           blakecoin     blake256r8\n\
                           bmw           BMW 256\n\
                           bmw512        BMW 512\n\
                           c11           Chaincoin\n\
-						   cpupower      CPUchain\n\
+			  cpupower      CPUchain\n\
                           decred        Blake256r14dcr\n\
                           deep          Deepcoin (DCN)\n\
                           dmd-gr        Diamond\n\
-						  gr            GhostRider\n\
-						  groestl       Groestl coin\n\
+			  gr            GhostRider\n\
+			  groestl       Groestl coin\n\
                           hex           x16r-hex\n\
                           hmq1725       Espers\n\
                           hodl          Hodlcoin\n\
@@ -816,7 +816,7 @@ Options:\n\
                           m7m           Magi (XMG)\n\
                           myr-gr        Myriad-Groestl\n\
                           minotaur      Ringcoin (RNG)\n\
-						  minotaurx     Litecoin Cash (LCC)\n\
+			  minotaurx     Litecoin Cash (LCC)\n\
 			  neoscrypt     NeoScrypt(128, 2, 1)\n\
                           nist5         Nist5\n\
                           pentablake    5 x blake512\n\
@@ -831,7 +831,7 @@ Options:\n\
                           sha256d       Double SHA-256\n\
                           sha256q       Quad SHA-256, Pyrite (PYE)\n\
                           sha256t       Triple SHA-256, Onecoin (OC)\n\
-			                 sha3d         Double Keccak256 (BSHA3)\n\
+			  sha3d         Double Keccak256 (BSHA3)\n\
                           shavite3      Shavite3\n\
                           skein         Skein+Sha (Skeincoin)\n\
                           skein2        Double Skein (Woodcoin)\n\

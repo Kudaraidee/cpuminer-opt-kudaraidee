@@ -375,18 +375,15 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_X25X:          register_x25x_algo          ( gate ); break;
     case ALGO_XEVAN:         register_xevan_algo         ( gate ); break;
     case ALGO_YESCRYPT:      register_yescrypt_05_algo   ( gate ); break;
-//    case ALGO_YESCRYPT:      register_yescrypt_algo      ( gate ); break;
     case ALGO_YESCRYPTR8:    register_yescryptr8_05_algo ( gate ); break;
-//    case ALGO_YESCRYPTR8:    register_yescryptr8_algo    ( gate ); break;
     case ALGO_YESCRYPTR8G:   register_yescryptr8g_algo   ( gate ); break;
     case ALGO_YESCRYPTR16:   register_yescryptr16_05_algo( gate ); break;
-//    case ALGO_YESCRYPTR16:   register_yescryptr16_algo   ( gate ); break;
     case ALGO_YESCRYPTR32:   register_yescryptr32_05_algo( gate ); break;
-//    case ALGO_YESCRYPTR32:   register_yescryptr32_algo   ( gate ); break;
     case ALGO_YESPOWER:      register_yespower_algo      ( gate ); break;
     case ALGO_YESPOWERARWN:   register_yespowerarwn_algo   ( gate ); break;
     case ALGO_YESPOWERR16:   register_yespowerr16_algo   ( gate ); break;
     case ALGO_YESPOWERSUGAR:   register_yespowersugar_algo   ( gate ); break;
+    case ALGO_YESPOWERURX:   register_yespowerurx_algo   ( gate ); break;
     case ALGO_YESPOWER_B2B:  register_yespower_b2b_algo  ( gate ); break;
     case ALGO_ZR5:           register_zr5_algo           ( gate ); break;
    default:
@@ -427,6 +424,7 @@ const char* const algo_alias_map[][2] =
 //   alias                proper
   { "argon2d-dyn",       "argon2d500"     },
   { "argon2d-uis",       "argon2d4096"    },
+  { "argon2d-crds",      "argon2d250"   },
   { "argon2d-bcrs",      "argon2d16000"   },
   { "bcd",               "x13bcd"         },
   { "bitcore",           "timetravel10"   },
@@ -439,7 +437,7 @@ const char* const algo_alias_map[][2] =
   { "diamond",           "dmd-gr"         },
   { "espers",            "hmq1725"        },
   { "flax",              "c11"            },
-  { "grhash",            "gr"             },
+  { "ghostrider",        "gr"             },
   { "hsr",               "x13sm3"         },
   { "jackpot",           "jha"            },
   { "jane",              "scryptjane"     }, 
@@ -458,6 +456,7 @@ const char* const algo_alias_map[][2] =
   { "yenten",            "yespowerr16"    },
   { "yespowerarwn",      "yespowerarwn"   },
   { "yespowersugar",     "yespowersugar"  },
+  { "yespowerurx",     	 "yespowerurx"    },
   { "ziftr",             "zr5"            },
   { NULL,                NULL             }   
 };

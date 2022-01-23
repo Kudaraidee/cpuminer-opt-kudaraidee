@@ -112,6 +112,7 @@ Supported Algorithms
                           qubit         Qubit
                           scrypt        scrypt(1024, 1, 1) (default)
                           scrypt:N      scrypt(N, 1, 1)
+                          scryptn2      scrypt:1048576
                           sha256d       Double SHA-256
                           sha256q       Quad SHA-256, Pyrite (PYE)
                           sha256t       Triple SHA-256, Onecoin (OC)
@@ -153,16 +154,15 @@ Supported Algorithms
                           yescryptr16   Eli
                           yescryptr32   WAVI
                           yespower      Cryply
-                          yespowerarwn      Arowanacoin(ARWN)
+                          yespowerarwn  Arowanacoin(ARWN)
                           yespowerr16   Yenten (YTN)
                           yespowersugar Suagrchain (SUGAR)
+						   yespowerurx   UraniumX (URX)
                           yespower-b2b  generic yespower + blake2b
                           zr5           Ziftr
 
 Many variations of scrypt based algos can be mine by specifying their
 parameters:
-
-scryptn2: --algo scrypt --param-n 1048576
 
 power2b: --algo yespower-b2b --param-n 2048 --param-r 32 --param-key "Now I am become Death, the destroyer of worlds"
 
@@ -171,8 +171,6 @@ yespoweriots: --algo yespower --param-n 2048 --param-key "Iots is committed to t
 yespowerlitb: --algo yespower --param-n 2048 --param-r 32 --param-key "LITBpower: The number of LITB working or available for proof-of-work mini"
 
 yespoweric: --algo yespower --param-n 2048 --param-r 32 --param-key "IsotopeC" 
-
-yespowerurx: --algo yespower --param-n 2048 --param-r 32 --param-key "UraniumX"
 
 yespowerltncg: --algo yespower --param-n 2048 --param-r 32 --param-key "LTNCGYES"
 

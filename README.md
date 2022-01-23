@@ -79,7 +79,7 @@ Supported Algorithms
                           decred
                           deep          Deepcoin (DCN)
                           dmd-gr        Diamond-Groestl
-                          gr       	Ghostrider
+                          gr       	    Ghostrider
                           groestl       Groestl coin
                           hex           x16r-hex
                           hmq1725       Espers
@@ -97,7 +97,7 @@ Supported Algorithms
                           lyra2z330     Lyra2 330 rows, Zoin (ZOI)
                           m7m           Magi (XMG)
                           minotaur      Ringcoin (RNG)
-					minotaurx     Litecoin Cash (LCC)
+				minotaurx     Litecoin Cash (LCC)
                           myr-gr        Myriad-Groestl
                           neoscrypt     NeoScrypt(128, 2, 1)
                           nist5         Nist5

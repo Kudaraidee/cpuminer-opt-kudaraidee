@@ -1112,8 +1112,7 @@ void report_summary_log( bool force )
 
 bool lowdiff_debug = false;
 
-static int share_result( int result, struct work *work,
-                         const char *reason )
+static int share_result( int result, struct work *work, const char *reason )
 {
    double share_time = 0.; //, share_ratio = 0.;
    double hashrate = 0.;
@@ -1160,36 +1159,36 @@ static int share_result( int result, struct work *work,
    share_ratio = my_stats.net_diff == 0. ? 0. : my_stats.share_diff /
                                                 my_stats.net_diff;
 */
-
+	
    // check result
    if ( likely( result ) )
    {
       accepted_share_count++;
-      if ( ( my_stats.share_diff > 0. ) 
+	  if ( ( my_stats.share_diff > 0. ) 
         && ( my_stats.share_diff < lowest_share ) )
          lowest_share = my_stats.share_diff;
       if ( my_stats.share_diff > highest_share )
          highest_share = my_stats.share_diff;
-      sprintf( sres, "S%d", stale_share_count );
-      sprintf( rres, "R%d", rejected_share_count );
+      sprintf( sres, "Stale %d", stale_share_count );
+      sprintf( rres, "Rejected %d", rejected_share_count );
       if unlikely( ( my_stats.net_diff > 0. )
                 && ( my_stats.share_diff >= net_diff ) )
       {
          solved = true;
          solved_block_count++;
          sprintf( bres, "BLOCK SOLVED %d", solved_block_count );
-         sprintf( ares, "A%d", accepted_share_count );
+         sprintf( ares, "Accepted %d", accepted_share_count);
       }
       else
       {
-         sprintf( bres, "B%d", solved_block_count );
-         sprintf( ares, "Accepted %d", accepted_share_count );
+         sprintf( bres, "BLOCK SOLVED %d", solved_block_count );
+         sprintf( ares, "Accepted %d ", accepted_share_count);
       }
    }
    else
    {
-     sprintf( ares, "A%d", accepted_share_count );
-     sprintf( bres, "B%d", solved_block_count );
+     sprintf( ares, "Accepted %d", accepted_share_count );
+     sprintf( bres, "BLOCK SOLVED %d", solved_block_count );
      stale = work ? work->data[ algo_gate.ntime_index ]
                  != g_work.data[ algo_gate.ntime_index ] : false; 
      if ( reason ) stale = stale || strstr( reason, "job" );
@@ -1197,12 +1196,12 @@ static int share_result( int result, struct work *work,
      {
         stale_share_count++;
         sprintf( sres, "Stale %d", stale_share_count );
-        sprintf( rres, "R%d", rejected_share_count );
+        sprintf( rres, "Rejected %d", rejected_share_count );
      }
      else
      {
         rejected_share_count++;
-        sprintf( sres, "S%d", stale_share_count );
+        sprintf( sres, "Stale %d", stale_share_count );
         sprintf( rres, "Rejected %d" , rejected_share_count );
      }
    }
@@ -1242,9 +1241,9 @@ static int share_result( int result, struct work *work,
      else              rcol = CL_WHT CL_RED;
    }
 
-   applog( LOG_NOTICE, "%d %s%s %s%s %s%s %s%s" CL_WHT ", %.3f sec (%dms)",
-           my_stats.share_count, acol, ares, scol, sres, rcol, rres, bcol,
-           bres, share_time, latency );
+   applog( LOG_NOTICE, "%s%s, %s%s, %s%s, %s%s" CL_WHT ", %.2f H/s, %.3f sec (%dms)",
+           acol, ares, scol, sres, rcol, rres, bcol,
+           bres, hashrate, share_time, latency );
 
    if ( unlikely( opt_debug || !result || solved ) )
    {
@@ -1839,11 +1838,11 @@ bool submit_solution( struct work *work, const void *hash,
      if ( !opt_quiet )
      {
         if ( have_stratum )
-           applog( LOG_NOTICE, "%d Submitted Diff %.5g, Block %d, Job %s",
+           applog( LOG_NOTICE, "Share %d Submitted Diff %.5g, Block %d, Job %s",
                    submitted_share_count, work->sharediff, work->height,
                    work->job_id );
         else
-           applog( LOG_NOTICE, "%d Submitted Diff %.5g, Block %d, Ntime %08x",
+           applog( LOG_NOTICE, "Share %d Submitted Diff %.5g, Block %d, Ntime %08x",
                    submitted_share_count, work->sharediff, work->height,
                    work->data[ algo_gate.ntime_index ] );
      }
@@ -2028,14 +2027,14 @@ static void stratum_gen_work( struct stratum_ctx *sctx, struct work *g_work )
    pthread_mutex_unlock( &stats_lock );
 
    if ( stratum_diff != sctx->job.diff )
-      applog( LOG_BLUE, "New Stratum Diff %g, Block %d, Job %s",
-                        sctx->job.diff, sctx->block_height, g_work->job_id );
+      applog( LOG_BLUE, "New Stratum Diff %g",
+                        sctx->job.diff );
    else if ( last_block_height != sctx->block_height )
       applog( LOG_BLUE, "New Block %d, Job %s",
                         sctx->block_height, g_work->job_id );
    else if ( g_work->job_id && new_job )
-      applog( LOG_BLUE, "New Work: Block %d, Net diff %.5g, Job %s",
-                         sctx->block_height, net_diff, g_work->job_id );
+      applog( LOG_BLUE, "%s %s Block %d, Job %s, network diff %.5g",
+                         short_url, algo_names[ opt_algo ], sctx->block_height, g_work->job_id, net_diff );
    else if ( !opt_quiet )
    {
       unsigned char *xnonce2str = abin2hex( g_work->xnonce2,

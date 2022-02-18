@@ -729,6 +729,7 @@ extern int opt_timeout;
 extern bool want_longpoll;
 extern bool have_longpoll;
 extern bool have_gbt;
+extern bool opt_minotaurx;
 extern char*  lp_id;
 extern char *rpc_userpass;
 extern const char *gbt_lp_req;

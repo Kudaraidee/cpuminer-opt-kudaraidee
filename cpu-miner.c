@@ -91,6 +91,7 @@ bool opt_extranonce = true;
 bool want_longpoll = false;
 bool have_longpoll = false;
 bool have_gbt = true;
+bool opt_minotaurx = false; // Flag for MinX on GBT
 bool allow_getwork = true;
 bool want_stratum = true;    // pretty useless
 bool have_stratum = false;
@@ -1241,9 +1242,9 @@ static int share_result( int result, struct work *work, const char *reason )
      else              rcol = CL_WHT CL_RED;
    }
 
-   applog( LOG_NOTICE, "%s%s, %s%s, %s%s, %s%s" CL_WHT ", %.2f H/s, %.3f sec (%dms)",
+   applog( LOG_NOTICE, "%s%s, %s%s, %s%s, %s%s, " CL_WHT "Diff %.5g, %.2f H/s, %.3f sec (%dms)",
            acol, ares, scol, sres, rcol, rres, bcol,
-           bres, hashrate, share_time, latency );
+           bres, my_stats.share_diff, hashrate, share_time, latency );
 
    if ( unlikely( opt_debug || !result || solved ) )
    {
@@ -1497,6 +1498,12 @@ const char *gbt_lp_req =
 */
 // Segwit END
 
+// Parameters for MinX BlockTemplate BEGIN
+#define MINX_PARAMS "\"powalgo\": \"minotaurx\""
+static const char *gbt_req_minx = "{\"method\": \"getblocktemplate\", \"params\": [{"MINX_PARAMS", \"capabilities\": "GBT_CAPABILITIES", \"rules\": "GBT_RULES"}], \"id\":0}\r\n";
+static const char *gbt_lp_req_minx = "{\"method\": \"getblocktemplate\", \"params\": [{"MINX_PARAMS", \"capabilities\": "GBT_CAPABILITIES", \"rules\": "GBT_RULES", \"longpollid\": \"%s\"}], \"id\":0}\r\n";
+// Parameters for MinX BlockTemplate END
+
 static bool get_upstream_work( CURL *curl, struct work *work )
 {
    json_t *val;
@@ -1506,11 +1513,20 @@ static bool get_upstream_work( CURL *curl, struct work *work )
 
 start:
    gettimeofday( &tv_start, NULL );
-
+   // Parameters for MinX BlockTemplate BEGIN
+/*
    val = json_rpc_call( curl, rpc_url, rpc_userpass,
 		           have_gbt ? gbt_req : getwork_req, &err,
                            have_gbt ? JSON_RPC_QUIET_404 : 0);
- 
+*/
+	if(!opt_minotaurx) 
+	{
+		val = json_rpc_call(curl, rpc_url, rpc_userpass, have_gbt ? gbt_req : getwork_req, &err, have_gbt ? JSON_RPC_QUIET_404 : 0);
+	} else 
+	{
+		val = json_rpc_call(curl, rpc_url, rpc_userpass, have_gbt ? gbt_req_minx : getwork_req, &err, have_gbt ? JSON_RPC_QUIET_404 : 0);
+	}
+	// Parameters for MinX BlockTemplate BEGIN
    gettimeofday( &tv_end, NULL );
 
    if ( have_stratum )
@@ -2465,8 +2481,21 @@ json_t *std_longpoll_rpc_call( CURL *curl, int *err, char* lp_url )
    char *req = NULL;
    if (have_gbt)
    {
-       req = (char*) malloc( strlen(gbt_lp_req) + strlen(lp_id) + 1 );
-       sprintf( req, gbt_lp_req, lp_id );
+       // Parameters for MinX BlockTemplate BEGIN
+	   	/*
+		req = (char*) malloc(strlen(gbt_lp_req) + strlen(lp_id) + 1);
+		sprintf(req, gbt_lp_req, lp_id);
+		*/
+		if(!opt_minotaurx) 
+		{
+			req = (char*) malloc(strlen(gbt_lp_req) + strlen(lp_id) + 1);
+			sprintf(req, gbt_lp_req, lp_id);
+		} else 
+		{
+			req = (char*) malloc(strlen(gbt_lp_req_minx) + strlen(lp_id) + 1);
+			sprintf(req, gbt_lp_req_minx, lp_id);
+		}
+				// Parameters for MinX BlockTemplate END
    }
    val = json_rpc_call( curl, rpc_url, rpc_userpass, getwork_req, err,
                         JSON_RPC_LONGPOLL );
@@ -3603,7 +3632,15 @@ int main(int argc, char *argv[])
    {
       fprintf(stderr, "%s: no algo supplied\n", argv[0]);
       show_usage_and_exit(1);
-   }
+   }  
+   
+   if (opt_algo == ALGO_MINOTAURX)
+	{ 
+	// Activating MinX for GBT
+	// applog(LOG_INFO, "Activating the BlockTemplate for MinotaurX");
+		opt_minotaurx = true;
+	}
+	
 	if ( !opt_benchmark )
    {
       if ( !short_url )

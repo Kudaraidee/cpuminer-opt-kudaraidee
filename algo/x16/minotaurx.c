@@ -306,5 +306,6 @@ bool register_minotaurx_algo( algo_gate_t* gate )
   gate->hash      = (void*)&minotaurx_hash;
   gate->optimizations = SSE2_OPT | AES_OPT | AVX2_OPT | AVX512_OPT;
   gate->miner_thread_init = (void*)&initialize_torture_gardenx;
+//  opt_target_factor = 65536.0;
   return true;
 };

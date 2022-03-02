@@ -518,6 +518,7 @@ uint32_t* get_stratum_job_ntime();
 
 enum algos {
         ALGO_NULL,
+        ALGO_0X10,
         ALGO_ALLIUM,
         ALGO_ANIME,
         ALGO_ARGON2,
@@ -617,6 +618,7 @@ enum algos {
 };
 static const char* const algo_names[] = {
         NULL,
+        "0x10",
         "allium",
         "anime",
         "argon2",
@@ -783,6 +785,7 @@ static char const usage[] = "\
 Usage: cpuminer [OPTIONS]\n\
 Options:\n\
   -a, --algo=ALGO       specify the algorithm to use\n\
+                          0x10        	ChainOX (CHOX)\n\
                           allium        Garlicoin (GRLC)\n\
                           anime         Animecoin (ANI)\n\
                           argon2        Argon2 Coin (AR2)\n\

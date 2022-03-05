@@ -436,48 +436,40 @@ void hash0x10_4way_hash( void *state, const void *input )
 int scanhash_hash0x10_4way( struct work *work, uint32_t max_nonce,
                    uint64_t *hashes_done, struct thr_info *mythr )
 {
-     uint32_t hash[4*8] __attribute__ ((aligned (64)));
-     uint32_t vdata[24*4] __attribute__ ((aligned (64)));
-     uint32_t *pdata = work->data;
-     uint32_t *ptarget = work->target;
-     uint32_t n = pdata[19];
-     const uint32_t first_nonce = pdata[19];
-     int thr_id = mythr->id;  // thr_id arg is deprecated
-     __m256i  *noncev = (__m256i*)vdata + 9;   // aligned
-     const uint32_t Htarg = ptarget[7];
-     uint64_t htmax[] = {          0,        0xF,       0xFF,
-                               0xFFF,     0xFFFF, hash0x10000000  };
-     uint32_t masks[] = { 0xFFFFFFFF, 0xFFFFFFF0, 0xFFFFFF00,
-                          0xFFFFF000, 0xFFFF0000,          0  };
+		uint32_t endiandata[20] __attribute__((aligned(64)));
+		uint32_t hash64[8] __attribute__((aligned(64)));
+		uint32_t *pdata = work->data;
+		uint32_t *ptarget = work->target;
+		uint32_t n = pdata[19] - 1;
+		const uint32_t first_nonce = pdata[19];
+		int thr_id = mythr->id;
+		const uint32_t Htarg = ptarget[7];
+		uint64_t htmax[] = { 0, 0xF, 0xFF, 0xFFF,0xFFFF, 0x10000000 };
+        uint32_t masks[] = { 0xFFFFFFFF, 0xFFFFFFF0, 0xFFFFFF00, 0xFFFFF000, 0xFFFF0000, 0 };
 
-     mm256_bswap32_intrlv80_4x64( vdata, pdata );
+        // big endian encode 0..18 uint32_t, 64 bits at a time
+        swab32_array( endiandata, pdata, 20 );
 
-     for (int m=0; m < 6; m++) 
-       if (Htarg <= htmax[m])
-       {
-         uint32_t mask = masks[m];
-         do
-         {
-           *noncev = mm256_intrlv_blend_32( mm256_bswap_32(
-                 _mm256_set_epi32( n+3, 0, n+2, 0, n+1, 0, n, 0 ) ), *noncev );
-
-            hash0x10_4way_hash( hash, vdata );
-            pdata[19] = n;
-
-            for ( int i = 0; i < 4; i++ )
-            if ( ( ( (hash+(i<<3))[7] & mask ) == 0 )
-                 && fulltest( hash+(i<<3), ptarget ) && !opt_benchmark )
+        for (int m=0; m < 6; m++) 
+          if (Htarg <= htmax[m])
+          {
+            uint32_t mask = masks[m];
+            do
             {
-               pdata[19] = n+i;
-               submit_solution( work, hash+(i<<3), mythr );
-            }
-            n += 4;
-         } while ( ( n < max_nonce ) && !work_restart[thr_id].restart );
-         break;
-       }
+              pdata[19] = ++n;
+              be32enc( &endiandata[19], n );
+              hash0x10_4way_hash( hash64, &endiandata );
+              if ( ( hash64[7] & mask ) == 0 )
+              {
+                 if ( fulltest( hash64, ptarget ) )
+                    submit_solution( work, hash64, mythr );
+              }
+            } while ( n < max_nonce && !work_restart[thr_id].restart );
+          }
 
-     *hashes_done = n - first_nonce + 1;
-     return 0;
+        *hashes_done = n - first_nonce + 1;
+        pdata[19] = n;
+        return 0;
 }
 
 #endif

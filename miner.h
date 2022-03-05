@@ -775,7 +775,6 @@ extern bool opt_stratum_stats;
 extern int num_cpus;
 extern int num_cpugroups;
 extern int opt_priority;
-extern bool opt_hash_meter;
 extern uint32_t accepted_share_count;
 extern uint32_t rejected_share_count;
 extern uint32_t solved_block_count;

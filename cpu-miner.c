@@ -156,7 +156,6 @@ double opt_diff_factor = 1.0;
 double opt_target_factor = 1.0;
 uint32_t zr5_pok = 0;
 bool opt_stratum_stats = false;
-bool opt_hash_meter = false;
 uint32_t submitted_share_count= 0;
 uint32_t accepted_share_count = 0;
 uint32_t rejected_share_count = 0;
@@ -2429,14 +2428,12 @@ static void *miner_thread( void *userdata )
        }
 
        // display hashrate
-       if ( unlikely( opt_hash_meter ) )
+       if (!opt_quiet)
        {
           char hr[16];
           char hr_units[2] = {0,0};
-          double hashrate;
-
-          hashrate  = thr_hashrates[thr_id];
-          if ( hashrate != 0. )
+          double hashrate = thr_hashrates[thr_id];
+          if ( hashrate )
           {
              scale_hash_for_display( &hashrate,  hr_units );
              sprintf( hr, "%.2f", hashrate );
@@ -2447,8 +2444,8 @@ static void *miner_thread( void *userdata )
 
        // Display benchmark total
        // Update hashrate for API if no shares accepted yet.
-       if ( unlikely( ( opt_benchmark || !accepted_share_count ) 
-            && thr_id == opt_n_threads - 1 ) )
+       if ( ( opt_benchmark || !accepted_share_count ) 
+            && thr_id == opt_n_threads - 1 ) 
        {
           double hashrate  = 0.;
           pthread_mutex_lock( &stats_lock );
@@ -3442,9 +3439,6 @@ void parse_arg(int key, char *arg )
 	case 1012:  // no-extranonce
 		opt_extranonce = false;
 		break;
-   case 1014:   // hash-meter
-      opt_hash_meter = true;
-      break;
    case 1016:			/* --coinbase-addr */
       if ( arg ) coinbase_address = strdup( arg );
 		break;

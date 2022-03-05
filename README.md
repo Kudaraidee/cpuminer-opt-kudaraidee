@@ -97,7 +97,7 @@ Supported Algorithms
                           lyra2z330     Lyra2 330 rows, Zoin (ZOI)
                           m7m           Magi (XMG)
                           minotaur      Ringcoin (RNG)
-						  myr-gr        Myriad-Groestl
+			  myr-gr        Myriad-Groestl
                           neoscrypt     NeoScrypt(128, 2, 1)
                           nist5         Nist5
                           pentablake    Pentablake
@@ -157,7 +157,7 @@ Supported Algorithms
                           yespowerARWN  Arowanacoin(ARWN)
                           yespowerr16   Yenten (YTN)
                           yespowerSUGAR Suagrchain (SUGAR)
-			      yespowerURX   UraniumX (URX)
+			  yespowerURX   UraniumX (URX)
                           yespower-b2b  generic yespower + blake2b
                           zr5           Ziftr
 

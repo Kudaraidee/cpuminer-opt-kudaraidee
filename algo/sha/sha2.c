@@ -8,7 +8,7 @@
  * any later version.  See COPYING for more details.
  */
 
-#include "algo-gate-api.h"
+#include "sha256d-4way.h"
 
 #include <string.h>
 #include <inttypes.h>
@@ -180,6 +180,9 @@ static const uint32_t sha256d_hash1[16] = {
 	0x00000000, 0x00000000, 0x00000000, 0x00000100
 };
 
+// this performs the entire hash all over again, why?
+// because main function only does 56 rounds.
+
 static void sha256d_80_swap(uint32_t *hash, const uint32_t *data)
 {
 	uint32_t S[16];
@@ -195,8 +198,29 @@ static void sha256d_80_swap(uint32_t *hash, const uint32_t *data)
 		hash[i] = swab32(hash[i]);
 }
 
-extern void sha256d(unsigned char *hash, const unsigned char *data, int len)
+/*
+#if defined (__SHA__)
+
+#include "algo/sha/sph_sha2.h"
+
+void sha256d(unsigned char *hash, const unsigned char *data, int len)
 {
+   sph_sha256_context ctx __attribute__ ((aligned (64)));
+
+   sph_sha256_init( &ctx );
+   sph_sha256( &ctx, data, len );
+   sph_sha256_close( &ctx, hash );
+
+   sph_sha256_init( &ctx );
+   sph_sha256( &ctx, hash, 32 );
+   sph_sha256_close( &ctx, hash );
+}
+
+#else
+
+void sha256d(unsigned char *hash, const unsigned char *data, int len)
+{
+
    uint32_t S[16], T[16];
 	int i, r;
 
@@ -219,6 +243,9 @@ extern void sha256d(unsigned char *hash, const unsigned char *data, int len)
 	for (i = 0; i < 8; i++)
 		be32enc((uint32_t *)hash + i, T[i]);
 }
+
+#endif
+*/
 
 static inline void sha256d_preextend(uint32_t *W)
 {
@@ -467,7 +494,7 @@ static inline void sha256d_ms(uint32_t *hash, uint32_t *W,
 void sha256d_ms_4way(uint32_t *hash,  uint32_t *data,
 	const uint32_t *midstate, const uint32_t *prehash);
 
-static inline int scanhash_sha256d_4way( struct work *work,
+static inline int scanhash_sha256d_4way_pooler( struct work *work,
              uint32_t max_nonce, uint64_t *hashes_done, struct thr_info *mythr )
 {
         uint32_t *pdata = work->data;
@@ -528,7 +555,7 @@ static inline int scanhash_sha256d_4way( struct work *work,
 void sha256d_ms_8way(uint32_t *hash,  uint32_t *data,
 	const uint32_t *midstate, const uint32_t *prehash);
 
-static inline int scanhash_sha256d_8way( struct work *work,
+static inline int scanhash_sha256d_8way_pooler( struct work *work,
             uint32_t max_nonce, uint64_t *hashes_done, struct thr_info *mythr )
 {
         uint32_t *pdata = work->data;
@@ -584,11 +611,11 @@ static inline int scanhash_sha256d_8way( struct work *work,
 
 #endif /* HAVE_SHA256_8WAY */
 
-int scanhash_sha256d( struct work *work,
-	uint32_t max_nonce, uint64_t *hashes_done, struct thr_info *mythr )
+int scanhash_sha256d_pooler( struct work *work,	uint32_t max_nonce,
+                             uint64_t *hashes_done, struct thr_info *mythr )
 {
-        uint32_t *pdata = work->data;
-        uint32_t *ptarget = work->target;
+   uint32_t *pdata = work->data;
+   uint32_t *ptarget = work->target;
 	uint32_t _ALIGN(128) data[64];
 	uint32_t _ALIGN(32) hash[8];
 	uint32_t _ALIGN(32) midstate[8];
@@ -599,12 +626,12 @@ int scanhash_sha256d( struct work *work,
    int thr_id = mythr->id;  // thr_id arg is deprecated
 
 #ifdef HAVE_SHA256_8WAY
-	if (sha256_use_8way())
-		return scanhash_sha256d_8way( work,	max_nonce, hashes_done, mythr );
+	if ( sha256_use_8way() )
+		return scanhash_sha256d_8way_pooler( work, max_nonce, hashes_done, mythr );
 #endif
 #ifdef HAVE_SHA256_4WAY
-	if (sha256_use_4way())
-		return scanhash_sha256d_4way( work,	max_nonce, hashes_done, mythr );
+	if ( sha256_use_4way() )
+		return scanhash_sha256d_4way_pooler( work, max_nonce, hashes_done, mythr );
 #endif
 	
 	memcpy(data, pdata + 16, 64);
@@ -631,6 +658,7 @@ int scanhash_sha256d( struct work *work,
 	return 0;
 }
 
+/*
 int scanhash_SHA256d( struct work *work, const uint32_t max_nonce,
                       uint64_t *hashes_done, struct thr_info *mythr )
 {
@@ -660,13 +688,20 @@ int scanhash_SHA256d( struct work *work, const uint32_t max_nonce,
    pdata[19] = n;
    return 0;
 }
-
+*/
 
 bool register_sha256d_algo( algo_gate_t* gate )
 {
-   gate->optimizations = SSE2_OPT | AVX2_OPT;
-   gate->scanhash = (void*)&scanhash_sha256d;
-   gate->hash     = (void*)&sha256d;
+   gate->optimizations = SSE2_OPT | AVX2_OPT | AVX512_OPT;
+#if defined(SHA256D_16WAY)
+   gate->scanhash = (void*)&scanhash_sha256d_16way;
+//#elif defined(SHA256D_8WAY)
+//   gate->scanhash = (void*)&scanhash_sha256d_8way;
+#else
+   gate->scanhash = (void*)&scanhash_sha256d_pooler;
+//   gate->scanhash = (void*)&scanhash_sha256d_4way;
+#endif
+   //   gate->hash     = (void*)&sha256d;
    return true;
 };
 

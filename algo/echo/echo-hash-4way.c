@@ -10,22 +10,27 @@ static const unsigned int mul2ipt[] __attribute__ ((aligned (64))) =
    0xfd5ba600, 0x2a8c71d7, 0x1eb845e3, 0xc96f9234
 };
 */
-// do these need to be reversed?
 
 #if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
 
-
-#define mul2mask \
-     m512_const2_64( 0, 0x00001b00 )
-//_mm512_set4_epi32( 0, 0, 0, 0x00001b00 ) 
-//   _mm512_set4_epi32( 0x00001b00, 0, 0, 0 )  
-
-#define lsbmask    m512_const1_32( 0x01010101 ) 
+#define ECHO_SUBBYTES4(state, j) \
+   state[0][j] = _mm512_aesenc_epi128( state[0][j], k1 ); \
+   k1 = _mm512_add_epi32( k1, one ); \
+   state[1][j] = _mm512_aesenc_epi128( state[1][j], k1 ); \
+   k1 = _mm512_add_epi32( k1, one ); \
+   state[2][j] = _mm512_aesenc_epi128( state[2][j], k1 ); \
+   k1 = _mm512_add_epi32( k1, one ); \
+   state[3][j] = _mm512_aesenc_epi128( state[3][j], k1 ); \
+   k1 = _mm512_add_epi32( k1, one ); \
+   state[0][j] = _mm512_aesenc_epi128( state[0][j], m512_zero ); \
+   state[1][j] = _mm512_aesenc_epi128( state[1][j], m512_zero ); \
+   state[2][j] = _mm512_aesenc_epi128( state[2][j], m512_zero ); \
+   state[3][j] = _mm512_aesenc_epi128( state[3][j], m512_zero )
 
 #define ECHO_SUBBYTES( state, i, j ) \
 	state[i][j] = _mm512_aesenc_epi128( state[i][j], k1 ); \
-	state[i][j] = _mm512_aesenc_epi128( state[i][j], m512_zero ); \
-	k1 = _mm512_add_epi32( k1, m512_one_128 );
+   k1 = _mm512_add_epi32( k1, one ); \
+	state[i][j] = _mm512_aesenc_epi128( state[i][j], m512_zero );
 
 #define ECHO_MIXBYTES( state1, state2, j, t1, t2, s2 ) do \
 { \
@@ -46,8 +51,7 @@ static const unsigned int mul2ipt[] __attribute__ ((aligned (64))) =
    t1 = _mm512_and_si512( t1, lsbmask ); \
    t2 = _mm512_shuffle_epi8( mul2mask, t1 ); \
    s2 = _mm512_xor_si512( s2, t2 );\
-   state2[ 0 ][ j ] = _mm512_xor_si512( state2[ 0 ][ j ], \
-                              _mm512_xor_si512( s2, state1[ 1 ][ j1 ] ) ); \
+   state2[ 0 ][ j ] = mm512_xor3( state2[ 0 ][ j ], s2, state1[ 1 ][ j1 ] ); \
    state2[ 1 ][ j ] = _mm512_xor_si512( state2[ 1 ][ j ], s2 ); \
    state2[ 2 ][ j ] = _mm512_xor_si512( state2[ 2 ][ j ], state1[ 1 ][ j1 ] ); \
    state2[ 3 ][ j ] = _mm512_xor_si512( state2[ 3 ][ j ], state1[ 1 ][ j1 ] ); \
@@ -57,8 +61,7 @@ static const unsigned int mul2ipt[] __attribute__ ((aligned (64))) =
    t2 = _mm512_shuffle_epi8( mul2mask, t1 ); \
    s2 = _mm512_xor_si512( s2, t2 ); \
    state2[ 0 ][ j ] = _mm512_xor_si512( state2[ 0 ][ j ], state1[ 2 ][ j2 ] ); \
-   state2[ 1 ][ j ] = _mm512_xor_si512( state2[ 1 ][ j ], \
-                            _mm512_xor_si512( s2, state1[ 2 ][ j2 ] ) ); \
+   state2[ 1 ][ j ] = mm512_xor3( state2[ 1 ][ j ], s2, state1[ 2 ][ j2 ] ); \
    state2[ 2 ][ j ] = _mm512_xor_si512( state2[ 2 ][ j ], s2 ); \
    state2[ 3 ][ j ] = _mm512_xor_si512( state2[ 3][ j ], state1[ 2 ][ j2 ] ); \
    s2 = _mm512_add_epi8( state1[ 3 ][ j3 ], state1[ 3 ][ j3 ] ); \
@@ -68,11 +71,29 @@ static const unsigned int mul2ipt[] __attribute__ ((aligned (64))) =
    s2 = _mm512_xor_si512( s2, t2 ); \
    state2[ 0 ][ j ] = _mm512_xor_si512( state2[ 0 ][ j ], state1[ 3 ][ j3 ] ); \
    state2[ 1 ][ j ] = _mm512_xor_si512( state2[ 1 ][ j ], state1[ 3 ][ j3 ] ); \
-   state2[ 2 ][ j ] = _mm512_xor_si512( state2[ 2 ][ j ], \
-                            _mm512_xor_si512( s2, state1[ 3 ][ j3] ) ); \
+   state2[ 2 ][ j ] = mm512_xor3( state2[ 2 ][ j ], s2, state1[ 3 ][ j3] ); \
    state2[ 3 ][ j ] = _mm512_xor_si512( state2[ 3 ][ j ], s2 ); \
 } while(0)
 
+#define ECHO_ROUND_UNROLL2 \
+   ECHO_SUBBYTES4(_state, 0);\
+   ECHO_SUBBYTES4(_state, 1);\
+   ECHO_SUBBYTES4(_state, 2);\
+   ECHO_SUBBYTES4(_state, 3);\
+   ECHO_MIXBYTES(_state, _state2, 0, t1, t2, s2);\
+   ECHO_MIXBYTES(_state, _state2, 1, t1, t2, s2);\
+   ECHO_MIXBYTES(_state, _state2, 2, t1, t2, s2);\
+   ECHO_MIXBYTES(_state, _state2, 3, t1, t2, s2);\
+   ECHO_SUBBYTES4(_state2, 0);\
+   ECHO_SUBBYTES4(_state2, 1);\
+   ECHO_SUBBYTES4(_state2, 2);\
+   ECHO_SUBBYTES4(_state2, 3);\
+   ECHO_MIXBYTES(_state2, _state, 0, t1, t2, s2);\
+   ECHO_MIXBYTES(_state2, _state, 1, t1, t2, s2);\
+   ECHO_MIXBYTES(_state2, _state, 2, t1, t2, s2);\
+   ECHO_MIXBYTES(_state2, _state, 3, t1, t2, s2)
+
+/*
 #define ECHO_ROUND_UNROLL2 \
    ECHO_SUBBYTES(_state, 0, 0);\
    ECHO_SUBBYTES(_state, 1, 0);\
@@ -114,6 +135,7 @@ static const unsigned int mul2ipt[] __attribute__ ((aligned (64))) =
    ECHO_MIXBYTES(_state2, _state, 1, t1, t2, s2);\
    ECHO_MIXBYTES(_state2, _state, 2, t1, t2, s2);\
    ECHO_MIXBYTES(_state2, _state, 3, t1, t2, s2)
+*/
 
 #define SAVESTATE(dst, src)\
 	dst[0][0] = src[0][0];\
@@ -140,6 +162,9 @@ void echo_4way_compress( echo_4way_context *ctx, const __m512i *pmsg,
   unsigned int r, b, i, j;
   __m512i t1, t2, s2, k1;
   __m512i _state[4][4], _state2[4][4], _statebackup[4][4]; 
+  __m512i one = m512_one_128;
+  __m512i mul2mask = m512_const2_64( 0, 0x00001b00 );
+  __m512i lsbmask  = m512_const1_32( 0x01010101 ); 
 
   _state[ 0 ][ 0 ] = ctx->state[ 0 ][ 0 ];
   _state[ 0 ][ 1 ] = ctx->state[ 0 ][ 1 ];
@@ -404,10 +429,24 @@ int echo_4way_full( echo_4way_context *ctx, void *hashval, int nHashSize,
 
 #define lsbmask_2way    m256_const1_32( 0x01010101 ) 
 
+#define ECHO_SUBBYTES4_2WAY( state, j ) \
+   state[0][j] = _mm256_aesenc_epi128( state[0][j], k1 ); \
+   k1 = _mm256_add_epi32( k1, m256_one_128 ); \
+   state[1][j] = _mm256_aesenc_epi128( state[1][j], k1 ); \
+   k1 = _mm256_add_epi32( k1, m256_one_128 ); \
+   state[2][j] = _mm256_aesenc_epi128( state[2][j], k1 ); \
+   k1 = _mm256_add_epi32( k1, m256_one_128 ); \
+   state[3][j] = _mm256_aesenc_epi128( state[3][j], k1 ); \
+   k1 = _mm256_add_epi32( k1, m256_one_128 ); \
+   state[0][j] = _mm256_aesenc_epi128( state[0][j], m256_zero ); \
+   state[1][j] = _mm256_aesenc_epi128( state[1][j], m256_zero ); \
+   state[2][j] = _mm256_aesenc_epi128( state[2][j], m256_zero ); \
+   state[3][j] = _mm256_aesenc_epi128( state[3][j], m256_zero )
+
 #define ECHO_SUBBYTES_2WAY( state, i, j ) \
         state[i][j] = _mm256_aesenc_epi128( state[i][j], k1 ); \
+        k1 = _mm256_add_epi32( k1, m256_one_128 ); \
         state[i][j] = _mm256_aesenc_epi128( state[i][j], m256_zero ); \
-        k1 = _mm256_add_epi32( k1, m256_one_128 );
 
 #define ECHO_MIXBYTES_2WAY( state1, state2, j, t1, t2, s2 ) do \
 { \
@@ -456,6 +495,25 @@ int echo_4way_full( echo_4way_context *ctx, void *hashval, int nHashSize,
 } while(0)
 
 #define ECHO_ROUND_UNROLL2_2WAY \
+   ECHO_SUBBYTES4_2WAY(_state, 0);\
+   ECHO_SUBBYTES4_2WAY(_state, 1);\
+   ECHO_SUBBYTES4_2WAY(_state, 2);\
+   ECHO_SUBBYTES4_2WAY(_state, 3);\
+   ECHO_MIXBYTES_2WAY(_state, _state2, 0, t1, t2, s2);\
+   ECHO_MIXBYTES_2WAY(_state, _state2, 1, t1, t2, s2);\
+   ECHO_MIXBYTES_2WAY(_state, _state2, 2, t1, t2, s2);\
+   ECHO_MIXBYTES_2WAY(_state, _state2, 3, t1, t2, s2);\
+   ECHO_SUBBYTES4_2WAY(_state2, 0);\
+   ECHO_SUBBYTES4_2WAY(_state2, 1);\
+   ECHO_SUBBYTES4_2WAY(_state2, 2);\
+   ECHO_SUBBYTES4_2WAY(_state2, 3);\
+   ECHO_MIXBYTES_2WAY(_state2, _state, 0, t1, t2, s2);\
+   ECHO_MIXBYTES_2WAY(_state2, _state, 1, t1, t2, s2);\
+   ECHO_MIXBYTES_2WAY(_state2, _state, 2, t1, t2, s2);\
+   ECHO_MIXBYTES_2WAY(_state2, _state, 3, t1, t2, s2)
+
+/*
+#define ECHO_ROUND_UNROLL2_2WAY \
    ECHO_SUBBYTES_2WAY(_state, 0, 0);\
    ECHO_SUBBYTES_2WAY(_state, 1, 0);\
    ECHO_SUBBYTES_2WAY(_state, 2, 0);\
@@ -496,6 +554,7 @@ int echo_4way_full( echo_4way_context *ctx, void *hashval, int nHashSize,
    ECHO_MIXBYTES_2WAY(_state2, _state, 1, t1, t2, s2);\
    ECHO_MIXBYTES_2WAY(_state2, _state, 2, t1, t2, s2);\
    ECHO_MIXBYTES_2WAY(_state2, _state, 3, t1, t2, s2)
+*/
 
 #define SAVESTATE_2WAY(dst, src)\
         dst[0][0] = src[0][0];\

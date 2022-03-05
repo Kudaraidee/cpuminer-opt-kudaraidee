@@ -51,7 +51,6 @@ typedef struct {
    __m128i buf[64>>2];
    __m128i val[8];
    uint32_t count_high, count_low;
-   bool initialized;
 } sha256_4way_context __attribute__ ((aligned (64)));
 
 void sha256_4way_init( sha256_4way_context *sc );
@@ -59,6 +58,16 @@ void sha256_4way_update( sha256_4way_context *sc, const void *data,
                          size_t len );
 void sha256_4way_close( sha256_4way_context *sc, void *dst );
 void sha256_4way_full( void *dst, const void *data, size_t len );
+void sha256_4way_transform_le( __m128i *state_out,  const __m128i *data,
+                            const __m128i *state_in );
+void sha256_4way_transform_be( __m128i *state_out,  const __m128i *data,
+                            const __m128i *state_in );
+void sha256_4way_prehash_3rounds( __m128i *state_mid, __m128i *X,
+                                   const __m128i *W, const __m128i *state_in );
+void sha256_4way_final_rounds( __m128i *state_out, const __m128i *data,
+        const __m128i *state_in, const __m128i *state_mid, const __m128i *X );
+int sha256_4way_transform_le_short( __m128i *state_out, const __m128i *data,
+                                     const __m128i *state_in );
 
 #endif  // SSE2
 
@@ -70,13 +79,23 @@ typedef struct {
    __m256i buf[64>>2];
    __m256i val[8];
    uint32_t count_high, count_low;
-   bool initialized;
 } sha256_8way_context __attribute__ ((aligned (128)));
 
 void sha256_8way_init( sha256_8way_context *sc );
 void sha256_8way_update( sha256_8way_context *sc, const void *data, size_t len );
 void sha256_8way_close( sha256_8way_context *sc, void *dst );
 void sha256_8way_full( void *dst, const void *data, size_t len );
+void sha256_8way_transform_le( __m256i *state_out, const __m256i *data,
+                               const __m256i *state_in );
+void sha256_8way_transform_be( __m256i *state_out, const __m256i *data,
+                               const __m256i *state_in );
+
+void sha256_8way_prehash_3rounds( __m256i *state_mid, __m256i *X,
+                                 const __m256i *W, const __m256i *state_in );
+void sha256_8way_final_rounds( __m256i *state_out, const __m256i *data,
+        const __m256i *state_in, const __m256i *state_mid, const __m256i *X );
+int sha256_8way_transform_le_short( __m256i *state_out, const __m256i *data,
+                                     const __m256i *state_in );
 
 #endif  // AVX2
 
@@ -88,13 +107,23 @@ typedef struct {
    __m512i buf[64>>2];
    __m512i val[8];
    uint32_t count_high, count_low;
-   bool initialized;
 } sha256_16way_context __attribute__ ((aligned (128)));
 
 void sha256_16way_init( sha256_16way_context *sc );
 void sha256_16way_update( sha256_16way_context *sc, const void *data, size_t len );
 void sha256_16way_close( sha256_16way_context *sc, void *dst );
 void sha256_16way_full( void *dst, const void *data, size_t len );
+void sha256_16way_transform_le( __m512i *state_out, const __m512i *data,
+                             const __m512i *state_in );
+void sha256_16way_transform_be( __m512i *state_out, const __m512i *data,
+                             const __m512i *state_in );
+void sha256_16way_prehash_3rounds( __m512i *state_mid, __m512i *X,
+                                  const __m512i *W, const __m512i *state_in );
+void sha256_16way_final_rounds( __m512i *state_out, const __m512i *data,
+        const __m512i *state_in, const __m512i *state_mid, const __m512i *X );
+
+int sha256_16way_transform_le_short( __m512i *state_out, const __m512i *data,
+                                     const __m512i *state_in );
 
 #endif // AVX512
 

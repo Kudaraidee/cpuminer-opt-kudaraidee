@@ -53,7 +53,8 @@ static const uint64_t RC[] = {
 #define WRITE_STATE(sc)
 
 #define MOV64(d, s)      (d = s)
-#define XOR64_IOTA       XOR64
+#define XOR64_IOTA       XOR
+
 
 #define LPAR   (
 #define RPAR   )
@@ -70,12 +71,16 @@ static const uint64_t RC[] = {
 
 // Targetted macros, keccak-macros.h is included for each target.
 
-#define DECL64(x)        __m512i x
-#define XOR64(d, a, b)   (d = _mm512_xor_si512(a,b))
-#define AND64(d, a, b)   (d = _mm512_and_si512(a,b))
-#define OR64(d, a, b)    (d = _mm512_or_si512(a,b))
-#define NOT64(d, s)      (d = _mm512_xor_si512(s,m512_neg1))
-#define ROL64(d, v, n)   (d = mm512_rol_64(v, n))
+#define DECL64(x)          __m512i x
+#define XOR(d, a, b)     (d = _mm512_xor_si512(a,b))
+#define XOR64 XOR
+#define AND64(d, a, b)     (d = _mm512_and_si512(a,b))
+#define OR64(d, a, b)      (d = _mm512_or_si512(a,b))
+#define NOT64(d, s)        (d = _mm512_xor_si512(s,m512_neg1))
+#define ROL64(d, v, n)     (d = mm512_rol_64(v, n))
+#define XOROR(d, a, b, c)  (d = mm512_xoror(a, b, c))
+#define XORAND(d, a, b, c) (d = mm512_xorand(a, b, c))
+#define XOR3( d, a, b, c ) (d = mm512_xor3( a, b, c ))
 
 #include "keccak-macros.c"
 
@@ -233,12 +238,15 @@ keccak512_8way_close(void *cc, void *dst)
 #undef INPUT_BUF
 #undef DECL64
 #undef XOR64
+#undef XOR
 #undef AND64
 #undef OR64
 #undef NOT64
 #undef ROL64
 #undef KECCAK_F_1600
-
+#undef XOROR
+#undef XORAND
+#undef XOR3
 #endif  // AVX512
 
 // AVX2
@@ -250,11 +258,15 @@ keccak512_8way_close(void *cc, void *dst)
 } while (0)
 
 #define DECL64(x)        __m256i x
-#define XOR64(d, a, b)   (d = _mm256_xor_si256(a,b))
+#define XOR(d, a, b)    (d = _mm256_xor_si256(a,b))
+#define XOR64 XOR
 #define AND64(d, a, b)   (d = _mm256_and_si256(a,b))
 #define OR64(d, a, b)    (d = _mm256_or_si256(a,b))
 #define NOT64(d, s)      (d = _mm256_xor_si256(s,m256_neg1))
 #define ROL64(d, v, n)   (d = mm256_rol_64(v, n))
+#define XOROR(d, a, b, c) (d = _mm256_xor_si256(a, _mm256_or_si256(b, c)))
+#define XORAND(d, a, b, c) (d = _mm256_xor_si256(a, _mm256_and_si256(b, c)))
+#define XOR3( d, a, b, c ) (d = mm256_xor3( a, b, c ))
 
 #include "keccak-macros.c"
 
@@ -414,10 +426,14 @@ keccak512_4way_close(void *cc, void *dst)
 #undef INPUT_BUF
 #undef DECL64
 #undef XOR64
+#undef XOR
 #undef AND64
 #undef OR64
 #undef NOT64
 #undef ROL64
 #undef KECCAK_F_1600
+#undef XOROR
+#undef XORAND
+#undef XOR3
 
 #endif  // AVX2

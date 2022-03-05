@@ -11,10 +11,6 @@ static const uint32_t IV512[] =
         0xE275EADE, 0x502D9FCD, 0xB9357178, 0x022A4B9A
 };
 
-#define mm512_ror2x512hi_1x32( a, b ) \
-   _mm512_mask_blend_epi32( 0x8888, mm512_ror128_32( a ), \
-                                    mm512_ror128_32( b ) )
-
 static void
 c512_4way( shavite512_4way_context *ctx, const void *msg )
 {
@@ -23,6 +19,8 @@ c512_4way( shavite512_4way_context *ctx, const void *msg )
    register __m512i K0, K1, K2, K3, K4, K5, K6, K7;
    __m512i *M = (__m512i*)msg;
    __m512i *H = (__m512i*)ctx->h;
+   const __m512i count = _mm512_set4_epi32( ctx->count3, ctx->count2,
+                                            ctx->count1, ctx->count0 );
    int r;
 
    P0 = H[0];
@@ -58,101 +56,101 @@ c512_4way( shavite512_4way_context *ctx, const void *msg )
    {
       // round 1, 5, 9
 
-     K0 = _mm512_xor_si512( K7, mm512_ror128_32(
+     K0 = _mm512_xor_si512( K7, mm512_shuflr128_32(
                                   _mm512_aesenc_epi128( K0, m512_zero ) ) );
 
      if ( r == 0 )
-        K0 = _mm512_xor_si512( K0, _mm512_set4_epi32( 
-		              ~ctx->count3, ctx->count2, ctx->count1, ctx->count0 ) );
+        K0 = _mm512_xor_si512( K0,
+                    _mm512_mask_xor_epi32( count, 0x8888, count, m512_neg1 ) );
 
      X = _mm512_aesenc_epi128( _mm512_xor_si512( P0, K0 ), m512_zero );
      K1 = _mm512_xor_si512( K0,
-		           mm512_ror128_32( _mm512_aesenc_epi128( K1, m512_zero ) ) );
+		           mm512_shuflr128_32( _mm512_aesenc_epi128( K1, m512_zero ) ) );
 
      if ( r == 1 )
-        K1 = _mm512_xor_si512( K1, _mm512_set4_epi32(
-	                 ~ctx->count0, ctx->count1, ctx->count2, ctx->count3 ) ); 
+        K1 = _mm512_xor_si512( K1, mm512_shuflr128_32(
+                 _mm512_mask_xor_epi32( count, 0x1111, count, m512_neg1 ) ) );
 
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K1 ), m512_zero );
      K2 = _mm512_xor_si512( K1,
-		           mm512_ror128_32( _mm512_aesenc_epi128( K2, m512_zero ) ) );
+		           mm512_shuflr128_32( _mm512_aesenc_epi128( K2, m512_zero ) ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K2 ), m512_zero );
      K3 = _mm512_xor_si512( K2,
-		           mm512_ror128_32( _mm512_aesenc_epi128( K3, m512_zero ) ) );
+		           mm512_shuflr128_32( _mm512_aesenc_epi128( K3, m512_zero ) ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K3 ), m512_zero );
 
      P3 = _mm512_xor_si512( P3, X );
 
      K4 = _mm512_xor_si512( K3,
-		           mm512_ror128_32( _mm512_aesenc_epi128( K4, m512_zero ) ) );
+		           mm512_shuflr128_32( _mm512_aesenc_epi128( K4, m512_zero ) ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( P2, K4 ), m512_zero );
      K5 = _mm512_xor_si512( K4,
-		           mm512_ror128_32( _mm512_aesenc_epi128( K5, m512_zero ) ) );
+		           mm512_shuflr128_32( _mm512_aesenc_epi128( K5, m512_zero ) ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K5 ), m512_zero );
      K6 = _mm512_xor_si512( K5,
-		           mm512_ror128_32( _mm512_aesenc_epi128( K6, m512_zero ) ) );
+		           mm512_shuflr128_32( _mm512_aesenc_epi128( K6, m512_zero ) ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K6 ), m512_zero );
      K7 = _mm512_xor_si512( K6,
-		           mm512_ror128_32( _mm512_aesenc_epi128( K7, m512_zero ) ) );
+		           mm512_shuflr128_32( _mm512_aesenc_epi128( K7, m512_zero ) ) );
 
      if ( r == 2 )
-        K7 = _mm512_xor_si512( K7, _mm512_set4_epi32(
-                    ~ctx->count1, ctx->count0, ctx->count3, ctx->count2 ) );
+        K7 = _mm512_xor_si512( K7, mm512_swap128_64(
+                 _mm512_mask_xor_epi32( count, 0x2222, count, m512_neg1 ) ) );
  
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K7 ), m512_zero );
      P1 = _mm512_xor_si512( P1, X );
      
      // round 2, 6, 10
 
-     K0 = _mm512_xor_si512( K0, mm512_ror2x512hi_1x32( K6, K7 ) );
+     K0 = _mm512_xor_si512( K0, _mm512_alignr_epi8( K7, K6, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( P3, K0 ), m512_zero );
-     K1 = _mm512_xor_si512( K1, mm512_ror2x512hi_1x32( K7, K0 ) );
+     K1 = _mm512_xor_si512( K1, _mm512_alignr_epi8( K0, K7, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K1 ), m512_zero );
-     K2 = _mm512_xor_si512( K2, mm512_ror2x512hi_1x32( K0, K1 ) );
+     K2 = _mm512_xor_si512( K2, _mm512_alignr_epi8( K1, K0, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K2 ), m512_zero );
-     K3 = _mm512_xor_si512( K3, mm512_ror2x512hi_1x32( K1, K2 ) );
+     K3 = _mm512_xor_si512( K3, _mm512_alignr_epi8( K2, K1, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K3 ), m512_zero );
 
      P2 = _mm512_xor_si512( P2, X );
 
-     K4 = _mm512_xor_si512( K4, mm512_ror2x512hi_1x32( K2, K3 ) );
+     K4 = _mm512_xor_si512( K4, _mm512_alignr_epi8( K3, K2, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( P1, K4 ), m512_zero );
-     K5 = _mm512_xor_si512( K5, mm512_ror2x512hi_1x32( K3, K4 ) );
+     K5 = _mm512_xor_si512( K5, _mm512_alignr_epi8( K4, K3, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K5 ), m512_zero );
-     K6 = _mm512_xor_si512( K6, mm512_ror2x512hi_1x32( K4, K5 ) );
+     K6 = _mm512_xor_si512( K6, _mm512_alignr_epi8( K5, K4, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K6 ), m512_zero );
-     K7 = _mm512_xor_si512( K7, mm512_ror2x512hi_1x32( K5, K6 ) );
+     K7 = _mm512_xor_si512( K7, _mm512_alignr_epi8( K6, K5, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K7 ), m512_zero );
 
      P0 = _mm512_xor_si512( P0, X );
 
      // round 3, 7, 11
 
-     K0 = _mm512_xor_si512( mm512_ror128_32(
+     K0 = _mm512_xor_si512( mm512_shuflr128_32(
                                _mm512_aesenc_epi128( K0, m512_zero ) ), K7 );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( P2, K0 ), m512_zero );
-     K1 = _mm512_xor_si512( mm512_ror128_32(
+     K1 = _mm512_xor_si512( mm512_shuflr128_32(
                                _mm512_aesenc_epi128( K1, m512_zero ) ), K0 );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K1 ), m512_zero );
-     K2 = _mm512_xor_si512( mm512_ror128_32(
+     K2 = _mm512_xor_si512( mm512_shuflr128_32(
                                _mm512_aesenc_epi128( K2, m512_zero ) ), K1 );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K2 ), m512_zero );
-     K3 = _mm512_xor_si512( mm512_ror128_32(
+     K3 = _mm512_xor_si512( mm512_shuflr128_32(
                                _mm512_aesenc_epi128( K3, m512_zero ) ), K2 );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K3 ), m512_zero );
 
      P1 = _mm512_xor_si512( P1, X );
 
-     K4 = _mm512_xor_si512( mm512_ror128_32(
+     K4 = _mm512_xor_si512( mm512_shuflr128_32(
                                _mm512_aesenc_epi128( K4, m512_zero ) ), K3 );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( P0, K4 ), m512_zero );
-     K5 = _mm512_xor_si512( mm512_ror128_32(
+     K5 = _mm512_xor_si512( mm512_shuflr128_32(
                                _mm512_aesenc_epi128( K5, m512_zero ) ), K4 );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K5 ), m512_zero );
-     K6 = _mm512_xor_si512( mm512_ror128_32(
+     K6 = _mm512_xor_si512( mm512_shuflr128_32(
                                _mm512_aesenc_epi128( K6, m512_zero ) ), K5 );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K6 ), m512_zero );
-     K7 = _mm512_xor_si512( mm512_ror128_32(
+     K7 = _mm512_xor_si512( mm512_shuflr128_32(
                                _mm512_aesenc_epi128( K7, m512_zero ) ), K6 );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K7 ), m512_zero );
 
@@ -160,24 +158,24 @@ c512_4way( shavite512_4way_context *ctx, const void *msg )
 
      // round 4, 8, 12
 
-     K0 = _mm512_xor_si512( K0, mm512_ror2x512hi_1x32( K6, K7 ) );
+     K0 = _mm512_xor_si512( K0, _mm512_alignr_epi8( K7, K6, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( P1, K0 ), m512_zero );
-     K1 = _mm512_xor_si512( K1, mm512_ror2x512hi_1x32( K7, K0 ) );
+     K1 = _mm512_xor_si512( K1, _mm512_alignr_epi8( K0, K7, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K1 ), m512_zero );
-     K2 = _mm512_xor_si512( K2, mm512_ror2x512hi_1x32( K0, K1 ) );
+     K2 = _mm512_xor_si512( K2, _mm512_alignr_epi8( K1, K0, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K2 ), m512_zero );
-     K3 = _mm512_xor_si512( K3, mm512_ror2x512hi_1x32( K1, K2 ) );
+     K3 = _mm512_xor_si512( K3, _mm512_alignr_epi8( K2, K1, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K3 ), m512_zero );
 
      P0 = _mm512_xor_si512( P0, X );
 
-     K4 = _mm512_xor_si512( K4, mm512_ror2x512hi_1x32( K2, K3 ) );
+     K4 = _mm512_xor_si512( K4, _mm512_alignr_epi8( K3, K2, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( P3, K4 ), m512_zero );
-     K5 = _mm512_xor_si512( K5, mm512_ror2x512hi_1x32( K3, K4 ) );
+     K5 = _mm512_xor_si512( K5, _mm512_alignr_epi8( K4, K3, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K5 ), m512_zero );
-     K6 = _mm512_xor_si512( K6, mm512_ror2x512hi_1x32( K4, K5 ) );
+     K6 = _mm512_xor_si512( K6, _mm512_alignr_epi8( K5, K4, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K6 ), m512_zero );
-     K7 = _mm512_xor_si512( K7, mm512_ror2x512hi_1x32( K5, K6 ) );
+     K7 = _mm512_xor_si512( K7, _mm512_alignr_epi8( K6, K5, 4 ) );
      X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K7 ), m512_zero );
 
      P2 = _mm512_xor_si512( P2, X );
@@ -185,34 +183,34 @@ c512_4way( shavite512_4way_context *ctx, const void *msg )
 
    // round 13
 
-   K0 = _mm512_xor_si512( mm512_ror128_32(
+   K0 = _mm512_xor_si512( mm512_shuflr128_32(
 			             _mm512_aesenc_epi128( K0, m512_zero ) ), K7  );
    X = _mm512_aesenc_epi128( _mm512_xor_si512( P0, K0 ), m512_zero );
-   K1 = _mm512_xor_si512( mm512_ror128_32(
+   K1 = _mm512_xor_si512( mm512_shuflr128_32(
 			             _mm512_aesenc_epi128( K1, m512_zero ) ), K0 );
    X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K1 ), m512_zero );
-   K2 = _mm512_xor_si512( mm512_ror128_32(
+   K2 = _mm512_xor_si512( mm512_shuflr128_32(
 			             _mm512_aesenc_epi128( K2, m512_zero ) ), K1 );
    X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K2 ), m512_zero );
-   K3 = _mm512_xor_si512( mm512_ror128_32(
+   K3 = _mm512_xor_si512( mm512_shuflr128_32(
 			             _mm512_aesenc_epi128( K3, m512_zero ) ), K2 );
    X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K3 ), m512_zero );
 
    P3 = _mm512_xor_si512( P3, X );
 
-   K4 = _mm512_xor_si512( mm512_ror128_32(
+   K4 = _mm512_xor_si512( mm512_shuflr128_32(
 			             _mm512_aesenc_epi128( K4, m512_zero ) ), K3 );
    X = _mm512_aesenc_epi128( _mm512_xor_si512( P2, K4 ), m512_zero );
-   K5 = _mm512_xor_si512( mm512_ror128_32(
+   K5 = _mm512_xor_si512( mm512_shuflr128_32(
 			             _mm512_aesenc_epi128( K5, m512_zero ) ), K4 );
    X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K5 ), m512_zero );
 
-   K6 = mm512_ror128_32( _mm512_aesenc_epi128( K6, m512_zero ) );
+   K6 = mm512_shuflr128_32( _mm512_aesenc_epi128( K6, m512_zero ) );
    K6 = _mm512_xor_si512( K6, _mm512_xor_si512( K5, _mm512_set4_epi32(
 	       ~ctx->count2, ctx->count3, ctx->count0, ctx->count1 ) ) );
 
    X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K6 ), m512_zero );
-   K7= _mm512_xor_si512( mm512_ror128_32(
+   K7= _mm512_xor_si512( mm512_shuflr128_32(
 			             _mm512_aesenc_epi128( K7, m512_zero ) ), K6 );
    X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K7 ), m512_zero );
 
@@ -292,7 +290,7 @@ void shavite512_4way_close( shavite512_4way_context *ctx, void *dst )
     uint32_t vp = ctx->ptr>>6;
 
     // Terminating byte then zero pad
-    casti_m512i( buf, vp++ ) = m512_const2_64( 0, 0x0000000000000080 );
+    casti_m512i( buf, vp++ ) = m512_const1_i128( 0x0000000000000080 );
 
     // Zero pad full vectors up to count
     for ( ; vp < 6; vp++ )      
@@ -372,13 +370,13 @@ void shavite512_4way_update_close( shavite512_4way_context *ctx, void *dst,
 
    if ( vp == 0 )    // empty buf, xevan.
    { 
-      casti_m512i( buf, 0 ) = m512_const2_64( 0, 0x0000000000000080 );
+      casti_m512i( buf, 0 ) = m512_const1_i128( 0x0000000000000080 );
       memset_zero_512( (__m512i*)buf + 1, 5 );
       ctx->count0 = ctx->count1 = ctx->count2 = ctx->count3 = 0;
    }
    else     // half full buf, everyone else.
    {
-    casti_m512i( buf, vp++ ) = m512_const2_64( 0, 0x0000000000000080 );
+    casti_m512i( buf, vp++ ) = m512_const1_i128( 0x0000000000000080 );
       memset_zero_512( (__m512i*)buf + vp, 6 - vp );
    }
 
@@ -463,13 +461,13 @@ void shavite512_4way_full( shavite512_4way_context *ctx, void *dst,
 
    if ( vp == 0 )    // empty buf, xevan.
    {
-      casti_m512i( buf, 0 ) = m512_const2_64( 0, 0x0000000000000080 );
+      casti_m512i( buf, 0 ) = m512_const1_i128( 0x0000000000000080 );
       memset_zero_512( (__m512i*)buf + 1, 5 );
       ctx->count0 = ctx->count1 = ctx->count2 = ctx->count3 = 0;
    }
    else     // half full buf, everyone else.
    {
-    casti_m512i( buf, vp++ ) = m512_const2_64( 0, 0x0000000000000080 );
+    casti_m512i( buf, vp++ ) = m512_const1_i128( 0x0000000000000080 );
       memset_zero_512( (__m512i*)buf + vp, 6 - vp );
    }
 

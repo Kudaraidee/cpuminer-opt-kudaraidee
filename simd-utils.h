@@ -78,6 +78,8 @@
 //   - specialized shift and rotate functions that move elements around
 //     use the notation "1x32" to indicate the distance moved as units of
 //     the element size.
+//     Vector shuffle rotations are being renamed to "vrol" and "vror"
+//     to avoid confusion with bit rotations.
 //   - there is a subset of some functions for scalar data. They may have
 //     no prefix nor vec-size, just one size, the size of the data.
 //   - Some integer functions are also defined which use a similar notation.
@@ -131,7 +133,7 @@
 // If a sequence of constants is to be used it can be more efficient to
 // use arithmetic with already existing constants to generate new ones.
 //
-// ex: const __m512i one = _mm512_const1_64( 1 );
+// ex: const __m512i one = m512_one_64;
 //     const __m512i two = _mm512_add_epi64( one, one );
 //     
 //////////////////////////////////////////////////////////////////////////

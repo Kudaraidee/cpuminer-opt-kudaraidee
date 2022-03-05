@@ -47,6 +47,7 @@
 //#include "miner.h"
 #include "elist.h"
 #include "algo-gate-api.h"
+#include "algo/sha/sha256d.h"
 
 //extern pthread_mutex_t stats_lock;
 
@@ -129,17 +130,19 @@ void applog2( int prio, const char *fmt, ... )
 
 //    localtime_r(&now, &tm);
 
-      switch (prio) {
+      switch ( prio )
+      {
+         case LOG_CRIT:    color = CL_LRD; break;
          case LOG_ERR:     color = CL_RED; break;
-         case LOG_WARNING: color = CL_YLW; break;
+         case LOG_WARNING: color = CL_YL2; break;
+         case LOG_MAJR:    color = CL_YL2; break;
          case LOG_NOTICE:  color = CL_WHT; break;
          case LOG_INFO:    color = ""; break;
          case LOG_DEBUG:   color = CL_GRY; break;
-
-         case LOG_BLUE:
-            prio = LOG_NOTICE;
-            color = CL_CYN;
-            break;
+         case LOG_MINR:    color = CL_YLW; break;
+         case LOG_GREEN:   color = CL_GRN; prio = LOG_INFO; break;
+         case LOG_BLUE:    color = CL_CYN; prio = LOG_NOTICE; break;
+         case LOG_PINK:    color = CL_LMA; prio = LOG_NOTICE; break;
       }
       if (!use_colors)
          color = "";
@@ -206,17 +209,19 @@ void applog(int prio, const char *fmt, ...)
 
 		localtime_r(&now, &tm);
 
-		switch (prio) {
-			case LOG_ERR:     color = CL_RED; break;
-			case LOG_WARNING: color = CL_YLW; break;
+		switch ( prio )
+      {
+         case LOG_CRIT:    color = CL_LRD; break;
+         case LOG_ERR:     color = CL_RED; break;
+			case LOG_WARNING: color = CL_YL2; break;
+         case LOG_MAJR:    color = CL_YL2; break;
 			case LOG_NOTICE:  color = CL_WHT; break;
-			case LOG_INFO:    color = ""; break;
+			case LOG_INFO:    color = "";     break;
 			case LOG_DEBUG:   color = CL_GRY; break;
-
-			case LOG_BLUE:
-				prio = LOG_NOTICE;
-				color = CL_CYN;
-				break;
+         case LOG_MINR:    color = CL_YLW; break;
+         case LOG_GREEN:   color = CL_GRN; prio = LOG_INFO;  break;
+			case LOG_BLUE:    color = CL_CYN; prio = LOG_NOTICE; break;
+         case LOG_PINK:    color = CL_LMA; prio = LOG_NOTICE; break;
 		}
 		if (!use_colors)
 			color = "";
@@ -302,6 +307,29 @@ void format_hashrate(double hashrate, char *output)
 		hashrate, prefix
 	);
 }
+
+// For use with MiB etc
+void format_number_si( double* n, char* si_units )
+{
+  if ( *n < 1024*10 )  {  *si_units = 0;   return;  }
+  *n /= 1024;
+  if ( *n < 1024*10 )  {  *si_units = 'k'; return;  }
+  *n /= 1024;
+  if ( *n < 1024*10 )  {  *si_units = 'M'; return;  }
+  *n /= 1024;
+  if ( *n < 1024*10 )  {  *si_units = 'G'; return;  }
+  *n /= 1024;
+  if ( *n < 1024*10 )  {  *si_units = 'T'; return;  }
+  *n /= 1024;
+  if ( *n < 1024*10 )  {  *si_units = 'P'; return;  }
+  *n /= 1024;
+  if ( *n < 1024*10 )  {  *si_units = 'E'; return;  }
+  *n /= 1024;
+  if ( *n < 1024*10 )  {  *si_units = 'Z'; return;  }
+  *n /= 1024;
+  *si_units = 'Y';
+}
+
 
 /* Modify the representation of integer numbers which would cause an overflow
  * so that they are treated as floating-point numbers.
@@ -795,6 +823,15 @@ char *abin2hex(const unsigned char *p, size_t len)
 	return s;
 }
 
+char *bebin2hex(const unsigned char *p, size_t len)
+{
+   char *s = (char*) malloc((len * 2) + 1);
+   if (!s)  return NULL;
+   for ( size_t i = 0, j = len - 1; i < len; i++, j-- )
+      sprintf( s + ( i*2 ), "%02x", (unsigned int) p[ j ] );
+   return s;
+}
+
 bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 {
 	char hex_byte[3];
@@ -943,6 +980,140 @@ bool jobj_binary(const json_t *obj, const char *key, void *buf, size_t buflen)
 	return true;
 }
 
+static uint32_t bech32_polymod_step(uint32_t pre) {
+    uint8_t b = pre >> 25;
+    return ((pre & 0x1FFFFFF) << 5) ^
+        (-((b >> 0) & 1) & 0x3b6a57b2UL) ^
+        (-((b >> 1) & 1) & 0x26508e6dUL) ^
+        (-((b >> 2) & 1) & 0x1ea119faUL) ^
+        (-((b >> 3) & 1) & 0x3d4233ddUL) ^
+        (-((b >> 4) & 1) & 0x2a1462b3UL);
+}
+
+static const int8_t bech32_charset_rev[128] = {
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    15, -1, 10, 17, 21, 20, 26, 30,  7,  5, -1, -1, -1, -1, -1, -1,
+    -1, 29, -1, 24, 13, 25,  9,  8, 23, -1, 18, 22, 31, 27, 19, -1,
+     1,  0,  3, 16, 11, 28, 12, 14,  6,  4,  2, -1, -1, -1, -1, -1,
+    -1, 29, -1, 24, 13, 25,  9,  8, 23, -1, 18, 22, 31, 27, 19, -1,
+     1,  0,  3, 16, 11, 28, 12, 14,  6,  4,  2, -1, -1, -1, -1, -1
+};
+
+static bool bech32_decode(char *hrp, uint8_t *data, size_t *data_len, const char *input) {
+    uint32_t chk = 1;
+    size_t i;
+    size_t input_len = strlen(input);
+    size_t hrp_len;
+    int have_lower = 0, have_upper = 0;
+    if (input_len < 8 || input_len > 90) {
+        return false;
+    }
+    *data_len = 0;
+    while (*data_len < input_len && input[(input_len - 1) - *data_len] != '1') {
+        ++(*data_len);
+    }
+    hrp_len = input_len - (1 + *data_len);
+    if (1 + *data_len >= input_len || *data_len < 6) {
+        return false;
+    }
+    *(data_len) -= 6;
+    for (i = 0; i < hrp_len; ++i) {
+        int ch = input[i];
+        if (ch < 33 || ch > 126) {
+            return false;
+        }
+        if (ch >= 'a' && ch <= 'z') {
+            have_lower = 1;
+        } else if (ch >= 'A' && ch <= 'Z') {
+            have_upper = 1;
+            ch = (ch - 'A') + 'a';
+        }
+        hrp[i] = ch;
+        chk = bech32_polymod_step(chk) ^ (ch >> 5);
+    }
+    hrp[i] = 0;
+    chk = bech32_polymod_step(chk);
+    for (i = 0; i < hrp_len; ++i) {
+        chk = bech32_polymod_step(chk) ^ (input[i] & 0x1f);
+    }
+    ++i;
+    while (i < input_len) {
+        int v = (input[i] & 0x80) ? -1 : bech32_charset_rev[(int)input[i]];
+        if (input[i] >= 'a' && input[i] <= 'z') have_lower = 1;
+        if (input[i] >= 'A' && input[i] <= 'Z') have_upper = 1;
+        if (v == -1) {
+            return false;
+        }
+        chk = bech32_polymod_step(chk) ^ v;
+        if (i + 6 < input_len) {
+            data[i - (1 + hrp_len)] = v;
+        }
+        ++i;
+    }
+    if (have_lower && have_upper) {
+        return false;
+    }
+    return chk == 1;
+}
+
+static bool convert_bits(uint8_t *out, size_t *outlen, int outbits, const uint8_t *in, size_t inlen, int inbits, int pad) {
+    uint32_t val = 0;
+    int bits = 0;
+    uint32_t maxv = (((uint32_t)1) << outbits) - 1;
+    while (inlen--) {
+        val = (val << inbits) | *(in++);
+        bits += inbits;
+        while (bits >= outbits) {
+            bits -= outbits;
+            out[(*outlen)++] = (val >> bits) & maxv;
+        }
+    }
+    if (pad) {
+        if (bits) {
+            out[(*outlen)++] = (val << (outbits - bits)) & maxv;
+        }
+    } else if (((val << (outbits - bits)) & maxv) || bits >= inbits) {
+        return false;
+    }
+    return true;
+}
+
+static bool segwit_addr_decode(int *witver, uint8_t *witdata, size_t *witdata_len, const char *addr) {
+    uint8_t data[84];
+    char hrp_actual[84];
+    size_t data_len;
+    if (!bech32_decode(hrp_actual, data, &data_len, addr)) return false;
+    if (data_len == 0 || data_len > 65) return false;
+    if (data[0] > 16) return false;
+    *witdata_len = 0;
+    if (!convert_bits(witdata, witdata_len, 8, data + 1, data_len - 1, 5, 0)) return false;
+    if (*witdata_len < 2 || *witdata_len > 40) return false;
+    if (data[0] == 0 && *witdata_len != 20 && *witdata_len != 32) return false;
+    *witver = data[0];
+    return true;
+}
+
+static size_t bech32_to_script(uint8_t *out, size_t outsz, const char *addr) {
+    uint8_t witprog[40];
+    size_t witprog_len;
+    int witver;
+
+    if (!segwit_addr_decode(&witver, witprog, &witprog_len, addr))
+        return 0;
+    if (outsz < witprog_len + 2)
+        return 0;
+    out[0] = witver ? (0x50 + witver) : 0;
+    out[1] = witprog_len;
+    memcpy(out + 2, witprog, witprog_len);
+
+   if ( opt_debug )
+      applog( LOG_INFO, "Coinbase address uses Bech32 coding");
+
+    return witprog_len + 2;
+}
+
 size_t address_to_script( unsigned char *out, size_t outsz, const char *addr )
 {
 	unsigned char addrbin[ pk_buffer_size_max ];
@@ -950,11 +1121,14 @@ size_t address_to_script( unsigned char *out, size_t outsz, const char *addr )
 	size_t rv;
 
 	if ( !b58dec( addrbin, outsz, addr ) )
-		return 0;
+		return bech32_to_script( out, outsz, addr );
 
    addrver = b58check( addrbin, outsz, addr );
    if ( addrver < 0 )
 		return 0;
+
+   if ( opt_debug )
+      applog( LOG_INFO, "Coinbase address uses B58 coding");
 
    switch ( addrver )
    {
@@ -1048,53 +1222,51 @@ bool fulltest( const uint32_t *hash, const uint32_t *target )
 	return rc;
 }
 
-// Mathmatically the difficulty is simply the reciprocal of the hash.
+// Mathmatically the difficulty is simply the reciprocal of the hash: d = 1/h.
 // Both are real numbers but the hash (target) is represented as a 256 bit
-// number with the upper 32 bits representing the whole integer part and the
-// lower 224 bits representing the fractional part:
+// fixed point number with the upper 32 bits representing the whole integer
+// part and the lower 224 bits representing the fractional part:
 //   target[ 255:224 ] = trunc( 1/diff )
 //   target[ 223:  0 ] = frac( 1/diff )
 //
 // The 256 bit hash is exact but any floating point representation is not.
-// Stratum provides the target difficulty as double precision, inexcact, and
+// Stratum provides the target difficulty as double precision, inexcact,
 // which must be converted to a hash target. The converted hash target will
-// likely be less precise to to inexact input and conversion error.
-// converted to 256 bit hash which will also be inexact and likelyless
-// accurate to to error in conversion.
+// likely be less precise due to inexact input and conversion error.
 // On the other hand getwork provides a 256 bit hash target which is exact.
 //
 // How much precision is needed?
 //
-// 128 bit types are implemented in software by the compiler using 64 bit
+// 128 bit types are implemented in software by the compiler on 64 bit
 // hardware resulting in lower performance and more error than would be
-// expected with a hardware 128 bit implementtaion.
+// expected with a hardware 128 bit implementaion.
 // Float80 exploits the internals of the FP unit which provide a 64 bit
 // mantissa in an 80 bit register with hardware rounding. When the destination
 // is double the data is rounded to float64 format. Long double returns all
 // 80 bits without rounding and including any accumulated computation error.
 // Float80 does not fit efficiently in memory.
 //
-// 256 bit hash: 76
+// Significant digits:
+// 256 bit hash: 76     
 // float:         7     (float32, 80 bits with rounding to 32 bits)
 // double:       15     (float64, 80 bits with rounding to 64 bits)
-// long double   19     (float80, 80 bits with no rounding)
-// __float128    33     (128 bits with no rounding)
+// long double:  19     (float80, 80 bits with no rounding)
+// __float128:   33     (128 bits with no rounding)
 // uint32_t:      9
 // uint64_t:     19
 // uint128_t     38
 //
 // The concept of significant digits doesn't apply to the 256 bit hash
-// representation. It's fixed point making leading zeros significant
-// Leading zeros count in the 256 bit 
+// representation. It's fixed point making leading zeros significant,
+// limiting its range and precision due to fewer zon-zero significant digits.
 //
 // Doing calculations with float128 and uint128 increases precision for
 // target_to_diff, but doesn't help with stratum diff being limited to
 // double precision. Is the extra precision really worth the extra cost?
-//
-// With double the error rate is 1/1e15, or one hash in every Petahash
-// with a very low difficulty, not a likely sitiation. Higher difficulty
-// increases the effective precision. Due to the floating nature of the 
-// decimal point leading zeros aren't counted.
+// With float128 the error rate is 1/1e33 compared with 1/1e15 for double.
+// For double that's 1 error in every petahash with a very low difficulty,
+// not a likely situation. With higher difficulty effective precision
+// increases.
 //
 // Unfortunately I can't get float128 to work so long double (float80) is
 // as precise as it gets.
@@ -1486,11 +1658,8 @@ static bool stratum_parse_extranonce(struct stratum_ctx *sctx, json_t *params, i
 	pthread_mutex_unlock(&sctx->work_lock);
 
    if ( !opt_quiet ) /* pool dynamic change */
-      applog( LOG_INFO, "Stratum extranonce1= %s, extranonce2 size= %d",
+      applog( LOG_INFO, "Stratum extranonce1 0x%s, extranonce2 size %d",
          xnonce1, xn2_size);
-//   if (pndx == 0 && opt_debug)
-//		applog(LOG_DEBUG, "Stratum set nonce %s with extranonce2 size=%d",
-//			xnonce1, xn2_size);
 
 	return true;
 out:
@@ -1640,8 +1809,6 @@ bool stratum_authorize(struct stratum_ctx *sctx, const char *user, const char *p
 		opt_extranonce = false;
       goto out;
 	}
-   if ( !opt_quiet )
-      applog( LOG_INFO, "Extranonce subscription enabled" );
 
 	sret = stratum_recv_line( sctx );
 	if ( sret )
@@ -1659,10 +1826,14 @@ bool stratum_authorize(struct stratum_ctx *sctx, const char *user, const char *p
 				if ( !stratum_handle_method( sctx, sret ) )
 					applog( LOG_WARNING, "Stratum answer id is not correct!" );
 			}
-			res_val = json_object_get( extra, "result" );
-//			if (opt_debug && (!res_val || json_is_false(res_val)))
-//				applog(LOG_DEBUG, "extranonce subscribe not supported");
-			json_decref( extra );
+         else
+         {
+            res_val = json_object_get( extra, "result" );
+			   if ( opt_debug && ( !res_val || json_is_false( res_val ) ) )
+				   applog( LOG_DEBUG,
+                       "Method extranonce.subscribe is not supported" );
+         }
+         json_decref( extra );
 		}
 		free(sret);
 	}
@@ -1674,6 +1845,25 @@ out:
 
 	return ret;
 }
+
+bool stratum_suggest_difficulty( struct stratum_ctx *sctx, double diff )
+{
+   char *s;
+   s = (char*) malloc( 80 );
+   bool rc = true;
+
+   // response is handled seperately, what ID?
+   sprintf( s, "{\"id\": 1, \"method\": \"mining.suggest_difficulty\", \"params\": [\"%f\"]}", diff );
+   if ( !stratum_send_line( sctx, s ) )
+   {
+      applog(LOG_WARNING,"stratum.suggest_difficulty send failed");
+      rc = false;
+   } 
+   free ( s );
+   return rc;
+}
+
+
 
 /**
  * Extract bloc height     L H... here len=3, height=0x1333e8

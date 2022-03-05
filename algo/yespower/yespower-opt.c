@@ -203,17 +203,17 @@ static inline void salsa20_simd_unshuffle(const salsa20_blk_t *Bin,
 	ARX(X0, X3, X2, 18) \
 	/* Rearrange data */ \
 	X1 = _mm_shuffle_epi32(X1, 0x93); \
+   X3 = _mm_shuffle_epi32(X3, 0x39); \
 	X2 = _mm_shuffle_epi32(X2, 0x4E); \
-	X3 = _mm_shuffle_epi32(X3, 0x39); \
 	/* Operate on "rows" */ \
 	ARX(X3, X0, X1, 7) \
 	ARX(X2, X3, X0, 9) \
 	ARX(X1, X2, X3, 13) \
 	ARX(X0, X1, X2, 18) \
 	/* Rearrange data */ \
+   X3 = _mm_shuffle_epi32(X3, 0x93); \
 	X1 = _mm_shuffle_epi32(X1, 0x39); \
-	X2 = _mm_shuffle_epi32(X2, 0x4E); \
-	X3 = _mm_shuffle_epi32(X3, 0x93);
+	X2 = _mm_shuffle_epi32(X2, 0x4E);
 
 /**
  * Apply the Salsa20 core to the block provided in (X0 ... X3).
@@ -373,6 +373,45 @@ static inline void salsa20(salsa20_blk_t *restrict B,
 #define INTEGERIFY (uint32_t)X.d[0]
 #endif
 
+// AVX512 ternary logic optimization
+#if defined(__AVX512VL__)
+
+#define XOR_X_XOR_X( in1, in2 ) \
+ X0 =  _mm_ternarylogic_epi32( X0, (in1).q[0], (in2).q[0], 0x96 ); \
+ X1 =  _mm_ternarylogic_epi32( X1, (in1).q[1], (in2).q[1], 0x96 ); \
+ X2 =  _mm_ternarylogic_epi32( X2, (in1).q[2], (in2).q[2], 0x96 ); \
+ X3 =  _mm_ternarylogic_epi32( X3, (in1).q[3], (in2).q[3], 0x96 ); 
+
+#define XOR_X_2_XOR_X( in1, in2, in3 ) \
+ X0 =  _mm_ternarylogic_epi32( (in1).q[0], (in2).q[0], (in3).q[0], 0x96 ); \
+ X1 =  _mm_ternarylogic_epi32( (in1).q[1], (in2).q[1], (in3).q[1], 0x96 ); \
+ X2 =  _mm_ternarylogic_epi32( (in1).q[2], (in2).q[2], (in3).q[2], 0x96 ); \
+ X3 =  _mm_ternarylogic_epi32( (in1).q[3], (in2).q[3], (in3).q[3], 0x96 );
+
+#define XOR_X_SALSA20_XOR_MEM( in1, in2, out) \
+ X0 =  _mm_ternarylogic_epi32( X0, (in1).q[0], (in2).q[0], 0x96 ); \
+ X1 =  _mm_ternarylogic_epi32( X1, (in1).q[1], (in2).q[1], 0x96 ); \
+ X2 =  _mm_ternarylogic_epi32( X2, (in1).q[2], (in2).q[2], 0x96 ); \
+ X3 =  _mm_ternarylogic_epi32( X3, (in1).q[3], (in2).q[3], 0x96 ); \
+ SALSA20(out)
+
+#else
+
+#define XOR_X_XOR_X( in1, in2 ) \
+  XOR_X( in1 ) \
+  XOR_X( in2 ) 
+
+#define XOR_X_2_XOR_X( in1, in2, in3 ) \
+   XOR_X_2( in1, in2 ) \
+   XOR_X( in3 )
+
+#define XOR_X_SALSA20_XOR_MEM( in1, in2, out) \
+   XOR_X(in1) \
+   XOR_X(in2) \
+   SALSA20( out )
+
+#endif
+
 /**
  * Apply the Salsa20 core to the block provided in X ^ in.
  */
@@ -406,11 +445,15 @@ static inline uint32_t blockmix_salsa_xor(const salsa20_blk_t *restrict Bin1,
 {
 	DECL_X
 
-	XOR_X_2(Bin1[1], Bin2[1])
-	XOR_X(Bin1[0])
+   XOR_X_2_XOR_X( Bin1[1], Bin2[1], Bin1[0] )   
+//	XOR_X_2(Bin1[1], Bin2[1])
+//	XOR_X(Bin1[0])
 	SALSA20_XOR_MEM(Bin2[0], Bout[0])
-	XOR_X(Bin1[1])
-	SALSA20_XOR_MEM(Bin2[1], Bout[1])
+
+// Factor out the XOR from salsa20 to do a xor3
+   XOR_X_SALSA20_XOR_MEM( Bin1[1], Bin2[1], Bout[1] )
+//   XOR_X(Bin1[1])
+//	SALSA20_XOR_MEM(Bin2[1], Bout[1])
 
 	return INTEGERIFY;
 }
@@ -745,13 +788,15 @@ static uint32_t blockmix_xor(const salsa20_blk_t *restrict Bin1,
 	i = 0;
 	r--;
 	do {
-		XOR_X(Bin1[i])
-		XOR_X(Bin2[i])
+      XOR_X_XOR_X( Bin1[i], Bin2[i] )
+//      XOR_X(Bin1[i])
+//      XOR_X(Bin2[i])
 		PWXFORM
 		WRITE_X(Bout[i])
 
-		XOR_X(Bin1[i + 1])
-		XOR_X(Bin2[i + 1])
+      XOR_X_XOR_X( Bin1[ i+1 ], Bin2[ i+1 ] )     
+//		XOR_X(Bin1[i + 1])
+//		XOR_X(Bin2[i + 1])
 		PWXFORM
 
 		if (unlikely(i >= r))
@@ -1050,7 +1095,7 @@ int yespower(yespower_local_t *local,
    salsa20_blk_t *V, *XY;
    pwxform_ctx_t ctx;
    uint8_t sha256[32];
-   sph_sha256_context sha256_ctx;
+   sha256_context sha256_ctx;
 
    /* Sanity-check parameters */
    if ( (version != YESPOWER_0_5 && version != YESPOWER_1_0)
@@ -1093,10 +1138,9 @@ int yespower(yespower_local_t *local,
 
    // copy prehash, do tail   
    memcpy( &sha256_ctx, &sha256_prehash_ctx, sizeof sha256_ctx );
-
-   sph_sha256( &sha256_ctx, src+64, srclen-64 );
-   sph_sha256_close( &sha256_ctx, sha256 );
-
+   sha256_update( &sha256_ctx, src+64, srclen-64 );
+   sha256_final( &sha256_ctx, sha256 );
+   
    if ( version == YESPOWER_0_5 )
    {
       PBKDF2_SHA256( sha256, sizeof(sha256), src, srclen, 1, B, B_size );
@@ -1141,7 +1185,9 @@ int yespower(yespower_local_t *local,
       if ( work_restart[thrid].restart ) return 0;
 
       smix_1_0( B, r, N, V, XY, &ctx );
-      
+
+      if ( work_restart[thrid].restart ) return 0;
+
       HMAC_SHA256_Buf( B + B_size - 64, 64, sha256, sizeof(sha256),
                        (uint8_t *)dst );
    }

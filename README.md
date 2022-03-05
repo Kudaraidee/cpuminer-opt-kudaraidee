@@ -60,6 +60,7 @@ GBT is YMMV.
 Supported Algorithms
 --------------------
 
+                          0x10        	ChainOX (CHOX)
                           allium        Garlicoin
                           anime         Animecoin
                           argon2        Argon2 coin (AR2)
@@ -79,7 +80,6 @@ Supported Algorithms
                           decred
                           deep          Deepcoin (DCN)
                           dmd-gr        Diamond-Groestl
-                          gr       	    Ghostrider
                           groestl       Groestl coin
                           hex           x16r-hex
                           hmq1725       Espers
@@ -92,13 +92,12 @@ Supported Algorithms
                           lyra2h        Hppcoin
                           lyra2re       lyra2
                           lyra2rev2     lyra2v2
-                          lyra2rev3     lyrav2v3, Vertcoin
+                          lyra2rev3     lyrav2v3
                           lyra2z        
                           lyra2z330     Lyra2 330 rows, Zoin (ZOI)
                           m7m           Magi (XMG)
                           minotaur      Ringcoin (RNG)
-			      minotaurx     Litecoin Cash (LCC)
-                          myr-gr        Myriad-Groestl
+						  myr-gr        Myriad-Groestl
                           neoscrypt     NeoScrypt(128, 2, 1)
                           nist5         Nist5
                           pentablake    Pentablake
@@ -127,6 +126,7 @@ Supported Algorithms
                           tribus        Denarius (DNR)
                           vanilla       blake256r8vnl (VCash)
                           veltor        (VLT)
+                          verthash      Vertcoin
                           whirlpool
                           whirlpoolx
                           x11           Dash
@@ -139,7 +139,7 @@ Supported Algorithms
                           x14           X14
                           x15           X15
                           x16r          
-                          x16rv2        Ravencoin (RVN)
+                          x16rv2        
                           x16rt         Gincoin (GIN)
                           x16rt-veil    Veil (VEIL)
                           x16s          Pigeoncoin (PGN)
@@ -154,10 +154,10 @@ Supported Algorithms
                           yescryptr16   Eli
                           yescryptr32   WAVI
                           yespower      Cryply
-                          yespowerarwn  Arowanacoin(ARWN)
+                          yespowerARWN  Arowanacoin(ARWN)
                           yespowerr16   Yenten (YTN)
-                          yespowersugar Suagrchain (SUGAR)
-			      yespowerurx   UraniumX (URX)
+                          yespowerSUGAR Suagrchain (SUGAR)
+			      yespowerURX   UraniumX (URX)
                           yespower-b2b  generic yespower + blake2b
                           zr5           Ziftr
 

@@ -29,30 +29,20 @@
 #ifndef HMAC_SHA256_H__
 #define HMAC_SHA256_H__
 
-//#define HMAC_SSL_SHA 1
-#define HMAC_SPH_SHA 1
-
 #include <sys/types.h>
 #include <stdint.h>
-#include "sph_sha2.h"
-#include <openssl/sha.h>
-
+#include "sha256-hash.h"
 
 typedef struct HMAC_SHA256Context
 {
-#if defined(HMAC_SPH_SHA)
-   sph_sha256_context ictx;
-   sph_sha256_context octx;
-#else
-   SHA256_CTX ictx;
-   SHA256_CTX octx;
-#endif
+   sha256_context ictx;
+   sha256_context octx;
 } HMAC_SHA256_CTX;
 
 void SHA256_Buf( const void *, size_t len, uint8_t digest[32] );
 void HMAC_SHA256_Init( HMAC_SHA256_CTX *, const void *, size_t );
 void HMAC_SHA256_Update( HMAC_SHA256_CTX *, const void *, size_t );
-void HMAC_SHA256_Final( unsigned char [32], HMAC_SHA256_CTX * );
+void HMAC_SHA256_Final( void*, HMAC_SHA256_CTX * );
 void HMAC_SHA256_Buf( const void *, size_t Klen, const void *,
                       size_t len, uint8_t digest[32] );
 

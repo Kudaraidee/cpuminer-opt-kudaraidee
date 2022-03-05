@@ -35,6 +35,7 @@
 
 #include "sph_ripemd.h"
 
+#if 0
 /*
  * Round functions for RIPEMD (original).
  */
@@ -46,6 +47,7 @@ static const sph_u32 oIV[5] = {
 	SPH_C32(0x67452301), SPH_C32(0xEFCDAB89),
 	SPH_C32(0x98BADCFE), SPH_C32(0x10325476)
 };
+#endif
 
 /*
  * Round functions for RIPEMD-128 and RIPEMD-160.
@@ -62,6 +64,8 @@ static const sph_u32 IV[5] = {
 };
 
 #define ROTL    SPH_ROTL32
+
+#if 0
 
 /* ===================================================================== */
 /*
@@ -479,7 +483,7 @@ sph_ripemd_comp(const sph_u32 msg[16], sph_u32 val[4])
  * One round of RIPEMD-128. The data must be aligned for 32-bit access.
  */
 static void
-ripemd128_round(const unsigned char *data, sph_u32 r[5])
+ripemd128_round(const unsigned char *data, sph_u32 r[4])
 {
 #if SPH_LITTLE_FAST
 
@@ -538,6 +542,8 @@ sph_ripemd128_comp(const sph_u32 msg[16], sph_u32 val[4])
 	RIPEMD128_ROUND_BODY(RIPEMD128_IN, val);
 #undef RIPEMD128_IN
 }
+
+#endif
 
 /* ===================================================================== */
 /*

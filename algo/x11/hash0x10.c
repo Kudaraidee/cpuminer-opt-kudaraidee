@@ -1,7 +1,7 @@
 #include "cpuminer-config.h"
-#include "0x10-gate.h"
+#include "hash0x10-gate.h"
 
-#if !defined(0X10_8WAY) && !defined(0X10_4WAY)
+#if !defined(HASH0X10_8WAY) && !defined(HASH0X10_4WAY)
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -42,35 +42,35 @@ typedef struct {
    cubehashParam           cube;
    sph_shavite512_context  shavite;
    hashState_sd            simd;
-} 0x10_ctx_holder;
+} hash0x10_ctx_holder;
 
-0x10_ctx_holder 0x10_ctx;
+hash0x10_ctx_holder hash0x10_ctx;
 
-void init_0x10_ctx()
+void init_hash0x10_ctx()
 {
-   sph_blake512_init( &0x10_ctx.blake );
-   sph_bmw512_init( &0x10_ctx.bmw );
+   sph_blake512_init( &hash0x10_ctx.blake );
+   sph_bmw512_init( &hash0x10_ctx.bmw );
 #if defined(__AES__)
-   init_groestl( &0x10_ctx.groestl, 64 );
-   init_echo( &0x10_ctx.echo, 512 );
+   init_groestl( &hash0x10_ctx.groestl, 64 );
+   init_echo( &hash0x10_ctx.echo, 512 );
 #else
-   sph_groestl512_init( &0x10_ctx.groestl );
-   sph_echo512_init( &0x10_ctx.echo );
+   sph_groestl512_init( &hash0x10_ctx.groestl );
+   sph_echo512_init( &hash0x10_ctx.echo );
 #endif
-   sph_skein512_init( &0x10_ctx.skein );
-   sph_jh512_init( &0x10_ctx.jh );
-   sph_keccak512_init( &0x10_ctx.keccak );
-   init_luffa( &0x10_ctx.luffa, 512 );
-   cubehashInit( &0x10_ctx.cube, 512, 16, 32 );
-   sph_shavite512_init( &0x10_ctx.shavite );
-   init_sd( &0x10_ctx.simd, 512 );
+   sph_skein512_init( &hash0x10_ctx.skein );
+   sph_jh512_init( &hash0x10_ctx.jh );
+   sph_keccak512_init( &hash0x10_ctx.keccak );
+   init_luffa( &hash0x10_ctx.luffa, 512 );
+   cubehashInit( &hash0x10_ctx.cube, 512, 16, 32 );
+   sph_shavite512_init( &hash0x10_ctx.shavite );
+   init_sd( &hash0x10_ctx.simd, 512 );
 }
 
-void 0x10_hash( void *state, const void *input )
+void hash0x10_hash( void *state, const void *input )
 {
     unsigned char hash[64] __attribute__((aligned(64)));
-    0x10_ctx_holder ctx;
-    memcpy( &ctx, &0x10_ctx, sizeof(0x10_ctx) );
+    hash0x10_ctx_holder ctx;
+    memcpy( &ctx, &hash0x10_ctx, sizeof(hash0x10_ctx) );
 
     sph_blake512( &ctx.blake, input, 80 );
     sph_blake512_close( &ctx.blake, hash );
@@ -121,7 +121,7 @@ void 0x10_hash( void *state, const void *input )
      memcpy( state, hash, 32 );
 }
 
-int scanhash_0x10( struct work *work, uint32_t max_nonce,
+int scanhash_hash0x10( struct work *work, uint32_t max_nonce,
                   uint64_t *hashes_done, struct thr_info *mythr )
 {
         uint32_t endiandata[20] __attribute__((aligned(64)));
@@ -160,7 +160,7 @@ int scanhash_0x10( struct work *work, uint32_t max_nonce,
             {
               pdata[19] = ++n;
               be32enc( &endiandata[19], n );
-              0x10_hash( hash64, &endiandata );
+              hash0x10_hash( hash64, &endiandata );
               if ( ( hash64[7] & mask ) == 0 )
               {
                  if ( fulltest( hash64, ptarget ) )

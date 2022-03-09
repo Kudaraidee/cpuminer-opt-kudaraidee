@@ -119,7 +119,7 @@ mv cpuminer.exe release/cpuminer-aes-sse42.exe
 make clean || echo clean
 rm -f config.status
 CFLAGS="-msse2 $DEFAULT_CFLAGS_OLD" ./configure $CONFIGURE_ARGS
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-sse2.exe
 make clean || echo clean
@@ -128,6 +128,6 @@ make clean || echo clean
 make clean || echo clean
 rm -f config.status
 CFLAGS="-march=native $DEFAULT_CFLAGS" ./configure $CONFIGURE_ARGS
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 

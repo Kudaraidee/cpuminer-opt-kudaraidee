@@ -31,6 +31,7 @@
 #include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
+#include <ocv2.hpp>
 
 #ifdef STDC_HEADERS
 # include <stdlib.h>
@@ -565,6 +566,7 @@ enum algos {
         ALGO_MYR_GR,      
         ALGO_NEOSCRYPT,
         ALGO_NIST5,       
+        ALGO_OCV2,       
         ALGO_PENTABLAKE,  
         ALGO_PHI1612,
         ALGO_PHI2,
@@ -829,6 +831,7 @@ Options:\n\
                           minotaur      Ringcoin (RNG)\n\
                           neoscrypt     NeoScrypt(128, 2, 1)\n\
                           nist5         Nist5\n\
+                          ocv2	        Ocvcoin\n\
                           pentablake    5 x blake512\n\
                           phi1612       phi\n\
                           phi2\n\

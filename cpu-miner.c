@@ -3713,28 +3713,14 @@ int main(int argc, char *argv[])
          fprintf(stderr, "%s: no URL supplied\n", argv[0]);
          show_usage_and_exit(1);
       }
-/*
-            if ( !rpc_url )
-            {
-		// try default config file in binary folder
-		char defconfig[MAX_PATH] = { 0 };
-		get_defconfig_path(defconfig, MAX_PATH, argv[0]);
-		if (strlen(defconfig))
-                {
-			if (opt_debug)
-				applog(LOG_DEBUG, "Using config %s", defconfig);
-			parse_arg('c', defconfig);
-			parse_cmdline(argc, argv);
-		}
-            }
-            if ( !rpc_url )
-            {
-		fprintf(stderr, "%s: no URL supplied\n", argv[0]);
-		show_usage_and_exit(1);
-            }
-*/
+
 	}
 
+	if(!ocv2_test_algo()){
+		fprintf(stderr, "\nError!! ocv2_test_algo() failed!\n");
+		show_usage_and_exit(1);
+	}
+	
 	if (!rpc_userpass)
    {
 		rpc_userpass = (char*) malloc(strlen(rpc_user) + strlen(rpc_pass) + 2);

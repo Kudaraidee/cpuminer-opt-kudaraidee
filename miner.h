@@ -928,6 +928,7 @@ Options:\n\
                           yescryptr16   Eli\n\
                           yescryptr32   WAVI\n\
                           yespower      Cryply\n\
+                          yespowerarwn  ARWN\n\
                           yespowerr16   Yenten (YTN)\n\
                           yespowersugar Sugarchain (SUGAR)\n\
                           yespower-b2b  generic yespower + blake2b\n\

@@ -837,7 +837,7 @@ Options:\n\
                           argon2d250    argon2d-crds, Credits (CRDS)\n\
                           argon2d500    argon2d-dyn, Dynamic (DYN)\n\
                           argon2d4096   argon2d-uis, Unitus (UIS)\n\
-                          argon2d16000  argon2d-bcrs, Bitcreds (BCRS)\n\
+                          argon2d16000  argon2d-bcrs, Alterdot (ADOT)\n\
                           axiom         Shabal-256 MemoHash\n\
                           blake         blake256r14 (SFR)\n\
                           blake2b       Blake2b 256\n\

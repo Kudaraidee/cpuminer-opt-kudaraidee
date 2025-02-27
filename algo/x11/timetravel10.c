@@ -11,15 +11,15 @@
 #include "algo/jh/sph_jh.h"
 #include "algo/keccak/sph_keccak.h"
 #include "algo/skein/sph_skein.h"
-#include "algo/luffa/luffa_for_sse2.h"
 #include "algo/cubehash/cubehash_sse2.h"
 #include "algo/shavite/sph_shavite.h"
-#include "algo/simd/nist.h"
+#include "algo/simd/simd-hash-2way.h"
 #ifdef __AES__
   #include "algo/groestl/aes_ni/hash-groestl.h"
 #else
   #include "algo/groestl/sph_groestl.h"
 #endif
+#include "algo/luffa/luffa_for_sse2.h"
 
 static __thread uint32_t s_ntime = UINT32_MAX;
 static __thread int permutation[TT10_FUNC_COUNT] = { 0 };
@@ -33,7 +33,7 @@ typedef struct {
         hashState_luffa         luffa;
         cubehashParam           cube;
         sph_shavite512_context  shavite;
-        hashState_sd            simd;
+        simd512_context         simd;
 #ifdef __AES__
         hashState_groestl       groestl;
 #else
@@ -54,7 +54,6 @@ void init_tt10_ctx()
         init_luffa( &tt10_ctx.luffa, 512 );
         cubehashInit( &tt10_ctx.cube, 512, 16, 32 );
         sph_shavite512_init( &tt10_ctx.shavite );
-        init_sd( &tt10_ctx.simd, 512 );
 #ifdef __AES__
         init_groestl( &tt10_ctx.groestl, 64 );
 #else
@@ -178,26 +177,22 @@ void timetravel10_hash(void *output, const void *input)
         if ( i == 0 )
         {
            memcpy( &ctx.luffa, &tt10_mid.luffa, sizeof tt10_mid.luffa );
-           update_and_final_luffa( &ctx.luffa, (BitSequence*)hashB,
-                                   (const BitSequence *)input + 64, 16 );
+           update_and_final_luffa( &ctx.luffa, hashB, input + 64, 16 );
         }
         else
         {
-           update_and_final_luffa( &ctx.luffa, (BitSequence*)hashB,
-                                   (const BitSequence *)hashA, dataLen );
+           update_and_final_luffa( &ctx.luffa, hashB, hashA, dataLen );
         }
         break;
      case 7:
         if ( i == 0 )
         {
            memcpy( &ctx.cube, &tt10_mid.cube, sizeof tt10_mid.cube );
-           cubehashUpdateDigest( &ctx.cube, (byte*)hashB,
-                                 (const byte*)input + midlen, tail );
+           cubehashUpdateDigest( &ctx.cube, hashB, input + midlen, tail );
         }
         else
         {
-           cubehashUpdateDigest( &ctx.cube, (byte*)hashB, (const byte*)hashA,
-                                 dataLen );
+           cubehashUpdateDigest( &ctx.cube, hashB, hashA, dataLen );
         }
         break;
      case 8:
@@ -214,17 +209,7 @@ void timetravel10_hash(void *output, const void *input)
         }
         break;
      case 9:
-        if ( i == 0 )
-        {
-           memcpy( &ctx.simd, &tt10_mid.simd, sizeof tt10_mid.simd );
-           update_final_sd( &ctx.simd, (BitSequence *)hashB,
-                            (const BitSequence *)input + midlen, tail*8 );
-        }
-        else
-        {
-           update_final_sd( &ctx.simd, (BitSequence *)hashB, 
-                            (const BitSequence *)hashA, dataLen*8 );
-        }
+        simd512_ctx( &ctx.simd, hashB, hashA, dataLen );
         break;
      default:
 	break;
@@ -297,19 +282,15 @@ int scanhash_timetravel10( struct work *work, uint32_t max_nonce,
            break;
         case 6:
            memcpy( &tt10_mid.luffa, &tt10_ctx.luffa, sizeof(tt10_mid.luffa ) );
-           update_luffa( &tt10_mid.luffa, (const BitSequence*)endiandata, 64 );
+           update_luffa( &tt10_mid.luffa, endiandata, 64 );
            break;
         case 7:
            memcpy( &tt10_mid.cube, &tt10_ctx.cube, sizeof(tt10_mid.cube ) );
-           cubehashUpdate( &tt10_mid.cube, (const byte*)endiandata, 64 );
+           cubehashUpdate( &tt10_mid.cube, endiandata, 64 );
            break;
         case 8:
            memcpy( &tt10_mid.shavite, &tt10_ctx.shavite, sizeof(tt10_mid.shavite ) );
            sph_shavite512( &tt10_mid.shavite, endiandata, 64 );
-           break;
-        case 9:
-           memcpy( &tt10_mid.simd, &tt10_ctx.simd, sizeof(tt10_mid.simd ) );
-           update_sd( &tt10_mid.simd, (const BitSequence *)endiandata, 512 );
            break;
         default:
            break;

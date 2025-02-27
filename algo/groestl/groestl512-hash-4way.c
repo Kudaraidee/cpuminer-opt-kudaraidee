@@ -17,19 +17,15 @@
 
 #if defined(__AVX2__) && defined(__VAES__)
 
-#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+#if defined(SIMD512)
 
 int groestl512_4way_init( groestl512_4way_context* ctx, uint64_t hashlen )
 {
-  if (ctx->chaining == NULL || ctx->buffer == NULL)
-    return 1;
-
   memset_zero_512( ctx->chaining, SIZE512 );
   memset_zero_512( ctx->buffer, SIZE512 );
 
   // The only non-zero in the IV is len. It can be hard coded.
-  ctx->chaining[ 6 ] = m512_const2_64( 0x0200000000000000, 0 );
-
+  ctx->chaining[ 6 ] = mm512_bcast128hi_64( 0x0200000000000000 );
   ctx->buf_ptr = 0;
   ctx->rem_ptr = 0;
 
@@ -64,14 +60,14 @@ int groestl512_4way_update_close( groestl512_4way_context* ctx, void* output,
    if ( i == SIZE512 - 1 )
    {        
        // only 1 vector left in buffer, all padding at once
-       ctx->buffer[i] = m512_const2_64( blocks << 56, 0x80 );
+       ctx->buffer[i] = mm512_set2_64( blocks << 56, 0x80 );
    }   
    else
    {
-       ctx->buffer[i] = m512_const2_64( 0, 0x80 );
+       ctx->buffer[i] = mm512_bcast128lo_64( 0x80 );
        for ( i += 1; i < SIZE512 - 1; i++ )
            ctx->buffer[i] = m512_zero;
-       ctx->buffer[i] = m512_const2_64( blocks << 56, 0 );
+       ctx->buffer[i] = mm512_bcast128hi_64( blocks << 56 );
    }
 
    TF1024_4way( ctx->chaining, ctx->buffer );
@@ -97,9 +93,8 @@ int groestl512_4way_full( groestl512_4way_context* ctx, void* output,
 
    memset_zero_512( ctx->chaining, SIZE512 );
    memset_zero_512( ctx->buffer, SIZE512 );
-   ctx->chaining[ 6 ] = m512_const2_64( 0x0200000000000000, 0 );
+   ctx->chaining[ 6 ] = mm512_bcast128hi_64( 0x0200000000000000 );
    ctx->buf_ptr = 0;
-   ctx->rem_ptr = 0;
 
    // --- update ---
 
@@ -108,8 +103,7 @@ int groestl512_4way_full( groestl512_4way_context* ctx, void* output,
    ctx->buf_ptr = blocks * SIZE512;
 
    for ( i = 0; i < len % SIZE512; i++ )
-       ctx->buffer[ ctx->rem_ptr + i ] = in[ ctx->buf_ptr + i ];
-   i += ctx->rem_ptr;
+       ctx->buffer[ i ] = in[ ctx->buf_ptr + i ];
 
    // --- close ---
 
@@ -118,14 +112,14 @@ int groestl512_4way_full( groestl512_4way_context* ctx, void* output,
    if ( i == SIZE512 - 1 )
    {
        // only 1 vector left in buffer, all padding at once
-       ctx->buffer[i] = m512_const2_64( blocks << 56, 0x80 );
+       ctx->buffer[i] = mm512_set2_64( blocks << 56, 0x80 );
    }
    else
    {
-       ctx->buffer[i] = m512_const2_64( 0, 0x80 );
+       ctx->buffer[i] = mm512_bcast128lo_64( 0x80 );
        for ( i += 1; i < SIZE512 - 1; i++ )
            ctx->buffer[i] = m512_zero;
-       ctx->buffer[i] = m512_const2_64( blocks << 56, 0 );
+       ctx->buffer[i] = mm512_bcast128hi_64( blocks << 56 );
    }
 
    TF1024_4way( ctx->chaining, ctx->buffer );
@@ -144,14 +138,11 @@ int groestl512_4way_full( groestl512_4way_context* ctx, void* output,
 
 int groestl512_2way_init( groestl512_2way_context* ctx, uint64_t hashlen )
 {
-  if (ctx->chaining == NULL || ctx->buffer == NULL)
-    return 1;
-
   memset_zero_256( ctx->chaining, SIZE512 );
   memset_zero_256( ctx->buffer, SIZE512 );
 
   // The only non-zero in the IV is len. It can be hard coded.
-  ctx->chaining[ 6 ] = m256_const2_64( 0x0200000000000000, 0 );
+  ctx->chaining[ 6 ] = mm256_bcast128hi_64( 0x0200000000000000 );
 
   ctx->buf_ptr = 0;
   ctx->rem_ptr = 0;
@@ -187,14 +178,14 @@ int groestl512_2way_update_close( groestl512_2way_context* ctx, void* output,
    if ( i == SIZE512 - 1 )
    {
        // only 1 vector left in buffer, all padding at once
-       ctx->buffer[i] = m256_const2_64( blocks << 56, 0x80 );
+       ctx->buffer[i] = mm256_set2_64( blocks << 56, 0x80 );
    }
    else
    {
-       ctx->buffer[i] = m256_const2_64( 0, 0x80 );
+       ctx->buffer[i] = mm256_bcast128lo_64( 0x80 );
        for ( i += 1; i < SIZE512 - 1; i++ )
            ctx->buffer[i] = m256_zero;
-       ctx->buffer[i] = m256_const2_64( blocks << 56, 0 );
+       ctx->buffer[i] = mm256_bcast128hi_64( blocks << 56 );
    }
 
    TF1024_2way( ctx->chaining, ctx->buffer );
@@ -220,9 +211,8 @@ int groestl512_2way_full( groestl512_2way_context* ctx, void* output,
 
    memset_zero_256( ctx->chaining, SIZE512 );
    memset_zero_256( ctx->buffer, SIZE512 );
-   ctx->chaining[ 6 ] = m256_const2_64( 0x0200000000000000, 0 );
+   ctx->chaining[ 6 ] = mm256_bcast128hi_64( 0x0200000000000000 );
    ctx->buf_ptr = 0;
-   ctx->rem_ptr = 0;
 
    // --- update ---
 
@@ -231,8 +221,7 @@ int groestl512_2way_full( groestl512_2way_context* ctx, void* output,
    ctx->buf_ptr = blocks * SIZE512;
 
    for ( i = 0; i < len % SIZE512; i++ )
-       ctx->buffer[ ctx->rem_ptr + i ] = in[ ctx->buf_ptr + i ];
-   i += ctx->rem_ptr;
+       ctx->buffer[ i ] = in[ ctx->buf_ptr + i ];
 
    // --- close ---
 
@@ -241,14 +230,14 @@ int groestl512_2way_full( groestl512_2way_context* ctx, void* output,
    if ( i == SIZE512 - 1 )
    {
        // only 1 vector left in buffer, all padding at once
-       ctx->buffer[i] = m256_const2_64( blocks << 56, 0x80 );
+       ctx->buffer[i] = mm256_set2_64( blocks << 56, 0x80 );
    }
    else
    {
-       ctx->buffer[i] = m256_const2_64( 0, 0x80 );
+       ctx->buffer[i] = mm256_bcast128lo_64( 0x80 );
        for ( i += 1; i < SIZE512 - 1; i++ )
            ctx->buffer[i] = m256_zero;
-       ctx->buffer[i] = m256_const2_64( blocks << 56, 0 );
+       ctx->buffer[i] = mm256_bcast128hi_64( blocks << 56 );
    }
 
    TF1024_2way( ctx->chaining, ctx->buffer );

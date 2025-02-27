@@ -1,7 +1,7 @@
 #include "lyra2-gate.h"
 #include <memory.h>
 
-#include "algo/blake/blake-hash-4way.h"
+#include "algo/blake/blake256-hash.h"
 #include "algo/bmw/bmw-hash-4way.h"
 #include "algo/cubehash/cubehash_sse2.h" 
 #include "algo/cubehash/cube-hash-2way.h"
@@ -287,7 +287,7 @@ int scanhash_lyra2rev3_8way( struct work *work, const uint32_t max_nonce,
              submit_solution( work, lane_hash, mythr );
          }
       }
-      *noncev = _mm256_add_epi32( *noncev, m256_const1_32( 8 ) );
+      *noncev = _mm256_add_epi32( *noncev, _mm256_set1_epi32( 8 ) );
       n += 8;
    } while ( likely( (n < last_nonce) && !work_restart[thr_id].restart ) );
    pdata[19] = n;
@@ -371,7 +371,7 @@ int scanhash_lyra2rev3_4way( struct work *work, const uint32_t max_nonce,
    if ( opt_benchmark )
       ( (uint32_t*)ptarget )[7] = 0x0000ff;
 
-   mm128_bswap32_intrlv80_4x32( vdata, pdata );
+   v128_bswap32_intrlv80_4x32( vdata, pdata );
    *noncev = _mm_set_epi32( n+3, n+2, n+1, n );
 
    blake256_4way_init( &l2v3_4way_ctx.blake );
@@ -389,7 +389,7 @@ int scanhash_lyra2rev3_4way( struct work *work, const uint32_t max_nonce,
               submit_solution( work, lane_hash, mythr );
 	      }
       }
-      *noncev = _mm_add_epi32( *noncev, m128_const1_32( 4 ) );
+      *noncev = _mm_add_epi32( *noncev, _mm_set1_epi32( 4 ) );
       n += 4;
    } while ( (n < max_nonce-4) && !work_restart[thr_id].restart);
    pdata[19] = n;

@@ -36,28 +36,21 @@
 #ifndef BMW_HASH_H__
 #define BMW_HASH_H__
 
-#ifdef __cplusplus
-extern "C"{
-#endif
-
 #include <stddef.h>
-
-#include "algo/sha/sph_types.h"
 #include "simd-utils.h"
 
 #define SPH_SIZE_bmw256   256
 
 #define SPH_SIZE_bmw512   512
 
-#if defined(__SSE2__)
-
 // BMW-256 4 way 32
 
-typedef struct {
-   __m128i buf[64];
-   __m128i H[16];
+typedef struct
+{
+   v128_t buf[64];
+   v128_t H[16];
    size_t ptr;
-   sph_u32 bit_count;  // assume bit_count fits in 32 bits
+   uint32_t bit_count;  // assume bit_count fits in 32 bits
 } bmw_4way_small_context;
 
 typedef bmw_4way_small_context bmw256_4way_context;
@@ -72,13 +65,12 @@ void bmw256_4way_close(void *cc, void *dst);
 void bmw256_4way_addbits_and_close(
         void *cc, unsigned ub, unsigned n, void *dst);
 
-#endif  // __SSE2__
-
 #if defined(__AVX2__)
 
 // BMW-256 8 way 32
 
-typedef struct {
+typedef struct
+{
    __m256i buf[16];
    __m256i H[16];
    size_t ptr;
@@ -95,11 +87,12 @@ void bmw256_8way_close( bmw256_8way_context *ctx, void *dst );
 
 #endif
 
-#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+#if defined(SIMD512)
 
 // BMW-256 16 way 32
 
-typedef struct {
+typedef struct
+{
    __m512i buf[16];
    __m512i H[16];
    size_t ptr;
@@ -115,73 +108,82 @@ void bmw256_16way_close( bmw256_16way_context *ctx, void *dst );
 
 #endif
 
-
-#if defined(__SSE2__)
-
 // BMW-512 2 way 64
 
-typedef struct {
-   __m128i buf[16];
-   __m128i H[16];
+typedef struct
+{
+   v128u64_t buf[16];
+   v128u64_t H[16];
    size_t ptr;
    uint64_t bit_count; 
 } bmw_2way_big_context __attribute__ ((aligned (64)));
 
-typedef bmw_2way_big_context bmw512_2way_context;
+typedef bmw_2way_big_context bmw512_2x64_context;
 
-void bmw512_2way_init( bmw512_2way_context *ctx );
-void bmw512_2way_update( bmw512_2way_context *ctx, const void *data,
+void bmw512_2x64_init( bmw512_2x64_context *ctx );
+void bmw512_2x64_update( bmw512_2x64_context *ctx, const void *data,
                          size_t len );
-void bmw512_2way_close( bmw512_2way_context *ctx, void *dst );
-
-#endif // __SSE2__
+void bmw512_2x64_close( bmw512_2x64_context *ctx, void *dst );
+void bmw512_2x64_ctx( bmw512_2x64_context *ctx, void *dst, const void *data,
+                      size_t len );
+void bmw512_2x64( void *dst, const void *data, size_t len );
 
 #if defined(__AVX2__)
 
 // BMW-512 64 bit 4 way
 
-typedef struct {
+typedef struct
+{
    __m256i buf[16];
    __m256i H[16];
    size_t ptr;
-   sph_u64 bit_count;
+   uint64_t bit_count;
 } bmw_4way_big_context __attribute__((aligned(128)));
 
-typedef bmw_4way_big_context bmw512_4way_context;
+typedef bmw_4way_big_context bmw512_4x64_context;
 
-void bmw512_4way_init(void *cc);
-
-void bmw512_4way_update(void *cc, const void *data, size_t len);
-#define bmw512_4way bmw512_4way_update
-
-void bmw512_4way_close(void *cc, void *dst);
-
+void bmw512_4x64_init(void *cc);
+void bmw512_4x64_update(void *cc, const void *data, size_t len);
+void bmw512_4x64_close(void *cc, void *dst);
 void bmw512_4way_addbits_and_close(
 	void *cc, unsigned ub, unsigned n, void *dst);
 
+// legacy names
+#define bmw512_4way_context   bmw512_4x64_context
+#define bmw512_4way_init      bmw512_4x64_init
+#define bmw512_4way_update    bmw512_4x64_update
+#define bmw512_4way           bmw512_4x64_update
+#define bmw512_4way_close     bmw512_4x64_close
+
 #endif  // __AVX2__
 
-#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+#if defined(SIMD512)
 
 // BMW-512 64 bit 8 way
-typedef struct {
+typedef struct
+{
    __m512i buf[16];
    __m512i H[16];
    size_t ptr;
    uint64_t bit_count;
-} bmw512_8way_context __attribute__((aligned(128)));
+} bmw512_8x64_context __attribute__((aligned(128)));
 
-void bmw512_8way_full( bmw512_8way_context *ctx, void *out, const void *data,
+void bmw512_8x64( bmw512_8x64_context *ctx, void *out, const void *data,
                          size_t len );
-void bmw512_8way_init( bmw512_8way_context *ctx );
-void bmw512_8way_update( bmw512_8way_context *ctx, const void *data,
+void bmw512_8x64_init( bmw512_8x64_context *ctx );
+void bmw512_8x64_update( bmw512_8x64_context *ctx, const void *data,
                          size_t len );
-void bmw512_8way_close( bmw512_8way_context *ctx, void *dst );
+void bmw512_8x64_close( bmw512_8x64_context *ctx, void *dst );
+
+// legacy names
+#define bmw512_8way_context   bmw512_8x64_context
+#define bmw512_8way_init      bmw512_8x64_init
+#define bmw512_8way_update    bmw512_8x64_update
+#define bmw512_8way_close     bmw512_8x64_close
+#define bmw512_8way           bmw512_8x64
+#define bmw512_8way_full      bmw512_8x64
+#define bmw512_8x64_full      bmw512_8x64
 
 #endif // AVX512
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif // BMW_HASH_H__

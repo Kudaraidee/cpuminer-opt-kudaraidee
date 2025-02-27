@@ -13,10 +13,7 @@
 #include "algo/keccak/sph_keccak.h"
 #include "algo/skein/sph_skein.h"
 #include "algo/shavite/sph_shavite.h"
-#include "algo/luffa/luffa_for_sse2.h"
 #include "algo/cubehash/cubehash_sse2.h"
-#include "algo/simd/nist.h"
-
 #if defined(__AES__)
   #include "algo/echo/aes_ni/hash_api.h"
   #include "algo/groestl/aes_ni/hash-groestl.h"
@@ -24,6 +21,8 @@
   #include "algo/groestl/sph_groestl.h"
   #include "algo/echo/sph_echo.h"
 #endif
+#include "algo/luffa/luffa_for_sse2.h"
+#include "algo/simd/simd-hash-2way.h"
 
 typedef struct {
    sph_blake512_context blake;
@@ -41,7 +40,7 @@ typedef struct {
    hashState_luffa         luffa;
    cubehashParam           cube;
    sph_shavite512_context  shavite;
-   hashState_sd            simd;
+   simd512_context         simd;
 } x11_ctx_holder;
 
 x11_ctx_holder x11_ctx;
@@ -63,7 +62,6 @@ void init_x11_ctx()
    init_luffa( &x11_ctx.luffa, 512 );
    cubehashInit( &x11_ctx.cube, 512, 16, 32 );
    sph_shavite512_init( &x11_ctx.shavite );
-   init_sd( &x11_ctx.simd, 512 );
 }
 
 void x11_hash( void *state, const void *input )
@@ -97,17 +95,16 @@ void x11_hash( void *state, const void *input )
     sph_keccak512( &ctx.keccak, (const void*) hash, 64 );
     sph_keccak512_close( &ctx.keccak, hash );
 
-     update_luffa( &ctx.luffa, (const BitSequence*)hash, 64 );
-     final_luffa( &ctx.luffa, (BitSequence*)hash );
+    update_luffa( &ctx.luffa, hash, 64 );
+    final_luffa( &ctx.luffa, hash );
 
-     cubehashUpdate( &ctx.cube, (const byte*) hash, 64 );
-     cubehashDigest( &ctx.cube, (byte*)hash );
+    cubehashUpdate( &ctx.cube, hash, 64 );
+    cubehashDigest( &ctx.cube, hash );
 
-     sph_shavite512( &ctx.shavite, hash, 64 );
-     sph_shavite512_close( &ctx.shavite, hash );
+    sph_shavite512( &ctx.shavite, hash, 64 );
+    sph_shavite512_close( &ctx.shavite, hash );
 
-     update_sd( &ctx.simd, (const BitSequence *)hash, 512 );
-     final_sd( &ctx.simd, (BitSequence *)hash );
+    simd512_ctx( &ctx.simd, hash, hash, 64 );
 
 #if defined(__AES__)
     update_final_echo ( &ctx.echo, (BitSequence *)hash,

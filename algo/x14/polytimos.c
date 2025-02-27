@@ -9,12 +9,12 @@
 #include "algo/skein/sph_skein.h"
 #include "algo/echo/sph_echo.h"
 #include "algo/fugue//sph_fugue.h"
-#include "algo/luffa/luffa_for_sse2.h"
 #include "algo/shabal/sph_shabal.h"
 #include "algo/gost/sph_gost.h"
 #ifdef __AES__
   #include "algo/echo/aes_ni/hash_api.h"
 #endif
+  #include "algo/luffa/luffa_for_sse2.h"
 
 typedef struct {
 	sph_skein512_context    skein;
@@ -65,8 +65,7 @@ void polytimos_hash(void *output, const void *input)
 	sph_echo512_close(&ctx.echo, hashA);
 #endif
 
-        update_and_final_luffa( &ctx.luffa, (BitSequence*)hashA,
-                                (const BitSequence*)hashA, 64 );
+   update_and_final_luffa( &ctx.luffa, hashA, hashA, 64 );
 
 	sph_fugue512(&ctx.fugue, hashA, 64);
 	sph_fugue512_close(&ctx.fugue, hashA);

@@ -1,14 +1,12 @@
 #include "pentablake-gate.h"
 
-#if defined (__AVX2__)
+#if defined(PENTABLAKE_4WAY)
 
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-
-#include "blake-hash-4way.h"
-#include "sph_blake.h"
+#include "blake512-hash.h"
 
 extern void pentablakehash_4way( void *output, const void *input )
 {

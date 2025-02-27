@@ -9,19 +9,16 @@
 #ifndef __hash_h
 #define __hash_h
 
-#include <immintrin.h>
-
 #include <stdio.h>
 #if defined(_WIN64) || defined(__WINDOWS__)
 #include <windows.h>
 #endif
 #include <stdlib.h>
-
-#define LENGTH (512)
+#include "simd-utils.h"
 
 #include "brg_endian.h"
-#define NEED_UINT_64T
-#include "algo/sha/brg_types.h"
+//#define NEED_UINT_64T
+#include "compat/brg_types.h"
 
 /* some sizes (number of bytes) */
 #define ROWS (8)
@@ -32,6 +29,8 @@
 #define SIZE_1024 ((ROWS)*(COLS1024))
 //#define ROUNDS512 (10)
 #define ROUNDS1024 (14)
+
+#define LENGTH 512
 
 //#if LENGTH<=256
 //#define COLS (COLS512)
@@ -67,8 +66,8 @@ typedef enum { SUCCESS_GR = 0, FAIL_GR = 1, BAD_HASHBITLEN_GR = 2} HashReturn_gr
 #define SIZE512 (SIZE_1024/16)
 
 typedef struct {
-  __attribute__ ((aligned (64))) __m128i chaining[SIZE512];
-  __attribute__ ((aligned (64))) __m128i buffer[SIZE512];
+  __attribute__ ((aligned (64))) v128_t chaining[SIZE512];
+  __attribute__ ((aligned (64))) v128_t buffer[SIZE512];
   int hashlen;       // byte
   int blk_count;     // SIZE_m128i
   int buf_ptr;       // __m128i offset
@@ -77,17 +76,18 @@ typedef struct {
 } hashState_groestl;
 
 
-HashReturn_gr init_groestl( hashState_groestl*, int );
+int init_groestl( hashState_groestl*, int );
 
-HashReturn_gr reinit_groestl( hashState_groestl* );
+int reinit_groestl( hashState_groestl* );
 
-HashReturn_gr update_groestl( hashState_groestl*, const void*,
-                              DataLength_gr );
+int update_groestl( hashState_groestl*, const void*, int );
 
-HashReturn_gr final_groestl( hashState_groestl*, void* );
+int final_groestl( hashState_groestl*, void* );
 
-HashReturn_gr update_and_final_groestl( hashState_groestl*,  void*,
-                                        const void*, DataLength_gr );
-int groestl512_full( hashState_groestl*,  void*, const void*, uint64_t );
+int update_and_final_groestl( hashState_groestl*,  void*, const void*, int );
+int groestl512( hashState_groestl*,  void*, const void*, uint64_t );
+#define groestl512_full   groestl512
+#define groestl512_ctx    groestl512
+
 
 #endif /* __hash_h */

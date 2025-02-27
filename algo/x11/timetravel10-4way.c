@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include "algo/blake/blake-hash-4way.h"
+#include "algo/blake/blake512-hash.h"
 #include "algo/bmw/bmw-hash-4way.h"
 #include "algo/groestl/aes_ni/hash-groestl.h"
 #include "algo/skein/skein-hash-4way.h"
@@ -118,8 +118,9 @@ void timetravel10_4way_hash(void *output, const void *input)
               intrlv_4x64( vhashB, hash0, hash1, hash2, hash3, dataLen<<3 );
         break;
         case 3:
-           skein512_4way_update( &ctx.skein, vhashA, dataLen );
-           skein512_4way_close( &ctx.skein, vhashB );
+           skein512_4way_full( &ctx.skein, vhashB, vhashA, dataLen );
+//           skein512_4way_update( &ctx.skein, vhashA, dataLen );
+//           skein512_4way_close( &ctx.skein, vhashB );
            if ( i == 9 )
               dintrlv_4x64( hash0, hash1, hash2, hash3, vhashB, dataLen<<3 );
         break;
@@ -150,17 +151,17 @@ void timetravel10_4way_hash(void *output, const void *input)
         case 7:
            dintrlv_4x64( hash0, hash1, hash2, hash3,
                                     vhashA, dataLen<<3 );
-           cubehashUpdateDigest( &ctx.cube, (byte*)hash0,
-                                      (const byte*)hash0, dataLen );
+           cubehashUpdateDigest( &ctx.cube, hash0,
+                                      hash0, dataLen );
            memcpy( &ctx.cube, &tt10_4way_ctx.cube, sizeof(cubehashParam) );
-           cubehashUpdateDigest( &ctx.cube, (byte*)hash1,
-                                      (const byte*)hash1, dataLen );
+           cubehashUpdateDigest( &ctx.cube, hash1,
+                                      hash1, dataLen );
            memcpy( &ctx.cube, &tt10_4way_ctx.cube, sizeof(cubehashParam) );
-           cubehashUpdateDigest( &ctx.cube, (byte*)hash2,
-                                      (const byte*)hash2, dataLen );
+           cubehashUpdateDigest( &ctx.cube, hash2,
+                                      hash2, dataLen );
            memcpy( &ctx.cube, &tt10_4way_ctx.cube, sizeof(cubehashParam) );
-           cubehashUpdateDigest( &ctx.cube, (byte*)hash3,
-                                      (const byte*)hash3, dataLen );
+           cubehashUpdateDigest( &ctx.cube, hash3,
+                                      hash3, dataLen );
            if ( i != 9 )           
               intrlv_4x64( vhashB, hash0, hash1, hash2, hash3, dataLen<<3 );
         break;

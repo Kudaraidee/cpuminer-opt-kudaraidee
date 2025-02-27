@@ -1,63 +1,71 @@
 
-if WANT_JANSSON
-JANSSON_INCLUDES= -I$(top_srcdir)/compat/jansson
+if HAVE_APPLE
+# MacOS uses Homebrew to install needed packages but they aren't linked for
+# the jansson test in configure. Ignore the failed test & link them now,
+# different path for different CPU arch.
+
+if ARCH_ARM64
+  EXTRA_INCLUDES = -I/opt/homebrew/include
+  EXTRA_LIBS     = -L/opt/homebrew/lib
 else
-JANSSON_INCLUDES=
+  EXTRA_INCLUDES = -I/usr/local/include
+  EXTRA_LIBS     = -L/usr/local/lib
 endif
 
-EXTRA_DIST	= example-cfg.json nomacro.pl
+else
 
-SUBDIRS		= compat
+if WANT_JANSSON
+# Can't find jansson libraries, compile the included source code.
+  EXTRA_INCLUDES = -I$(top_srcdir)/compat/jansson
+  EXTRA_LIBS     = -L$(top_srcdir)/compat/jansson
+else
+  EXTRA_INCLUDES =
+  EXTRA_LIBS     =
+endif
 
-ALL_INCLUDES	= @PTHREAD_FLAGS@ -fno-strict-aliasing $(JANSSON_INCLUDES) -I.
+endif
 
-bin_PROGRAMS	= cpuminer
+EXTRA_DIST = example-cfg.json nomacro.pl
 
-dist_man_MANS	= cpuminer.1
+SUBDIRS = compat
+
+ALL_INCLUDES = @PTHREAD_FLAGS@ -fno-strict-aliasing $(EXTRA_INCLUDES) -I.
+
+bin_PROGRAMS = cpuminer
+
+dist_man_MANS = cpuminer.1
 
 cpuminer_SOURCES = \
+  dummy.cpp \
   cpu-miner.c \
   util.c \
   api.c \
   sysinfos.c \
   algo-gate-api.c\
   malloc-huge.c \
-  algo/argon2/argon2a/argon2a.c \
-  algo/argon2/argon2a/ar2/argon2.c \
-  algo/argon2/argon2a/ar2/opt.c \
-  algo/argon2/argon2a/ar2/cores.c \
-  algo/argon2/argon2a/ar2/ar2-scrypt-jane.c \
-  algo/argon2/argon2a/ar2/blake2b.c \
-  algo/argon2/argon2d/argon2d-gate.c \
-  algo/argon2/argon2d/blake2/blake2b.c \
-  algo/argon2/argon2d/argon2d/argon2.c \
-  algo/argon2/argon2d/argon2d/core.c \
-  algo/argon2/argon2d/argon2d/opt.c \
-  algo/argon2/argon2d/argon2d/argon2d_thread.c \
-  algo/argon2/argon2d/argon2d/encoding.c \
+  algo/argon2d/argon2d-gate.c \
+  algo/argon2d/blake2/blake2b.c \
+  algo/argon2d/argon2d/argon2.c \
+  algo/argon2d/argon2d/core.c \
+  algo/argon2d/argon2d/opt.c \
+  algo/argon2d/argon2d/argon2d_thread.c \
+  algo/argon2d/argon2d/encoding.c \
   algo/blake/sph_blake.c \
-  algo/blake/blake256-hash-4way.c \
-  algo/blake/blake512-hash-4way.c \
+  algo/blake/blake256-hash.c \
+  algo/blake/blake512-hash.c \
   algo/blake/blake-gate.c \
   algo/blake/blake.c \
   algo/blake/blake-4way.c \
   algo/blake/sph_blake2b.c \
   algo/blake/sph-blake2s.c \
-  algo/blake/blake2s-hash-4way.c \
+  algo/blake/blake2s-hash.c \
   algo/blake/blake2s.c \
-  algo/blake/blake2s-gate.c \
-  algo/blake/blake2s-4way.c \
-  algo/blake/blake2b-hash-4way.c \
+  algo/blake/blake2b-hash.c \
   algo/blake/blake2b.c \
-  algo/blake/blake2b-gate.c \
-  algo/blake/blake2b-4way.c \
   algo/blake/blakecoin-gate.c \
   algo/blake/mod_blakecoin.c \
   algo/blake/blakecoin.c \
   algo/blake/blakecoin-4way.c \
-  algo/blake/decred-gate.c \
-  algo/blake/decred.c \
-  algo/blake/decred-4way.c \
   algo/blake/pentablake-gate.c \
   algo/blake/pentablake-4way.c \
   algo/blake/pentablake.c \
@@ -70,6 +78,7 @@ cpuminer_SOURCES = \
   algo/bmw/bmw512-4way.c \
   algo/cubehash/cubehash_sse2.c\
   algo/cubehash/cube-hash-2way.c \
+  algo/cubehash/sph_cubehash.c \
   algo/echo/sph_echo.c \
   algo/echo/echo-hash-4way.c \
   algo/echo/aes_ni/hash.c\
@@ -91,11 +100,6 @@ cpuminer_SOURCES = \
   algo/hamsi/hamsi-hash-4way.c \
   algo/haval/haval.c \
   algo/haval/haval-hash-4way.c \
-  algo/hodl/aes.c \
-  algo/hodl/hodl-gate.c \
-  algo/hodl/hodl-wolf.c \
-  algo/hodl/sha512_avx.c \
-  algo/hodl/sha512_avx2.c \
   algo/jh/sph_jh.c \
   algo/jh/jh-hash-4way.c \
   algo/jh/jha-gate.c \
@@ -111,6 +115,7 @@ cpuminer_SOURCES = \
   algo/lanehash/lane.c \
   algo/luffa/luffa_for_sse2.c \
   algo/luffa/luffa-hash-2way.c \
+  algo/luffa/sph_luffa.c \
   algo/lyra2/lyra2.c \
   algo/lyra2/sponge.c \
   algo/lyra2/sponge-2way.c \
@@ -121,17 +126,14 @@ cpuminer_SOURCES = \
   algo/lyra2/lyra2rev3.c \
   algo/lyra2/lyra2rev3-4way.c \
   algo/lyra2/lyra2re.c \
-  algo/lyra2/lyra2z.c \
   algo/lyra2/lyra2z-4way.c \
   algo/lyra2/lyra2z330.c \
   algo/lyra2/lyra2h.c \
   algo/lyra2/lyra2h-4way.c \
   algo/lyra2/allium-4way.c \
-  algo/lyra2/allium.c \
   algo/lyra2/phi2-4way.c \
   algo/lyra2/phi2.c \
   algo/m7m/m7m.c \
-  algo/m7m/magimath.cpp \
   algo/nist5/nist5-gate.c \
   algo/nist5/nist5-4way.c \
   algo/nist5/nist5.c \
@@ -161,32 +163,30 @@ cpuminer_SOURCES = \
   algo/scrypt/scrypt.c \
   algo/scrypt/scrypt-core-4way.c \
   algo/scrypt/neoscrypt.c \
+  algo/sha/sha1.c \
+  algo/sha/sha1-hash.c \
   algo/sha/sha256-hash.c \
   algo/sha/sph_sha2.c \
   algo/sha/sph_sha2big.c \
   algo/sha/sha256-hash-4way.c \
   algo/sha/sha512-hash-4way.c \
-  algo/sha/sha256-hash-opt.c \
-  algo/sha/sha256-hash-2way-ni.c \
   algo/sha/hmac-sha256-hash.c \
   algo/sha/hmac-sha256-hash-4way.c \
   algo/sha/sha256d.c \
-  algo/sha/sha2.c \
   algo/sha/sha256d-4way.c \
   algo/sha/sha256t-gate.c \
   algo/sha/sha256t-4way.c \
-  algo/sha/sha256t.c \
   algo/sha/sha256q-4way.c \
   algo/sha/sha256q.c \
+  algo/sha/sha512256d-4way.c \
+  algo/sha/sha256dt.c \
   algo/shabal/sph_shabal.c \
   algo/shabal/shabal-hash-4way.c \
   algo/shavite/sph_shavite.c \
   algo/shavite/sph-shavite-aesni.c \
   algo/shavite/shavite-hash-2way.c \
   algo/shavite/shavite-hash-4way.c \
-  algo/shavite/shavite.c \
-  algo/simd/nist.c \
-  algo/simd/vector.c \
+  algo/simd/sph_simd.c \
   algo/simd/simd-hash-2way.c \
   algo/skein/sph_skein.c \
   algo/skein/skein-hash-4way.c \
@@ -205,7 +205,6 @@ cpuminer_SOURCES = \
   algo/verthash/tiny_sha3/sha3.c \
   algo/verthash/tiny_sha3/sha3-4way.c \
   algo/whirlpool/sph_whirlpool.c \
-  algo/whirlpool/whirlpool-hash-4way.c \
   algo/whirlpool/whirlpool-gate.c \
   algo/whirlpool/whirlpool.c \
   algo/whirlpool/whirlpoolx.c \
@@ -268,6 +267,7 @@ cpuminer_SOURCES = \
   algo/x16/x16rt.c \
   algo/x16/x16rt-4way.c \
   algo/x16/hex.c \
+  algo/x16/x20r.c \
   algo/x16/x21s-4way.c \
   algo/x16/x21s.c \
   algo/x16/minotaur.c \
@@ -285,45 +285,36 @@ cpuminer_SOURCES = \
   algo/x22/x22i-gate.c \
   algo/x22/x25x.c \
   algo/x22/x25x-4way.c \
-  algo/yescrypt/yescrypt.c \
-  algo/yescrypt/yescrypt-best.c \
   algo/yespower/yespower-gate.c \
   algo/yespower/yespower-blake2b.c \
-  algo/yespower/crypto/blake2b-yp.c \
+  algo/yespower/crypto/hmac-blake2b.c \
   algo/yespower/yescrypt-r8g.c \
-  algo/yespower/yespower-opt.c
-
-disable_flags =
-
-if USE_ASM
-   cpuminer_SOURCES += asm/neoscrypt_asm.S
-if ARCH_x86
-   cpuminer_SOURCES += asm/sha2-x86.S asm/scrypt-x86.S asm/aesb-x86.S
-endif
-if ARCH_x86_64
-   cpuminer_SOURCES += asm/sha2-x64.S asm/scrypt-x64.S asm/aesb-x64.S
-endif
-if ARCH_ARM
-   cpuminer_SOURCES += asm/sha2-arm.S asm/scrypt-arm.S
-endif
-else
-   disable_flags += -DNOASM
-endif
+  algo/yespower/yespower-opt.c \
+  algo/yespower/yespower-ref.c \
+  algo/yespower/yespower-blake2b-ref.c
 
 if HAVE_WINDOWS
    cpuminer_SOURCES += compat/winansi.c
 endif
 
-cpuminer_LDFLAGS	= @LDFLAGS@
-cpuminer_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @WS2_LIBS@ -lssl -lcrypto -lgmp
-cpuminer_CPPFLAGS = @LIBCURL_CPPFLAGS@ $(ALL_INCLUDES)
-cpuminer_CFLAGS   = -Wno-pointer-sign -Wno-pointer-to-int-cast $(disable_flags)
+if USE_ASM
+   disable_flags =
+   cpuminer_SOURCES += asm/neoscrypt_asm.S
+else
+   disable_flags = -DNOASM
+endif
 
-if HAVE_WINDOWS
-cpuminer_CFLAGS += -Wl,--stack,10485760
+cpuminer_LDFLAGS = @LDFLAGS@
+cpuminer_LDADD	= $(EXTRA_LIBS) @LIBCURL@ -ljansson @PTHREAD_LIBS@ @WS2_LIBS@ -lgmp
+cpuminer_CPPFLAGS = @LIBCURL_CPPFLAGS@ $(ALL_INCLUDES)
+cpuminer_CFLAGS = -Wno-pointer-sign -Wno-pointer-to-int-cast $(disable_flags)
+
+if ARCH_ARM64
+   cpuminer_CFLAGS += -flax-vector-conversions
 endif
 
 if HAVE_WINDOWS
+
 # use to profile an object
 # gprof_cflags = -pg -g3
 # cpuminer_LDFLAGS += -pg
@@ -336,6 +327,5 @@ common_ccflags = $(DEFS) $(ALL_INCLUDES) $(cpuminer_CPPFLAGS) $(CPPFLAGS) $(cpum
 cpuminer-neoscrypt.o: neoscrypt.c
 	@echo "CUSTOM ${@}: ${filter %.o,${^}} ${filter %.c,${^}}"
 	$(CC) $(common_ccflags) -g -O3 $(gprof_cflags) -MT $@ -MD -MP -c -o $@ $<
-
 
 endif

@@ -19,7 +19,7 @@
 #define EPS1 DBL_EPSILON
 #define EPS2 3.0e-11
 
-inline double exp_n( double xt )
+static inline double exp_n( double xt )
 {
     if ( xt < -700.0 )
         return 0;
@@ -31,7 +31,8 @@ inline double exp_n( double xt )
         return exp( xt );
 }
 
-inline double exp_n2( double x1, double x2 )
+/*
+static inline double exp_n2( double x1, double x2 )
 {
     double p1 = -700., p2 = -37., p3 = -0.8e-8, p4 = 0.8e-8,
            p5 = 37., p6 = 700.;
@@ -51,6 +52,7 @@ inline double exp_n2( double x1, double x2 )
     else if ( xt > p6 - 1.e-200 )
         return 0.;
 }
+*/
 
 double swit2_( double wvnmb )
 {
@@ -298,7 +300,7 @@ int scanhash_m7m_hash( struct work* work, uint64_t max_nonce,
 
 bool register_m7m_algo( algo_gate_t *gate )
 {
-  gate->optimizations = SHA_OPT;
+  gate->optimizations = SHA256_OPT;
   init_m7m_ctx();
   gate->scanhash              = (void*)&scanhash_m7m_hash;
   gate->build_stratum_request = (void*)&std_be_build_stratum_request;
@@ -308,5 +310,4 @@ bool register_m7m_algo( algo_gate_t *gate )
   opt_target_factor = 65536.0;
   return true;
 }
-
 

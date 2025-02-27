@@ -2,24 +2,26 @@
 
 #if !( defined(X22I_8WAY) || defined(X22I_4WAY) )
 
-#include "algo/blake/sph_blake.h"
+#include "algo/blake/blake512-hash.h"
 #include "algo/bmw/sph_bmw.h"
-#if defined(__AES__)
-  #include "algo/echo/aes_ni/hash_api.h"
-  #include "algo/groestl/aes_ni/hash-groestl.h"
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
   #include "algo/fugue/fugue-aesni.h"
+#else
+  #include "algo/fugue/sph_fugue.h"
+#endif
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
+  #include "algo/groestl/aes_ni/hash-groestl.h"
+  #include "algo/echo/aes_ni/hash_api.h"
 #else
   #include "algo/groestl/sph_groestl.h"
   #include "algo/echo/sph_echo.h"
-  #include "algo/fugue/sph_fugue.h"
 #endif
 #include "algo/skein/sph_skein.h"
 #include "algo/jh/sph_jh.h"
 #include "algo/keccak/sph_keccak.h"
-#include "algo/luffa/luffa_for_sse2.h"
 #include "algo/cubehash/cubehash_sse2.h"
 #include "algo/shavite/sph_shavite.h"
-#include "algo/simd/nist.h"
+#include "algo/simd/simd-hash-2way.h"
 #include "algo/hamsi/sph_hamsi.h"
 #include "algo/shabal/sph_shabal.h"
 #include "algo/whirlpool/sph_whirlpool.h"
@@ -30,19 +32,23 @@
 #include "algo/lyra2/lyra2.h"
 #include "algo/gost/sph_gost.h"
 #include "algo/swifftx/swifftx.h"
+#include "algo/luffa/luffa_for_sse2.h"
 
 union _x22i_context_overlay
 {
-        sph_blake512_context blake;
-        sph_bmw512_context bmw;
-#if defined(__AES__)
+        blake512_context       blake;
+        sph_bmw512_context     bmw;
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
+        hashState_fugue         fugue;
+#else
+        sph_fugue512_context    fugue;
+#endif
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
         hashState_groestl       groestl;
         hashState_echo          echo;
-        hashState_fugue         fugue;
 #else
         sph_groestl512_context  groestl;
         sph_echo512_context     echo;
-        sph_fugue512_context    fugue;
 #endif
         sph_jh512_context       jh;
         sph_keccak512_context   keccak;
@@ -50,7 +56,7 @@ union _x22i_context_overlay
         hashState_luffa         luffa;
         cubehashParam           cube;
         sph_shavite512_context  shavite;
-        hashState_sd            simd;
+        simd512_context         simd;
         sph_hamsi512_context    hamsi;
         sph_shabal512_context   shabal;
         sph_whirlpool_context   whirlpool;
@@ -67,18 +73,16 @@ int x22i_hash( void *output, const void *input, int thrid )
    unsigned char hash2[65]    __attribute__((aligned(64))) = {0};
    x22i_context_overlay ctx;
 
-   sph_blake512_init(&ctx.blake);
-   sph_blake512(&ctx.blake, input, 80);
-   sph_blake512_close(&ctx.blake, hash);
+   blake512_init(&ctx.blake);
+   blake512_update(&ctx.blake, input, 80);
+   blake512_close(&ctx.blake, hash);
 
    sph_bmw512_init(&ctx.bmw);
    sph_bmw512(&ctx.bmw, (const void*) hash, 64);
    sph_bmw512_close(&ctx.bmw, hash);
 
-#if defined(__AES__)
-   init_groestl( &ctx.groestl, 64 );
-   update_and_final_groestl( &ctx.groestl, (char*)hash,
-                                  (const char*)hash, 512 );
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
+   groestl512_full( &ctx.groestl, hash, hash, 512 );
 #else
    sph_groestl512_init( &ctx.groestl );
    sph_groestl512( &ctx.groestl, hash, 64 );
@@ -99,26 +103,18 @@ int x22i_hash( void *output, const void *input, int thrid )
 
    if ( work_restart[thrid].restart ) return 0;
    
-   init_luffa( &ctx.luffa, 512 );
-   update_and_final_luffa( &ctx.luffa, (BitSequence*)hash,
-                                (const BitSequence*)hash, 64 );
+   luffa_full( &ctx.luffa, hash, 512, hash, 64 );
 
-   cubehashInit( &ctx.cube, 512, 16, 32 );
-   cubehashUpdateDigest( &ctx.cube, (byte*) hash,
-                              (const byte*)hash, 64 );
-
+   cubehash_full( &ctx.cube, hash, 512, hash, 64 );
+   
    sph_shavite512_init(&ctx.shavite);
    sph_shavite512(&ctx.shavite, (const void*) hash, 64);
    sph_shavite512_close(&ctx.shavite, hash);
 
-   init_sd( &ctx.simd, 512 );
-   update_final_sd( &ctx.simd, (BitSequence*)hash,
-                         (const BitSequence*)hash, 512 );
+   simd512_ctx( &ctx.simd, hash, hash, 64 );
 
-#if defined(__AES__)
-   init_echo( &ctx.echo, 512 );
-   update_final_echo ( &ctx.echo, (BitSequence*)hash,
-                            (const BitSequence*)hash, 512 );
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
+   echo_full( &ctx.echo, hash, 512, hash, 64 );
 #else
    sph_echo512_init( &ctx.echo );
    sph_echo512( &ctx.echo, hash, 64 );
@@ -131,7 +127,7 @@ int x22i_hash( void *output, const void *input, int thrid )
    sph_hamsi512(&ctx.hamsi, (const void*) hash, 64);
    sph_hamsi512_close(&ctx.hamsi, hash);
 
-#if defined(__AES__)
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
    fugue512_full( &ctx.fugue, hash, hash, 64 );
 #else
    sph_fugue512_init(&ctx.fugue);
@@ -151,7 +147,7 @@ int x22i_hash( void *output, const void *input, int thrid )
    sph_sha512( &ctx.sha512, &hash[128], 64 );
    sph_sha512_close( &ctx.sha512, &hash[192] );
    
-   ComputeSingleSWIFFTX((unsigned char*)hash, (unsigned char*)hash2);
+   ComputeSingleSWIFFTX( (unsigned char*)hash, (unsigned char*)hash2 );
 
    if ( work_restart[thrid].restart ) return 0;
    
@@ -166,7 +162,7 @@ int x22i_hash( void *output, const void *input, int thrid )
    sph_tiger_close(&ctx.tiger, (void*) hash2);
 
    memset(hash, 0, 64);
-   LYRA2RE((void*) hash, 32, (const void*) hash2, 32, (const void*) hash2, 32, 1, 4, 4);
+   LYRA2RE( (void*)hash, 32, (const void*)hash2, 32, (const void*)hash2, 32, 1, 4, 4 );
 
    sph_gost512_init(&ctx.gost);
    sph_gost512 (&ctx.gost, (const void*) hash, 64);
@@ -182,8 +178,8 @@ int x22i_hash( void *output, const void *input, int thrid )
 int scanhash_x22i( struct work *work, uint32_t max_nonce,
              uint64_t *hashes_done, struct thr_info *mythr)
 {
-   uint32_t edata[20] __attribute__((aligned(64)));
-   uint32_t hash64[8] __attribute__((aligned(64)));
+   uint32_t edata[20] __attribute__((aligned(32)));
+   uint32_t hash64[8] __attribute__((aligned(32)));
    uint32_t *pdata = work->data;
    uint32_t *ptarget = work->target;
    uint32_t n = pdata[19];
@@ -193,14 +189,14 @@ int scanhash_x22i( struct work *work, uint32_t max_nonce,
 
    if ( bench ) ptarget[7] = 0x08ff;
    
-   mm128_bswap32_80( edata, pdata );
+   v128_bswap32_80( edata, pdata );
 
    InitializeSWIFFTX();
    
    do
    {
       edata[19] = n;
-      if ( x22i_hash( hash64, edata, thr_id ) );
+      if ( x22i_hash( hash64, edata, thr_id ) )
       if ( unlikely( valid_hash( hash64, ptarget ) && !bench ) )
       {
          pdata[19] = bswap_32( n );

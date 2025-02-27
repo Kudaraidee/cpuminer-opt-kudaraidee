@@ -23,16 +23,16 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
-#include <immintrin.h>
 #include "sponge.h"
 #include "lyra2.h"
+#include "simd-utils.h"
 
-#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+#if defined(SIMD512)
 
 inline void squeeze_2way( uint64_t *State, byte *Out, unsigned int len )
 {
     const int len_m256i = len / 32;
-    const int fullBlocks = len_m256i / BLOCK_LEN_M256I;
+    const int fullBlocks = len_m256i / BLOCK_LEN_256;
     __m512i* state = (__m512i*)State;
     __m512i* out   = (__m512i*)Out;
     int i;
@@ -40,12 +40,12 @@ inline void squeeze_2way( uint64_t *State, byte *Out, unsigned int len )
     //Squeezes full blocks
     for ( i = 0; i < fullBlocks; i++ )
     {
-       memcpy_512( out, state, BLOCK_LEN_M256I );
+       memcpy_512( out, state, BLOCK_LEN_256 );
        LYRA_ROUND_2WAY_AVX512( state[0], state[1], state[2], state[3] );
-       out += BLOCK_LEN_M256I;
+       out += BLOCK_LEN_256;
     }
     //Squeezes remaining bytes
-    memcpy_512( out, state, len_m256i % BLOCK_LEN_M256I );
+    memcpy_512( out, state, len_m256i % BLOCK_LEN_256 );
 }
 
 inline void absorbBlock_2way( uint64_t *State, const uint64_t *In0,
@@ -85,10 +85,10 @@ inline void absorbBlockBlake2Safe_2way( uint64_t *State, const uint64_t *In,
 
   state0 = 
   state1 = m512_zero;
-  state2 = m512_const4_64( 0xa54ff53a5f1d36f1ULL, 0x3c6ef372fe94f82bULL,
-                           0xbb67ae8584caa73bULL, 0x6a09e667f3bcc908ULL );
-  state3 = m512_const4_64( 0x5be0cd19137e2179ULL, 0x1f83d9abfb41bd6bULL,
-                           0x9b05688c2b3e6c1fULL, 0x510e527fade682d1ULL );
+  state2 = _mm512_set4_epi64( 0xa54ff53a5f1d36f1ULL, 0x3c6ef372fe94f82bULL,
+                              0xbb67ae8584caa73bULL, 0x6a09e667f3bcc908ULL );
+  state3 = _mm512_set4_epi64( 0x5be0cd19137e2179ULL, 0x1f83d9abfb41bd6bULL,
+                              0x9b05688c2b3e6c1fULL, 0x510e527fade682d1ULL );
 
   for ( int i = 0; i < nBlocks; i++ )
   { 
@@ -116,7 +116,7 @@ inline void reducedSqueezeRow0_2way( uint64_t* State, uint64_t* rowOut,
 
 
     register __m512i state0, state1, state2, state3;
-    __m512i* out   = (__m512i*)rowOut + ( (nCols-1) * BLOCK_LEN_M256I );
+    __m512i* out   = (__m512i*)rowOut + ( (nCols-1) * BLOCK_LEN_256 );
 
     state0 = _mm512_load_si512( (__m512i*)State     );
     state1 = _mm512_load_si512( (__m512i*)State + 1 );
@@ -139,7 +139,7 @@ inline void reducedSqueezeRow0_2way( uint64_t* State, uint64_t* rowOut,
        out[2] = state2;
 
        //Goes to next block (column) that will receive the squeezed data
-       out -= BLOCK_LEN_M256I;
+       out -= BLOCK_LEN_256;
 
        LYRA_ROUND_2WAY_AVX512( state0, state1, state2, state3 );
     }
@@ -157,7 +157,7 @@ inline void reducedDuplexRow1_2way( uint64_t *State, uint64_t *rowIn,
     int i;
     register __m512i state0, state1, state2, state3;
     __m512i *in = (__m512i*)rowIn;
-    __m512i *out = (__m512i*)rowOut + ( (nCols-1) * BLOCK_LEN_M256I );
+    __m512i *out = (__m512i*)rowOut + ( (nCols-1) * BLOCK_LEN_256 );
 
     state0 = _mm512_load_si512( (__m512i*)State     );
     state1 = _mm512_load_si512( (__m512i*)State + 1 );
@@ -177,9 +177,9 @@ inline void reducedDuplexRow1_2way( uint64_t *State, uint64_t *rowIn,
          out[2] = _mm512_xor_si512( state2, in[2] );
 
          //Input: next column (i.e., next block in sequence)
-         in += BLOCK_LEN_M256I;
+         in += BLOCK_LEN_256;
          //Output: goes to previous column
-         out -= BLOCK_LEN_M256I;
+         out -= BLOCK_LEN_256;
     }
 
     _mm512_store_si512( (__m512i*)State,     state0 );
@@ -195,7 +195,7 @@ inline void reducedDuplexRowSetup_2way( uint64_t *State, uint64_t *rowIn,
     register __m512i state0, state1, state2, state3;
     __m512i* in    = (__m512i*)rowIn;
     __m512i* inout = (__m512i*)rowInOut;
-    __m512i* out   = (__m512i*)rowOut + ( (nCols-1) * BLOCK_LEN_M256I );
+    __m512i* out   = (__m512i*)rowOut + ( (nCols-1) * BLOCK_LEN_256 );
 
     state0 = _mm512_load_si512( (__m512i*)State     );
     state1 = _mm512_load_si512( (__m512i*)State + 1 );
@@ -234,10 +234,10 @@ inline void reducedDuplexRowSetup_2way( uint64_t *State, uint64_t *rowIn,
       }
 
       //Inputs: next column (i.e., next block in sequence)
-      in    += BLOCK_LEN_M256I;
-      inout += BLOCK_LEN_M256I;
+      in    += BLOCK_LEN_256;
+      inout += BLOCK_LEN_256;
       //Output: goes to previous column
-      out   -= BLOCK_LEN_M256I;
+      out   -= BLOCK_LEN_256;
     }
 
     _mm512_store_si512( (__m512i*)State,     state0 );
@@ -261,7 +261,7 @@ inline void reducedDuplexRowSetup_2way( uint64_t *State, uint64_t *rowIn,
 // overlap it's unified.
 // As a result normal is Nrows-2 / Nrows.
 // for 4 rows: 1 unified, 2 overlap, 1 normal.
-// for 8 rows: 1 unified, 2 overlap, 56 normal.
+// for 8 rows: 1 unified, 2 overlap, 5 normal.
 
 static inline void reducedDuplexRow_2way_normal( uint64_t *State,
                    uint64_t *rowIn, uint64_t *rowInOut0, uint64_t *rowInOut1,
@@ -283,6 +283,15 @@ static inline void reducedDuplexRow_2way_normal( uint64_t *State,
    for ( i = 0; i < nCols; i++ )
    {
      //Absorbing "M[prev] [+] M[row*]"
+     io0 = _mm512_load_si512( inout0    );
+     io1 = _mm512_load_si512( inout0 +1 );
+     io2 = _mm512_load_si512( inout0 +2 );
+
+     io0 = _mm512_mask_load_epi64( io0, 0xf0, inout1    );
+     io1 = _mm512_mask_load_epi64( io1, 0xf0, inout1 +1 );
+     io2 = _mm512_mask_load_epi64( io2, 0xf0, inout1 +2 );
+
+/*
      io0 = _mm512_mask_blend_epi64( 0xf0,
                                     _mm512_load_si512( (__m512i*)inout0 ),
                                     _mm512_load_si512( (__m512i*)inout1 ) );
@@ -292,6 +301,7 @@ static inline void reducedDuplexRow_2way_normal( uint64_t *State,
      io2 = _mm512_mask_blend_epi64( 0xf0,
                                     _mm512_load_si512( (__m512i*)inout0 +2 ),
                                     _mm512_load_si512( (__m512i*)inout1 +2 ) );
+*/
 
      state0 = _mm512_xor_si512( state0, _mm512_add_epi64( in[0], io0 ) );
      state1 = _mm512_xor_si512( state1, _mm512_add_epi64( in[1], io1 ) );
@@ -326,10 +336,10 @@ static inline void reducedDuplexRow_2way_normal( uint64_t *State,
      _mm512_mask_store_epi64( inout1 +2, 0xf0, io2 );
 
       //Goes to next block
-      in     += BLOCK_LEN_M256I;
-      inout0 += BLOCK_LEN_M256I;
-      inout1 += BLOCK_LEN_M256I;
-      out    += BLOCK_LEN_M256I;
+      in     += BLOCK_LEN_256;
+      inout0 += BLOCK_LEN_256;
+      inout1 += BLOCK_LEN_256;
+      out    += BLOCK_LEN_256;
    }
 
    _mm512_store_si512( (__m512i*)State,     state0 );
@@ -359,6 +369,15 @@ static inline void reducedDuplexRow_2way_overlap( uint64_t *State,
    for ( i = 0; i < nCols; i++ )
    {
      //Absorbing "M[prev] [+] M[row*]"
+     io0.v512 = _mm512_load_si512( inout0    );
+     io1.v512 = _mm512_load_si512( inout0 +1 );
+     io2.v512 = _mm512_load_si512( inout0 +2 );
+
+     io0.v512 = _mm512_mask_load_epi64( io0.v512, 0xf0, inout1    );
+     io1.v512 = _mm512_mask_load_epi64( io1.v512, 0xf0, inout1 +1 );
+     io2.v512 = _mm512_mask_load_epi64( io2.v512, 0xf0, inout1 +2 );
+
+/*
      io0.v512 = _mm512_mask_blend_epi64( 0xf0,
                                   _mm512_load_si512( (__m512i*)inout0 ),
                                   _mm512_load_si512( (__m512i*)inout1 ) );
@@ -368,27 +387,12 @@ static inline void reducedDuplexRow_2way_overlap( uint64_t *State,
      io2.v512 = _mm512_mask_blend_epi64( 0xf0,
                                   _mm512_load_si512( (__m512i*)inout0 +2 ),
                                   _mm512_load_si512( (__m512i*)inout1 +2 ) );
+*/
 
      state0 = _mm512_xor_si512( state0, _mm512_add_epi64( in[0], io0.v512 ) );
      state1 = _mm512_xor_si512( state1, _mm512_add_epi64( in[1], io1.v512 ) );
      state2 = _mm512_xor_si512( state2, _mm512_add_epi64( in[2], io2.v512 ) );
      
-/* 
-     io.v512[0] = _mm512_mask_blend_epi64( 0xf0,
-                                  _mm512_load_si512( (__m512i*)inout0 ),
-                                  _mm512_load_si512( (__m512i*)inout1 ) );
-     io.v512[1] = _mm512_mask_blend_epi64( 0xf0,
-                                  _mm512_load_si512( (__m512i*)inout0 +1 ),
-                                  _mm512_load_si512( (__m512i*)inout1 +1 ) );
-     io.v512[2] = _mm512_mask_blend_epi64( 0xf0,
-                                  _mm512_load_si512( (__m512i*)inout0 +2 ),
-                                  _mm512_load_si512( (__m512i*)inout1 +2 ) );
-
-     state0 = _mm512_xor_si512( state0, _mm512_add_epi64( in[0], io.v512[0] ) );
-     state1 = _mm512_xor_si512( state1, _mm512_add_epi64( in[1], io.v512[1] ) );
-     state2 = _mm512_xor_si512( state2, _mm512_add_epi64( in[2], io.v512[2] ) );
-*/
-
      //Applies the reduced-round transformation f to the sponge's state
      LYRA_ROUND_2WAY_AVX512( state0, state1, state2, state3 );
 
@@ -415,22 +419,6 @@ static inline void reducedDuplexRow_2way_overlap( uint64_t *State,
           io2.v512 = _mm512_mask_blend_epi64( 0xf0, io2.v512, out[2] );
        }
 
-/*
-       if ( rowOut == rowInOut0 )
-       {
-          io.v512[0] = _mm512_mask_blend_epi64( 0x0f, io.v512[0], out[0] );
-          io.v512[1] = _mm512_mask_blend_epi64( 0x0f, io.v512[1], out[1] );
-          io.v512[2] = _mm512_mask_blend_epi64( 0x0f, io.v512[2], out[2] );
-
-       }
-       if ( rowOut == rowInOut1 )
-       {
-          io.v512[0] = _mm512_mask_blend_epi64( 0xf0, io.v512[0], out[0] );
-          io.v512[1] = _mm512_mask_blend_epi64( 0xf0, io.v512[1], out[1] );
-          io.v512[2] = _mm512_mask_blend_epi64( 0xf0, io.v512[2], out[2] );
-       }
-*/
-
        //M[rowInOut][col] = M[rowInOut][col] XOR rotW(rand)
        t0 = _mm512_permutex_epi64( state0, 0x93 );
        t1 = _mm512_permutex_epi64( state1, 0x93 );
@@ -444,12 +432,23 @@ static inline void reducedDuplexRow_2way_overlap( uint64_t *State,
                                  _mm512_mask_blend_epi64( 0x11, t2, t1 ) );
      }
 
+/*     
+      casti_m256i( inout0, 0 ) = _mm512_castsi512_si256( io0.v512 );
+      casti_m256i( inout0, 2 ) = _mm512_castsi512_si256( io1.v512 );
+      casti_m256i( inout0, 4 ) = _mm512_castsi512_si256( io2.v512 );
+     _mm512_mask_store_epi64( inout1,    0xf0, io0.v512 );
+     _mm512_mask_store_epi64( inout1 +1, 0xf0, io1.v512 );
+     _mm512_mask_store_epi64( inout1 +2, 0xf0, io2.v512 );
+*/
+
+      
       casti_m256i( inout0, 0 ) = io0.v256lo;
       casti_m256i( inout1, 1 ) = io0.v256hi;
       casti_m256i( inout0, 2 ) = io1.v256lo;
       casti_m256i( inout1, 3 ) = io1.v256hi;
       casti_m256i( inout0, 4 ) = io2.v256lo;
       casti_m256i( inout1, 5 ) = io2.v256hi;
+
 /*     
      _mm512_mask_store_epi64( inout0,    0x0f, io.v512[0] );
      _mm512_mask_store_epi64( inout1,    0xf0, io.v512[0] );
@@ -459,10 +458,10 @@ static inline void reducedDuplexRow_2way_overlap( uint64_t *State,
      _mm512_mask_store_epi64( inout1 +2, 0xf0, io.v512[2] );
 */
       //Goes to next block
-      in     += BLOCK_LEN_M256I;
-      inout0 += BLOCK_LEN_M256I;
-      inout1 += BLOCK_LEN_M256I;
-      out    += BLOCK_LEN_M256I;
+      in     += BLOCK_LEN_256;
+      inout0 += BLOCK_LEN_256;
+      inout1 += BLOCK_LEN_256;
+      out    += BLOCK_LEN_256;
    }
 
    _mm512_store_si512( (__m512i*)State,     state0 );
@@ -551,10 +550,10 @@ static inline void reducedDuplexRow_2way_overlap_X( uint64_t *State,
       inout1[5] = inout.v256[5];
 
        //Goes to next block
-       in     += BLOCK_LEN_M256I;
-       inout0 += BLOCK_LEN_M256I * 2;
-       inout1 += BLOCK_LEN_M256I * 2;
-       out    += BLOCK_LEN_M256I;
+       in     += BLOCK_LEN_256;
+       inout0 += BLOCK_LEN_256 * 2;
+       inout1 += BLOCK_LEN_256 * 2;
+       out    += BLOCK_LEN_256;
    }
 
    _mm512_store_si512( (__m512i*)State,     state0 );
@@ -611,9 +610,9 @@ static inline void reducedDuplexRow_2way_unified( uint64_t *State,
      }
 
      //Goes to next block
-     in    += BLOCK_LEN_M256I;
-     inout += BLOCK_LEN_M256I;
-     out   += BLOCK_LEN_M256I;
+     in    += BLOCK_LEN_256;
+     inout += BLOCK_LEN_256;
+     out   += BLOCK_LEN_256;
    }
 
    _mm512_store_si512( (__m512i*)State,     state0 );

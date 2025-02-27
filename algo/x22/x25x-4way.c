@@ -1,14 +1,15 @@
 #include "x22i-gate.h"
-#include "algo/blake/blake-hash-4way.h"
+#include "algo/blake/blake512-hash.h"
 #include "algo/bmw/bmw-hash-4way.h"
 #include "algo/skein/skein-hash-4way.h"
 #include "algo/jh/jh-hash-4way.h"
 #include "algo/keccak/keccak-hash-4way.h"
 #include "algo/hamsi/hamsi-hash-4way.h"
 #include "algo/shabal/shabal-hash-4way.h"
-#include "algo/sha/sha-hash-4way.h"
+#include "algo/sha/sha512-hash.h"
+#include "algo/sha/sha256-hash.h"
 #include "algo/haval/haval-hash-4way.h"
-#include "algo/blake/blake2s-hash-4way.h"
+#include "algo/blake/blake2s-hash.h"
 #include "algo/echo/aes_ni/hash_api.h"
 #include "algo/groestl/aes_ni/hash-groestl.h"
 #include "algo/luffa/luffa_for_sse2.h"
@@ -17,23 +18,18 @@
 #include "algo/cubehash/cube-hash-2way.h"
 #include "algo/shavite/shavite-hash-2way.h"
 #include "algo/shavite/sph_shavite.h"
-#include "algo/simd/nist.h"
 #include "algo/simd/simd-hash-2way.h"
 #include "algo/fugue/fugue-aesni.h"
 #include "algo/whirlpool/sph_whirlpool.h"
 #include "algo/tiger/sph_tiger.h"
 #include "algo/lyra2/lyra2.h"
 #include "algo/gost/sph_gost.h"
-#include "algo/swifftx/swifftx.h"
 #include "algo/panama/panama-hash-4way.h"
 #include "algo/lanehash/lane.h"
 #if defined(__VAES__)
   #include "algo/groestl/groestl512-hash-4way.h"
   #include "algo/shavite/shavite-hash-4way.h"
   #include "algo/echo/echo-hash-4way.h"
-#endif
-#if defined(__SHA__)
-  #include "algo/sha/sha256-hash.h"
 #endif
 
 void x25x_shuffle( void *hash )
@@ -102,6 +98,9 @@ union _x25x_8way_ctx_overlay
 };
 typedef union _x25x_8way_ctx_overlay x25x_8way_ctx_overlay;
 
+static __thread __m512i x25x_8way_midstate[16] __attribute__((aligned(64)));
+static __thread blake512_8way_context blake512_8way_ctx __attribute__((aligned(64)));
+
 int x25x_8way_hash( void *output, const void *input, int thrid )
 {
    uint64_t vhash[8*8] __attribute__ ((aligned (128)));
@@ -118,9 +117,9 @@ int x25x_8way_hash( void *output, const void *input, int thrid )
    uint64_t vhashB[8*8] __attribute__ ((aligned (64)));
    x25x_8way_ctx_overlay ctx __attribute__ ((aligned (64)));
 
-   blake512_8way_init( &ctx.blake );
-   blake512_8way_update( &ctx.blake, input, 80 );
-   blake512_8way_close( &ctx.blake, vhash );
+   blake512_8way_final_le( &blake512_8way_ctx, vhash, casti_m512i( input, 9 ),
+                                                x25x_8way_midstate );
+
    dintrlv_8x64_512( hash0[0], hash1[0], hash2[0], hash3[0],
                      hash4[0], hash5[0], hash6[0], hash7[0], vhash );
 
@@ -271,7 +270,6 @@ int x25x_8way_hash( void *output, const void *input, int thrid )
    intrlv_8x64_512( vhash, hash0[10], hash1[10], hash2[10], hash3[10],
                            hash4[10], hash5[10], hash6[10], hash7[10] );
 
-   
 #else
 
    init_echo( &ctx.echo, 512 );
@@ -558,6 +556,7 @@ int scanhash_x25x_8way( struct work *work, uint32_t max_nonce,
 {
    uint32_t hash[8*8] __attribute__ ((aligned (128)));
    uint32_t vdata[20*8] __attribute__ ((aligned (64)));
+   __m128i edata[5] __attribute__ ((aligned (64)));
    uint32_t lane_hash[8] __attribute__ ((aligned (64)));
    uint32_t *hashd7 = &(hash[7*8]);
    uint32_t *pdata = work->data;
@@ -569,15 +568,20 @@ int scanhash_x25x_8way( struct work *work, uint32_t max_nonce,
    const int thr_id = mythr->id;
    const uint32_t targ32 = ptarget[7];
    const bool bench = opt_benchmark;
-
+   const __m512i eight = _mm512_set1_epi64( 8 );
    if ( bench )  ptarget[7] = 0x08ff;
 
-   InitializeSWIFFTX();
+   edata[0] = v128_swap64_32( casti_v128( pdata, 0 ) ); 
+   edata[1] = v128_swap64_32( casti_v128( pdata, 1 ) );   
+   edata[2] = v128_swap64_32( casti_v128( pdata, 2 ) );   
+   edata[3] = v128_swap64_32( casti_v128( pdata, 3 ) );   
+   edata[4] = v128_swap64_32( casti_v128( pdata, 4 ) );   
 
-   mm512_bswap32_intrlv80_8x64( vdata, pdata );
-   *noncev = mm512_intrlv_blend_32(
-              _mm512_set_epi32( n+7, 0, n+6, 0, n+5, 0, n+4, 0,
-                                n+3, 0, n+2, 0, n+1, 0, n,   0 ), *noncev );
+   mm512_intrlv80_8x64( vdata, edata );
+   *noncev = _mm512_add_epi32( *noncev, _mm512_set_epi32(
+                       0, 7, 0, 6, 0, 5, 0, 4, 0, 3, 0, 2, 0, 1, 0, 0 ) );
+   blake512_8way_prehash_le( &blake512_8way_ctx, x25x_8way_midstate, vdata ); 
+
    do
    {
       if ( x25x_8way_hash( hash, vdata, thr_id ) );
@@ -588,12 +592,11 @@ int scanhash_x25x_8way( struct work *work, uint32_t max_nonce,
          extr_lane_8x32( lane_hash, hash, lane, 256 );
          if ( likely( valid_hash( lane_hash, ptarget ) ) )
          {
-            pdata[19] = bswap_32( n + lane );
+            pdata[19] = n + lane;
             submit_solution( work, lane_hash, mythr );
          }
       }
-      *noncev = _mm512_add_epi32( *noncev,
-                                  m512_const1_64( 0x0000000800000000 ) );
+      *noncev = _mm512_add_epi32( *noncev, eight );
       n += 8;
    } while ( likely( ( n < last_nonce ) && !work_restart[thr_id].restart ) );
    pdata[19] = n;
@@ -637,7 +640,11 @@ union _x25x_4way_ctx_overlay
     panama_4way_context     panama;
     blake2s_4way_state      blake2s;
 };
+
 typedef union _x25x_4way_ctx_overlay x25x_4way_ctx_overlay;
+
+static __thread __m256i x25x_4way_midstate[16] __attribute__((aligned(64)));
+static __thread blake512_4way_context blake512_4way_ctx __attribute__((aligned(64)));
 
 int x25x_4way_hash( void *output, const void *input, int thrid )
 {
@@ -651,7 +658,9 @@ int x25x_4way_hash( void *output, const void *input, int thrid )
    uint64_t vhashB[8*4] __attribute__ ((aligned (64)));
    x25x_4way_ctx_overlay ctx __attribute__ ((aligned (64)));
 
-   blake512_4way_full( &ctx.blake, vhash, input, 80 );
+   blake512_4way_final_le( &blake512_4way_ctx, vhash, casti_m256i( input, 9 ),
+                                                x25x_4way_midstate );
+   
    dintrlv_4x64_512( hash0[0], hash1[0], hash2[0], hash3[0], vhash );
 
    bmw512_4way_init( &ctx.bmw );
@@ -905,6 +914,7 @@ int scanhash_x25x_4way( struct work* work, uint32_t max_nonce,
    uint32_t hash[8*4] __attribute__ ((aligned (64)));
    uint32_t vdata[20*4] __attribute__ ((aligned (64)));
    uint32_t lane_hash[8] __attribute__ ((aligned (64)));
+   __m128i edata[5] __attribute__ ((aligned (64)));
    uint32_t *hashd7 = &(hash[ 7*4 ]);
    uint32_t *pdata = work->data;
    uint32_t *ptarget = work->target;
@@ -914,15 +924,22 @@ int scanhash_x25x_4way( struct work* work, uint32_t max_nonce,
    uint32_t n = first_nonce;
    const int thr_id = mythr->id;
    const uint32_t targ32 = ptarget[7];
+   const __m256i four = _mm256_set1_epi64x( 4 );
    const bool bench = opt_benchmark;
 
    if ( bench ) ptarget[7] = 0x08ff;
 
-   InitializeSWIFFTX();
+   edata[0] = v128_swap64_32( casti_v128( pdata, 0 ) );
+   edata[1] = v128_swap64_32( casti_v128( pdata, 1 ) );
+   edata[2] = v128_swap64_32( casti_v128( pdata, 2 ) );
+   edata[3] = v128_swap64_32( casti_v128( pdata, 3 ) );
+   edata[4] = v128_swap64_32( casti_v128( pdata, 4 ) );
 
-   mm256_bswap32_intrlv80_4x64( vdata, pdata );
-   *noncev = mm256_intrlv_blend_32(
-                   _mm256_set_epi32( n+3, 0, n+2, 0, n+1, 0, n, 0 ), *noncev );
+   mm256_intrlv80_4x64( vdata, edata );
+   *noncev = _mm256_add_epi32( *noncev, _mm256_set_epi32(
+                                                 0, 3, 0, 2, 0, 1, 0, 0 ) );
+   blake512_4way_prehash_le( &blake512_4way_ctx, x25x_4way_midstate, vdata );
+   
    do
    {
       if ( x25x_4way_hash( hash, vdata, thr_id ) )
@@ -932,12 +949,11 @@ int scanhash_x25x_4way( struct work* work, uint32_t max_nonce,
          extr_lane_4x32( lane_hash, hash, lane, 256 );
          if ( valid_hash( lane_hash, ptarget ) )
          {
-            pdata[19] = bswap_32( n + lane );
+            pdata[19] = n + lane;
             submit_solution( work, lane_hash, mythr );
          }
       }
-      *noncev = _mm256_add_epi32( *noncev,
-                                  m256_const1_64( 0x0000000400000000 ) );
+      *noncev = _mm256_add_epi32( *noncev, four );
       n += 4;
    } while ( likely( ( n <= last_nonce ) && !work_restart[thr_id].restart ) );
    pdata[19] = n;

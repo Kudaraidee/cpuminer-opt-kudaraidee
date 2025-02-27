@@ -2,7 +2,6 @@
 #define RIPEMD_HASH_4WAY_H__
 
 #include <stddef.h>
-#include "algo/sha/sph_types.h"
 
 #if defined(__SSE4_2__)
 
@@ -34,7 +33,7 @@ void ripemd160_8way_update( ripemd160_8way_context *sc, const void *data,
                             size_t len );
 void ripemd160_8way_close( ripemd160_8way_context *sc, void *dst );
 
-#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+#if defined(SIMD512)
 
 typedef struct
 {

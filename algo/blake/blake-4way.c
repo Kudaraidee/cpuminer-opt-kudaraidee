@@ -1,5 +1,5 @@
 #include "blake-gate.h"
-#include "blake-hash-4way.h"
+#include "blake256-hash.h"
 #include <string.h>
 #include <stdint.h>
 #include <memory.h>
@@ -34,12 +34,12 @@ int scanhash_blake_4way( struct work *work, uint32_t max_nonce,
    if (opt_benchmark)
       HTarget = 0x7f;
 
-   mm128_bswap32_intrlv80_4x32( vdata, pdata );
+   v128_bswap32_intrlv80_4x32( vdata, pdata );
    blake256r14_4way_init( &blake_4w_ctx );
    blake256r14_4way_update( &blake_4w_ctx, vdata, 64 );
 
    do {
-      *noncev = mm128_bswap_32( _mm_set_epi32( n+3, n+2, n+1, n ) );
+      *noncev = v128_bswap32( _mm_set_epi32( n+3, n+2, n+1, n ) );
 
       blakehash_4way( hash, vdata );
 

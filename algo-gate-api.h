@@ -89,27 +89,36 @@
 typedef  uint32_t set_t;
 
 #define EMPTY_SET        0
-#define SSE2_OPT         1
-#define AES_OPT          2  
-#define SSE42_OPT        4
-#define AVX_OPT          8   // Sandybridge
-#define AVX2_OPT      0x10   // Haswell, Zen1
-#define SHA_OPT       0x20   // Zen1, Icelake (sha256)
-#define AVX512_OPT    0x40   // Skylake-X (AVX512[F,VL,DQ,BW])
-#define VAES_OPT      0x80   // Icelake (VAES & AVX512)
+#define SSE2_OPT         1         // parity with NEON
+#define SSSE3_OPT        1 <<  1   // Intel Core2
+#define SSE41_OPT        1 <<  2
+#define SSE42_OPT        1 <<  3
+#define AVX_OPT          1 <<  4   // Intel Sandybridge
+#define AVX2_OPT         1 <<  5   // Intel Haswell, AMD Zen1
+#define AVX512_OPT       1 <<  6   // Skylake-X, Zen4 (AVX512[F,VL,DQ,BW])
+#define AES_OPT          1 <<  7   // Intel Westmere, AArch64
+#define VAES_OPT         1 <<  8   // Icelake, Zen3
+#define SHA256_OPT       1 <<  9   // Zen1, Icelake, AArch64 
+#define SHA512_OPT       1 << 10   // Intel Arrow Lake, AArch64 
+#define NEON_OPT         1 << 11   // AArch64 
+#define AVX10_256        1 << 12
+#define AVX10_512        1 << 13
 
+// AVX10 does not have explicit algo features:
+//  AVX10_512 is compatible with AVX512 + VAES
+//  AVX10_256 is compatible with AVX2 + VAES
 
 // return set containing all elements from sets a & b
-inline set_t set_union ( set_t a, set_t b ) { return a | b; }
+static inline set_t set_union ( set_t a, set_t b ) { return a | b; }
 
 // return set contained common elements from sets a & b
-inline set_t set_intsec ( set_t a, set_t b) { return a & b; }
+static inline set_t set_intsec ( set_t a, set_t b) { return a & b; }
 
 // all elements in set a are included in set b
-inline bool set_incl ( set_t a, set_t b ) { return (a & b) == a; }
+static inline bool set_incl ( set_t a, set_t b ) { return (a & b) == a; }
 
 // no elements in set a are included in set b
-inline bool set_excl ( set_t a, set_t b ) { return (a & b) == 0; }
+static inline bool set_excl ( set_t a, set_t b ) { return (a & b) == 0; }
 
 typedef struct
 {
@@ -144,7 +153,7 @@ void ( *gen_merkle_root )       ( char*, struct stratum_ctx* );
 void ( *build_extraheader )     ( struct work*, struct stratum_ctx* );
 
 void ( *build_block_header )    ( struct work*, uint32_t, uint32_t*,
-	                                uint32_t*, uint32_t, uint32_t,
+	                                uint32_t*,   uint32_t, uint32_t,
                                    unsigned char* );
 
 // Build mining.submit message
@@ -155,19 +164,13 @@ char* ( *malloc_txs_request )   ( struct work* );
 // Big endian or little endian
 void ( *set_work_data_endian )  ( struct work* );
 
-double ( *calc_network_diff )   ( struct work* );
-
-// Wait for first work
-bool ( *ready_to_mine )         ( struct work*, struct stratum_ctx*, int );
-
 // Diverge mining threads
-bool ( *do_this_thread )        ( int );
+//bool ( *do_this_thread )        ( int );
 
 // After do_this_thread
-void ( *resync_threads )        ( int, struct work* );
+//void ( *resync_threads )        ( int, struct work* );
 
-// No longer needed
-json_t* (*longpoll_rpc_call)      ( CURL*, int*, char* );
+json_t* ( *longpoll_rpc_call )  ( CURL*, int*, char* );
 
 set_t optimizations;
 int  ( *get_work_data_size )     ();
@@ -245,7 +248,7 @@ int scanhash_4way_64in_32out( struct work *work, uint32_t max_nonce,
 
 #endif
 
-#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+#if defined(SIMD512)
 
 //int scanhash_8way_64in_64out( struct work *work, uint32_t max_nonce,
 //                      uint64_t *hashes_done, struct thr_info *mythr );
@@ -270,7 +273,9 @@ void std_get_new_work( struct work *work, struct work *g_work, int thr_id,
                        uint32_t* end_nonce_ptr );
 
 void sha256d_gen_merkle_root( char *merkle_root, struct stratum_ctx *sctx );
-void SHA256_gen_merkle_root ( char *merkle_root, struct stratum_ctx *sctx );
+void sha256_gen_merkle_root ( char *merkle_root, struct stratum_ctx *sctx );
+// OpenSSL sha256 deprecated
+//void SHA256_gen_merkle_root ( char *merkle_root, struct stratum_ctx *sctx );
 
 bool std_le_work_decode( struct work *work );
 bool std_be_work_decode( struct work *work );
@@ -286,8 +291,6 @@ char* std_malloc_txs_request( struct work *work );
 // Default is do_nothing, little endian is assumed
 void set_work_data_big_endian( struct work *work );
 
-double std_calc_network_diff( struct work *work );
-
 void std_build_block_header( struct work* g_work, uint32_t version,
 	                          uint32_t *prevhash,  uint32_t *merkle_root,
    	                       uint32_t ntime,      uint32_t nbits,
@@ -296,9 +299,6 @@ void std_build_block_header( struct work* g_work, uint32_t version,
 void std_build_extraheader( struct work *work, struct stratum_ctx *sctx );
 
 json_t* std_longpoll_rpc_call( CURL *curl, int *err, char *lp_url );
-
-bool std_ready_to_mine( struct work* work, struct stratum_ctx* stratum,
-                        int thr_id );
 
 int std_get_work_data_size();
 

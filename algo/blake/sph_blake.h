@@ -42,7 +42,7 @@ extern "C"{
 #endif
 
 #include <stddef.h>
-#include "algo/sha/sph_types.h"
+#include "compat/sph_types.h"
 
 /**
  * Output size (in bits) for BLAKE-224.
@@ -82,9 +82,9 @@ typedef struct {
 #ifndef DOXYGEN_IGNORE
 	unsigned char buf[64];    /* first field, for alignment */
 	size_t ptr;
-	sph_u32 H[8];
-	sph_u32 S[4];
-	sph_u32 T0, T1;
+	uint32_t H[8];
+	uint32_t S[4];
+	uint32_t T0, T1;
 #endif
 } sph_blake_small_context;
 
@@ -198,6 +198,7 @@ void sph_blake256_init(void *cc);
  * @param len    the input data length (in bytes)
  */
 void sph_blake256(void *cc, const void *data, size_t len);
+void sph_blake256_update_le(void *cc, const void *data, size_t len);
 
 /**
  * Terminate the current BLAKE-256 computation and output the result into

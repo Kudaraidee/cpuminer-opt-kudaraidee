@@ -74,6 +74,10 @@
    _mm256_or_si256( _mm256_and_si256( x, y ), \
                     _mm256_andnot_si256( x, z ) )
 
+#define mm256_rol_var_32( v, c ) \
+   _mm256_or_si256( _mm256_slli_epi32( v, c ), \
+                    _mm256_srli_epi32( v, 32-(c) ) )
+
 void sm3_8way_compress( __m256i *digest, __m256i *block )
 {
    __m256i W[68], W1[64];
@@ -236,10 +240,10 @@ void sm3_8way_close( void *cc, void *dst )
 
 #if defined(__SSE2__)
 
-#define P0(x) _mm_xor_si128( x, _mm_xor_si128( mm128_rol_32( x,  9 ), \
-                                               mm128_rol_32( x, 17 ) ) ) 
-#define P1(x) _mm_xor_si128( x, _mm_xor_si128( mm128_rol_32( x, 15 ), \
-                                               mm128_rol_32( x, 23 ) ) ) 
+#define P0(x) _mm_xor_si128( x, _mm_xor_si128( v128_rol32( x,  9 ), \
+                                               v128_rol32( x, 17 ) ) )
+#define P1(x) _mm_xor_si128( x, _mm_xor_si128( v128_rol32( x, 15 ), \
+                                               v128_rol32( x, 23 ) ) )
 
 #define FF0(x,y,z) _mm_xor_si128( x, _mm_xor_si128( y, z ) )
 #define FF1(x,y,z) _mm_or_si128( _mm_or_si128( _mm_and_si128( x, y ), \
@@ -250,6 +254,9 @@ void sm3_8way_close( void *cc, void *dst )
 #define GG1(x,y,z) _mm_or_si128( _mm_and_si128( x, y ), \
                                  _mm_andnot_si128( x, z ) )
 
+
+#define mm128_rol_var_32( v, c ) \
+   _mm_or_si128( _mm_slli_epi32( v, c ), _mm_srli_epi32( v, 32-(c) ) )
 
 void sm3_4way_compress( __m128i *digest, __m128i *block )
 {
@@ -266,13 +273,13 @@ void sm3_4way_compress( __m128i *digest, __m128i *block )
    int j;
 
    for ( j = 0; j < 16; j++ )
-      W[j] = mm128_bswap_32( block[j] );
+      W[j] = v128_bswap32( block[j] );
 
    for ( j = 16; j < 68; j++ )
       W[j] = _mm_xor_si128( P1( _mm_xor_si128( _mm_xor_si128( W[ j-16 ],
                                                               W[ j-9 ] ),
-                                               mm128_rol_32( W[ j-3 ], 15 ) ) ),
-                            _mm_xor_si128( mm128_rol_32( W[ j-13 ], 7 ),
+                                               v128_rol32( W[ j-3 ], 15 ) ) ),
+                            _mm_xor_si128( v128_rol32( W[ j-13 ], 7 ),
                                            W[ j-6 ] ) );
 
    for( j = 0; j < 64; j++ )
@@ -281,19 +288,19 @@ void sm3_4way_compress( __m128i *digest, __m128i *block )
    T = _mm_set1_epi32( 0x79CC4519UL );
    for( j =0; j < 16; j++ )
    {
-      SS1 = mm128_rol_32( _mm_add_epi32( _mm_add_epi32( mm128_rol_32(A,12), E ),
+      SS1 = v128_rol32( _mm_add_epi32( _mm_add_epi32( v128_rol32(A,12), E ),
                                       mm128_rol_var_32( T, j ) ), 7 );
-      SS2 = _mm_xor_si128( SS1, mm128_rol_32( A, 12 ) );
+      SS2 = _mm_xor_si128( SS1, v128_rol32( A, 12 ) );
       TT1 = _mm_add_epi32( _mm_add_epi32( _mm_add_epi32( FF0( A, B, C ), D ),
                                           SS2 ), W1[j] );
       TT2 = _mm_add_epi32( _mm_add_epi32( _mm_add_epi32( GG0( E, F, G ), H ),
                                           SS1 ), W[j] );
       D = C;
-      C = mm128_rol_32( B, 9 );
+      C = v128_rol32( B, 9 );
       B = A;
       A = TT1;
       H = G;
-      G = mm128_rol_32( F, 19 );
+      G = v128_rol32( F, 19 );
       F = E;
       E = P0( TT2 );
    }
@@ -301,19 +308,19 @@ void sm3_4way_compress( __m128i *digest, __m128i *block )
    T = _mm_set1_epi32( 0x7A879D8AUL );
    for( j =16; j < 64; j++ )
    {
-      SS1 = mm128_rol_32( _mm_add_epi32( _mm_add_epi32( mm128_rol_32(A,12), E ),
+      SS1 = v128_rol32( _mm_add_epi32( _mm_add_epi32( v128_rol32(A,12), E ),
                                       mm128_rol_var_32( T, j&31 ) ), 7 );
-      SS2 = _mm_xor_si128( SS1, mm128_rol_32( A, 12 ) );
+      SS2 = _mm_xor_si128( SS1, v128_rol32( A, 12 ) );
       TT1 = _mm_add_epi32( _mm_add_epi32( _mm_add_epi32( FF1( A, B, C ), D ), 
                                           SS2 ), W1[j] );
       TT2 = _mm_add_epi32( _mm_add_epi32( _mm_add_epi32( GG1( E, F, G ), H ),
                                           SS1 ), W[j] );
       D = C;
-      C = mm128_rol_32( B, 9 );
+      C = v128_rol32( B, 9 );
       B = A;
       A = TT1;
       H = G;
-      G = mm128_rol_32( F, 19 );
+      G = v128_rol32( F, 19 );
       F = E;
       E = P0( TT2 );
    }
@@ -401,14 +408,14 @@ void sm3_4way_close( void *cc, void *dst )
       memset_zero_128( block, ( SM3_BLOCK_SIZE - 8 ) >> 2 );
    }
 
-   count[0] = mm128_bswap_32(
+   count[0] = v128_bswap32(
                   _mm_set1_epi32( ctx->nblocks >> 23 ) );
-   count[1] = mm128_bswap_32( _mm_set1_epi32( ( ctx->nblocks << 9 ) +
-                                              ( ctx->num     << 3 ) ) );
+   count[1] = v128_bswap32( _mm_set1_epi32( ( ctx->nblocks << 9 ) +
+                                            ( ctx->num     << 3 ) ) );
    sm3_4way_compress( ctx->digest, block );
 
    for ( i = 0; i < 8 ; i++ )
-     hash[i] = mm128_bswap_32( ctx->digest[i] );
+     hash[i] = v128_bswap32( ctx->digest[i] );
 }
 
 #endif

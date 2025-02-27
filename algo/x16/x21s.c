@@ -8,13 +8,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+//#include <mm_malloc.h>
 #include "algo/sha/sha256-hash.h"
 #include "algo/haval/sph-haval.h"
 #include "algo/tiger/sph_tiger.h"
 #include "algo/gost/sph_gost.h"
 #include "algo/lyra2/lyra2.h"
 
-#if !defined(X16R_8WAY) && !defined(X16R_4WAY)
+#if !defined(X21S_8WAY) && !defined(X21S_4WAY)
 
 static __thread uint64_t* x21s_matrix;
 
@@ -32,7 +33,8 @@ int x21s_hash( void* output, const void* input, int thrid )
    uint32_t _ALIGN(128) hash[16];
    x21s_context_overlay ctx;
 
-   if ( !x16r_hash_generic( hash, input, thrid ) )
+   if ( !x16r_hash_generic( hash, input, thrid, x16r_hash_order,
+                            X16R_HASH_FUNC_COUNT ) )
       return 0;
 
    sph_haval256_5_init( &ctx.haval );
@@ -71,7 +73,7 @@ int scanhash_x21s( struct work *work, uint32_t max_nonce,
    const bool bench = opt_benchmark;
    if ( bench )  ptarget[7] = 0x0cff;
 
-   mm128_bswap32_80( edata, pdata );
+   v128_bswap32_80( edata, pdata );
 
    static __thread uint32_t s_ntime = UINT32_MAX;
    if ( s_ntime != pdata[17] )
@@ -83,7 +85,7 @@ int scanhash_x21s( struct work *work, uint32_t max_nonce,
           applog( LOG_INFO, "hash order %s (%08x)", x16r_hash_order, ntime );
    }
 
-   x16r_prehash( edata, pdata );
+   x16r_prehash( edata, pdata, x16r_hash_order );
 
    do
    {
@@ -107,7 +109,7 @@ bool x21s_thread_init()
    const int64_t ROW_LEN_BYTES = ROW_LEN_INT64 * 8;
 
    const int size = (int64_t)ROW_LEN_BYTES * 4; // nRows;
-   x21s_matrix = _mm_malloc( size, 64 );
+   x21s_matrix = mm_malloc( size, 64 );
    return x21s_matrix;
 }
 

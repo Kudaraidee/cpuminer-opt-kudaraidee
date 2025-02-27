@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include "algo/blake/blake-hash-4way.h"
+#include "algo/blake/blake512-hash.h"
 #include "algo/bmw/bmw-hash-4way.h"
 #include "algo/groestl/aes_ni/hash-groestl.h"
 #include "algo/jh/jh-hash-4way.h"
@@ -19,7 +19,7 @@
 #include "algo/fugue/fugue-aesni.h"
 #include "algo/shabal/shabal-hash-4way.h"
 #include "algo/whirlpool/sph_whirlpool.h"
-#include "algo/sha/sha-hash-4way.h"
+#include "algo/sha/sha512-hash.h"
 #include "algo/haval/haval-hash-4way.h"
 #if defined(__VAES__)
   #include "algo/groestl/groestl512-hash-4way.h"
@@ -62,14 +62,14 @@ int xevan_8way_hash( void *output, const void *input, int thr_id )
      uint64_t vhash[16<<3] __attribute__ ((aligned (128)));
      uint64_t vhashA[16<<3] __attribute__ ((aligned (64)));
      uint64_t vhashB[16<<3] __attribute__ ((aligned (64)));
-     uint64_t hash0[16] __attribute__ ((aligned (64)));
-     uint64_t hash1[16] __attribute__ ((aligned (64)));
-     uint64_t hash2[16] __attribute__ ((aligned (64)));
-     uint64_t hash3[16] __attribute__ ((aligned (64)));
-     uint64_t hash4[16] __attribute__ ((aligned (64)));
-     uint64_t hash5[16] __attribute__ ((aligned (64)));
-     uint64_t hash6[16] __attribute__ ((aligned (64)));
-     uint64_t hash7[16] __attribute__ ((aligned (64)));
+     uint64_t hash0[16] __attribute__ ((aligned (32)));
+     uint64_t hash1[16] __attribute__ ((aligned (32)));
+     uint64_t hash2[16] __attribute__ ((aligned (32)));
+     uint64_t hash3[16] __attribute__ ((aligned (32)));
+     uint64_t hash4[16] __attribute__ ((aligned (32)));
+     uint64_t hash5[16] __attribute__ ((aligned (32)));
+     uint64_t hash6[16] __attribute__ ((aligned (32)));
+     uint64_t hash7[16] __attribute__ ((aligned (32)));
      const int dataLen = 128;
      xevan_8way_context_overlay ctx __attribute__ ((aligned (64)));
 
@@ -430,13 +430,13 @@ typedef union _xevan_4way_context_overlay xevan_4way_context_overlay;
 
 int xevan_4way_hash( void *output, const void *input, int thr_id )
 {
-     uint64_t hash0[16] __attribute__ ((aligned (64)));
-     uint64_t hash1[16] __attribute__ ((aligned (64)));
-     uint64_t hash2[16] __attribute__ ((aligned (64)));
-     uint64_t hash3[16] __attribute__ ((aligned (64)));
      uint64_t vhash[16<<2] __attribute__ ((aligned (64)));
      uint64_t vhashA[16<<2] __attribute__ ((aligned (64)));
      uint64_t vhashB[16<<2] __attribute__ ((aligned (64)));
+     uint64_t hash0[16] __attribute__ ((aligned (32)));
+     uint64_t hash1[16] __attribute__ ((aligned (32)));
+     uint64_t hash2[16] __attribute__ ((aligned (32)));
+     uint64_t hash3[16] __attribute__ ((aligned (32)));
      const int dataLen = 128;
      xevan_4way_context_overlay ctx __attribute__ ((aligned (64)));
 

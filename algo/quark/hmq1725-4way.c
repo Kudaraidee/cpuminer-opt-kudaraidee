@@ -1,7 +1,7 @@
 #include "hmq1725-gate.h"
 #include <string.h>
 #include <stdint.h>
-#include "algo/blake/blake-hash-4way.h"
+#include "algo/blake/blake512-hash.h"
 #include "algo/bmw/bmw-hash-4way.h"
 #include "algo/groestl/aes_ni/hash-groestl.h"
 #include "algo/skein/skein-hash-4way.h"
@@ -11,8 +11,8 @@
 #include "algo/luffa/luffa-hash-2way.h"
 #include "algo/cubehash/cube-hash-2way.h"
 #include "algo/cubehash/cubehash_sse2.h"
-#include "algo/simd/nist.h"
 #include "algo/shavite/sph_shavite.h"
+#include "algo/shavite/shavite-hash-2way.h"
 #include "algo/simd/simd-hash-2way.h"
 #include "algo/echo/aes_ni/hash_api.h"
 #include "algo/hamsi/hamsi-hash-4way.h"
@@ -20,7 +20,7 @@
 #include "algo/shabal/shabal-hash-4way.h"
 #include "algo/whirlpool/sph_whirlpool.h"
 #include "algo/haval/haval-hash-4way.h"
-#include "algo/sha/sha-hash-4way.h"
+#include "algo/sha/sha512-hash.h"
 #if defined(__VAES__)
   #include "algo/groestl/groestl512-hash-4way.h"
   #include "algo/shavite/shavite-hash-4way.h"
@@ -64,17 +64,17 @@ extern void hmq1725_8way_hash(void *state, const void *input)
    uint32_t vhashA[16<<3] __attribute__ ((aligned (64)));
    uint32_t vhashB[16<<3] __attribute__ ((aligned (64)));
    uint32_t vhashC[16<<3] __attribute__ ((aligned (64)));
-   uint32_t hash0 [16]    __attribute__ ((aligned (64)));
-   uint32_t hash1 [16]    __attribute__ ((aligned (64)));
-   uint32_t hash2 [16]    __attribute__ ((aligned (64)));
-   uint32_t hash3 [16]    __attribute__ ((aligned (64)));
-   uint32_t hash4 [16]    __attribute__ ((aligned (64)));
-   uint32_t hash5 [16]    __attribute__ ((aligned (64)));
-   uint32_t hash6 [16]    __attribute__ ((aligned (64)));
-   uint32_t hash7 [16]    __attribute__ ((aligned (64)));
+   uint32_t hash0 [16]    __attribute__ ((aligned (32)));
+   uint32_t hash1 [16]    __attribute__ ((aligned (32)));
+   uint32_t hash2 [16]    __attribute__ ((aligned (32)));
+   uint32_t hash3 [16]    __attribute__ ((aligned (32)));
+   uint32_t hash4 [16]    __attribute__ ((aligned (32)));
+   uint32_t hash5 [16]    __attribute__ ((aligned (32)));
+   uint32_t hash6 [16]    __attribute__ ((aligned (32)));
+   uint32_t hash7 [16]    __attribute__ ((aligned (32)));
    hmq1725_8way_context_overlay ctx __attribute__ ((aligned (64)));
    __mmask8 vh_mask;
-   const __m512i vmask = m512_const1_64( 24 );
+   const __m512i vmask = _mm512_set1_epi64( 24 );
    const uint32_t mask = 24;
    __m512i* vh  = (__m512i*)vhash;
    __m512i* vhA = (__m512i*)vhashA;
@@ -98,8 +98,7 @@ extern void hmq1725_8way_hash(void *state, const void *input)
    intrlv_8x64_512( vhash, hash0, hash1, hash2, hash3,
                            hash4, hash5, hash6,  hash7 );
 
-   vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], vmask ),
-                                       m512_zero );
+   vh_mask = _mm512_testn_epi64_mask( vh[0], vmask );
 
    // A
 #if defined(__VAES__)
@@ -154,8 +153,7 @@ extern void hmq1725_8way_hash(void *state, const void *input)
    keccak512_8way_update( &ctx.keccak, vhash, 64 );
    keccak512_8way_close( &ctx.keccak, vhash );
 
-   vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], vmask ),
-                                       m512_zero );
+   vh_mask = _mm512_testn_epi64_mask( vh[0], vmask );
 
    // A
    if ( ( vh_mask & 0xff ) != 0xff )
@@ -174,8 +172,7 @@ extern void hmq1725_8way_hash(void *state, const void *input)
    cube_4way_full( &ctx.cube, vhashB, 512, vhashB, 64 );
 
    rintrlv_4x128_8x64( vhash, vhashA, vhashB, 512 );
-   vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], vmask ),
-                                       m512_zero );
+   vh_mask = _mm512_testn_epi64_mask( vh[0], vmask );
 
    if ( likely( ( vh_mask & 0xff ) != 0xff ) )
    {
@@ -223,8 +220,7 @@ extern void hmq1725_8way_hash(void *state, const void *input)
    simd512_4way_full( &ctx.simd, vhashB, vhashB, 64 );
 
    rintrlv_4x128_8x64( vhash, vhashA, vhashB, 512 );
-   vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], vmask ),
-                                       m512_zero );
+   vh_mask = _mm512_testn_epi64_mask( vh[0], vmask );
    dintrlv_8x64_512( hash0, hash1, hash2, hash3,
                      hash4, hash5, hash6, hash7, vhash );
    // 4x32 for haval
@@ -302,8 +298,7 @@ extern void hmq1725_8way_hash(void *state, const void *input)
 
    blake512_8way_full( &ctx.blake, vhash, vhash, 64 );
 
-   vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], vmask ),
-                                       m512_zero );
+   vh_mask = _mm512_testn_epi64_mask( vh[0], vmask );
 
    // A
 #if defined(__VAES__)
@@ -374,8 +369,7 @@ extern void hmq1725_8way_hash(void *state, const void *input)
 
    intrlv_8x64_512( vhash, hash0, hash1, hash2, hash3,
                            hash4, hash5, hash6, hash7 );
-   vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], vmask ),
-                                       m512_zero );
+   vh_mask = _mm512_testn_epi64_mask( vh[0], vmask );
 
      // A   
 #if defined(__VAES__)
@@ -455,8 +449,7 @@ extern void hmq1725_8way_hash(void *state, const void *input)
 
    intrlv_8x64_512( vhash, hash0, hash1, hash2, hash3,
                            hash4, hash5, hash6, hash7 );
-   vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], vmask ),
-                                       m512_zero );
+   vh_mask = _mm512_testn_epi64_mask( vh[0], vmask );
 
    if ( hash0[0] & mask )
       fugue512_full( &ctx.fugue, hash0, hash0, 64 );
@@ -520,8 +513,7 @@ extern void hmq1725_8way_hash(void *state, const void *input)
    sha512_8way_update( &ctx.sha512, vhash, 64 );
    sha512_8way_close( &ctx.sha512, vhash );
 
-   vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], vmask ),
-                                       m512_zero );
+   vh_mask = _mm512_testn_epi64_mask( vh[0], vmask );
    dintrlv_8x64_512( hash0, hash1, hash2, hash3,
                      hash4, hash5, hash6, hash7, vhash );
 
@@ -600,7 +592,7 @@ int scanhash_hmq1725_8way( struct work *work, uint32_t max_nonce,
           }
        }
        *noncev = _mm512_add_epi32( *noncev,
-                                   m512_const1_64( 0x0000000800000000 ) );
+                                   _mm512_set1_epi64( 0x0000000800000000 ) );
        n += 8;
     } while ( likely( ( n < last_nonce ) && !work_restart[thr_id].restart ) );
 
@@ -624,8 +616,9 @@ union _hmq1725_4way_context_overlay
     cubehashParam           cube;
     cube_2way_context       cube2;
     sph_shavite512_context  shavite;
-    hashState_sd            sd;
-    simd_2way_context       simd;
+    simd512_context         simd;
+    shavite512_2way_context shavite2;
+    simd_2way_context       simd_2way;
     hashState_echo          echo;
     hamsi512_4way_context   hamsi;
     hashState_fugue         fugue;
@@ -633,23 +626,27 @@ union _hmq1725_4way_context_overlay
     sph_whirlpool_context   whirlpool;
     sha512_4way_context     sha512;
     haval256_5_4way_context haval;
+#if defined(__VAES__)
+    groestl512_2way_context groestl2;
+    echo_2way_context       echo2;
+#endif    
 } __attribute__ ((aligned (64)));
 
 typedef union _hmq1725_4way_context_overlay hmq1725_4way_context_overlay;
 
 extern void hmq1725_4way_hash(void *state, const void *input)
 {
-   uint32_t hash0 [16]    __attribute__ ((aligned (64)));
-   uint32_t hash1 [16]    __attribute__ ((aligned (64)));
-   uint32_t hash2 [16]    __attribute__ ((aligned (64)));
-   uint32_t hash3 [16]    __attribute__ ((aligned (64)));
    uint32_t vhash [16<<2] __attribute__ ((aligned (64)));
    uint32_t vhashA[16<<2] __attribute__ ((aligned (64)));
    uint32_t vhashB[16<<2] __attribute__ ((aligned (64)));
+   uint32_t hash0 [16]    __attribute__ ((aligned (32)));
+   uint32_t hash1 [16]    __attribute__ ((aligned (32)));
+   uint32_t hash2 [16]    __attribute__ ((aligned (32)));
+   uint32_t hash3 [16]    __attribute__ ((aligned (32)));
    hmq1725_4way_context_overlay ctx __attribute__ ((aligned (64)));
    __m256i vh_mask;     
    int h_mask;
-   const __m256i vmask = m256_const1_64( 24 );
+   const __m256i vmask = _mm256_set1_epi64x( 24 );
    const uint32_t mask = 24;
    __m256i* vh  = (__m256i*)vhash;
    __m256i* vhA = (__m256i*)vhashA;
@@ -750,18 +747,13 @@ extern void hmq1725_4way_hash(void *state, const void *input)
 
     mm256_blend_hash_4x64( vh, vhA, vhB, vh_mask );
 
-    dintrlv_4x64( hash0, hash1, hash2, hash3, vhash, 512 );
+    rintrlv_4x64_2x128( vhashA, vhashB, vhash, 512 );
 
-    shavite512_full( &ctx.shavite, hash0, hash0, 64 );
-    shavite512_full( &ctx.shavite, hash1, hash1, 64 );
-    shavite512_full( &ctx.shavite, hash2, hash2, 64 );
-    shavite512_full( &ctx.shavite, hash3, hash3, 64 );
+    shavite512_2way_full( &ctx.shavite2, vhashA, vhashA, 64 );
+    shavite512_2way_full( &ctx.shavite2, vhashB, vhashB, 64 );
 
-    intrlv_2x128_512( vhashA, hash0, hash1 );
-    intrlv_2x128_512( vhashB, hash2, hash3 );
-
-    simd512_2way_full( &ctx.simd, vhashA, vhashA, 64 );
-    simd512_2way_full( &ctx.simd, vhashB, vhashB, 64 );
+    simd512_2way_full( &ctx.simd_2way, vhashA, vhashA, 64 );
+    simd512_2way_full( &ctx.simd_2way, vhashB, vhashB, 64 );
 
     rintrlv_2x128_4x64( vhash, vhashA, vhashB, 512 );     
 
@@ -795,6 +787,17 @@ extern void hmq1725_4way_hash(void *state, const void *input)
 
     mm256_blend_hash_4x64( vh, vhA, vhB, vh_mask );
 
+#if defined(__VAES__)
+
+   rintrlv_4x64_2x128( vhashA, vhashB, vhash, 512 );
+
+   echo_2way_full( &ctx.echo2, vhashA, 512, vhashA, 64 );
+   echo_2way_full( &ctx.echo2, vhashB, 512, vhashB, 64 );
+
+   rintrlv_2x128_4x64( vhash, vhashA, vhashB, 512 );
+
+#else
+    
     dintrlv_4x64( hash0, hash1, hash2, hash3, vhash, 512 );
     
     echo_full( &ctx.echo, (BitSequence *)hash0, 512,
@@ -807,7 +810,9 @@ extern void hmq1725_4way_hash(void *state, const void *input)
                     (const BitSequence *)hash3, 64 );
 
     intrlv_4x64( vhash, hash0, hash1, hash2, hash3, 512 );
-     
+
+#endif
+
     blake512_4way_full( &ctx.blake, vhash, vhash, 64 );
 
     dintrlv_4x64( hash0, hash1, hash2, hash3, vhash, 512 );
@@ -863,41 +868,25 @@ extern void hmq1725_4way_hash(void *state, const void *input)
        echo_full( &ctx.echo, (BitSequence *)hash0, 512,
                        (const BitSequence *)hash0, 64 );
     else
-    {
-       init_sd( &ctx.sd, 512 );
-       update_final_sd( &ctx.sd, (BitSequence *)hash0,
-                           (const BitSequence *)hash0, 512 );
-    }
+       simd512_ctx( &ctx.simd, hash0, hash0, 64 );
 
    if ( hash1[0] & mask ) //4
        echo_full( &ctx.echo, (BitSequence *)hash1, 512,
                        (const BitSequence *)hash1, 64 );
    else
-   {
-       init_sd( &ctx.sd, 512 );
-       update_final_sd( &ctx.sd, (BitSequence *)hash1,
-                           (const BitSequence *)hash1, 512 );
-   }
+       simd512_ctx( &ctx.simd, hash1, hash1, 64 );
 
    if ( hash2[0] & mask ) //4
        echo_full( &ctx.echo, (BitSequence *)hash2, 512,
                        (const BitSequence *)hash2, 64 );
    else
-   {
-       init_sd( &ctx.sd, 512 );
-       update_final_sd( &ctx.sd, (BitSequence *)hash2,
-                           (const BitSequence *)hash2, 512 );
-   }
+       simd512_ctx( &ctx.simd, hash2, hash2, 64 );
 
    if ( hash3[0] & mask ) //4
        echo_full( &ctx.echo, (BitSequence *)hash3, 512,
                        (const BitSequence *)hash3, 64 );
    else
-   {
-       init_sd( &ctx.sd, 512 );
-       update_final_sd( &ctx.sd, (BitSequence *)hash3,
-                           (const BitSequence *)hash3, 512 );
-   }
+       simd512_ctx( &ctx.simd, hash3, hash3, 64 );
 
    intrlv_4x32( vhash, hash0, hash1, hash2, hash3, 512 );
 
@@ -939,6 +928,17 @@ extern void hmq1725_4way_hash(void *state, const void *input)
 
    mm256_blend_hash_4x64( vh, vhA, vhB, vh_mask );
 
+#if defined(__VAES__)
+
+   rintrlv_4x64_2x128( vhashA, vhashB, vhash, 512 );
+
+   groestl512_2way_full( &ctx.groestl2, vhashA, vhashA, 64 );
+   groestl512_2way_full( &ctx.groestl2, vhashB, vhashB, 64 );
+
+   rintrlv_2x128_4x64( vhash, vhashA, vhashB, 512 );
+
+#else
+   
    dintrlv_4x64( hash0, hash1, hash2, hash3, vhash, 512 );
 
    groestl512_full( &ctx.groestl, (char*)hash0, (char*)hash0, 512 );
@@ -947,6 +947,8 @@ extern void hmq1725_4way_hash(void *state, const void *input)
    groestl512_full( &ctx.groestl, (char*)hash3, (char*)hash3, 512 );
 
    intrlv_4x64( vhash, hash0, hash1, hash2, hash3, 512 );
+
+#endif
 
    sha512_4way_init( &ctx.sha512 ); 
    sha512_4way_update( &ctx.sha512, vhash, 64 );
@@ -1022,7 +1024,7 @@ int scanhash_hmq1725_4way( struct work *work, uint32_t max_nonce,
           }
        }
        *noncev = _mm256_add_epi32( *noncev,
-                                   m256_const1_64( 0x0000000400000000 ) );
+                                   _mm256_set1_epi64x( 0x0000000400000000 ) );
        n += 4;
     } while ( likely( ( n < last_nonce ) && !work_restart[thr_id].restart ) );
     pdata[19] = n;

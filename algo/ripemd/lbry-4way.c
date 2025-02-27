@@ -3,7 +3,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include "algo/sha/sha-hash-4way.h"
+#include "algo/sha/sha256-hash.h"
+#include "algo/sha/sha512-hash.h"
 #include "ripemd-hash-4way.h"
 
 #define LBRY_INPUT_SIZE 112
@@ -103,14 +104,14 @@ int scanhash_lbry_16way( struct work *work, uint32_t max_nonce,
    int thr_id = mythr->id;  // thr_id arg is deprecated
 
    // we need bigendian data...
-   casti_m128i( edata, 0 ) = mm128_bswap_32( casti_m128i( pdata, 0 ) );
-   casti_m128i( edata, 1 ) = mm128_bswap_32( casti_m128i( pdata, 1 ) );
-   casti_m128i( edata, 2 ) = mm128_bswap_32( casti_m128i( pdata, 2 ) );
-   casti_m128i( edata, 3 ) = mm128_bswap_32( casti_m128i( pdata, 3 ) );
-   casti_m128i( edata, 4 ) = mm128_bswap_32( casti_m128i( pdata, 4 ) );
-   casti_m128i( edata, 5 ) = mm128_bswap_32( casti_m128i( pdata, 5 ) );
-   casti_m128i( edata, 6 ) = mm128_bswap_32( casti_m128i( pdata, 6 ) );
-   casti_m128i( edata, 7 ) = mm128_bswap_32( casti_m128i( pdata, 7 ) );
+   casti_v128u32( edata, 0 ) = v128_bswap32( casti_v128u32( pdata, 0 ) );
+   casti_v128u32( edata, 1 ) = v128_bswap32( casti_v128u32( pdata, 1 ) );
+   casti_v128u32( edata, 2 ) = v128_bswap32( casti_v128u32( pdata, 2 ) );
+   casti_v128u32( edata, 3 ) = v128_bswap32( casti_v128u32( pdata, 3 ) );
+   casti_v128u32( edata, 4 ) = v128_bswap32( casti_v128u32( pdata, 4 ) );
+   casti_v128u32( edata, 5 ) = v128_bswap32( casti_v128u32( pdata, 5 ) );
+   casti_v128u32( edata, 6 ) = v128_bswap32( casti_v128u32( pdata, 6 ) );
+   casti_v128u32( edata, 7 ) = v128_bswap32( casti_v128u32( pdata, 7 ) );
    intrlv_16x32( vdata, edata, edata, edata, edata, edata, edata, edata,
         edata, edata, edata, edata, edata, edata, edata, edata, edata, 1024 );
 
@@ -223,14 +224,14 @@ int scanhash_lbry_8way( struct work *work, uint32_t max_nonce,
    int thr_id = mythr->id;  // thr_id arg is deprecated
 
    // we need bigendian data...
-   casti_m128i( edata, 0 ) = mm128_bswap_32( casti_m128i( pdata, 0 ) );
-   casti_m128i( edata, 1 ) = mm128_bswap_32( casti_m128i( pdata, 1 ) );
-   casti_m128i( edata, 2 ) = mm128_bswap_32( casti_m128i( pdata, 2 ) );
-   casti_m128i( edata, 3 ) = mm128_bswap_32( casti_m128i( pdata, 3 ) );
-   casti_m128i( edata, 4 ) = mm128_bswap_32( casti_m128i( pdata, 4 ) );
-   casti_m128i( edata, 5 ) = mm128_bswap_32( casti_m128i( pdata, 5 ) );
-   casti_m128i( edata, 6 ) = mm128_bswap_32( casti_m128i( pdata, 6 ) );
-   casti_m128i( edata, 7 ) = mm128_bswap_32( casti_m128i( pdata, 7 ) );
+   casti_v128u32( edata, 0 ) = v128_bswap32( casti_v128u32( pdata, 0 ) );
+   casti_v128u32( edata, 1 ) = v128_bswap32( casti_v128u32( pdata, 1 ) );
+   casti_v128u32( edata, 2 ) = v128_bswap32( casti_v128u32( pdata, 2 ) );
+   casti_v128u32( edata, 3 ) = v128_bswap32( casti_v128u32( pdata, 3 ) );
+   casti_v128u32( edata, 4 ) = v128_bswap32( casti_v128u32( pdata, 4 ) );
+   casti_v128u32( edata, 5 ) = v128_bswap32( casti_v128u32( pdata, 5 ) );
+   casti_v128u32( edata, 6 ) = v128_bswap32( casti_v128u32( pdata, 6 ) );
+   casti_v128u32( edata, 7 ) = v128_bswap32( casti_v128u32( pdata, 7 ) );
    intrlv_8x32( vdata, edata, edata, edata, edata,
                        edata, edata, edata, edata, 1024 );
 

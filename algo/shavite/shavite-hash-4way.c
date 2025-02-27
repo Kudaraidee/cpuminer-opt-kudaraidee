@@ -1,7 +1,7 @@
 #include "shavite-hash-4way.h"
 #include <stdint.h>
 
-#if defined(__VAES__) && defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+#if defined(__VAES__) && defined(SIMD512)
 
 static const uint32_t IV512[] =
 {
@@ -204,11 +204,9 @@ c512_4way( shavite512_4way_context *ctx, const void *msg )
    K5 = _mm512_xor_si512( mm512_shuflr128_32(
 			             _mm512_aesenc_epi128( K5, m512_zero ) ), K4 );
    X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K5 ), m512_zero );
-
    K6 = mm512_shuflr128_32( _mm512_aesenc_epi128( K6, m512_zero ) );
-   K6 = _mm512_xor_si512( K6, _mm512_xor_si512( K5, _mm512_set4_epi32(
-	       ~ctx->count2, ctx->count3, ctx->count0, ctx->count1 ) ) );
-
+   K6 = _mm512_xor_si512( K6, _mm512_xor_si512( K5,  mm512_swap64_32( 
+              _mm512_mask_xor_epi32( count, 0x4444, count, m512_neg1 ) ) ) );
    X = _mm512_aesenc_epi128( _mm512_xor_si512( X, K6 ), m512_zero );
    K7= _mm512_xor_si512( mm512_shuflr128_32(
 			             _mm512_aesenc_epi128( K7, m512_zero ) ), K6 );
@@ -227,10 +225,10 @@ void shavite512_4way_init( shavite512_4way_context *ctx )
     __m512i *h = (__m512i*)ctx->h;
     __m128i *iv = (__m128i*)IV512;
    
-   h[0] = m512_const1_128( iv[0] );
-   h[1] = m512_const1_128( iv[1] );
-   h[2] = m512_const1_128( iv[2] );
-   h[3] = m512_const1_128( iv[3] );
+   h[0] = mm512_bcast_m128( iv[0] );
+   h[1] = mm512_bcast_m128( iv[1] );
+   h[2] = mm512_bcast_m128( iv[2] );
+   h[3] = mm512_bcast_m128( iv[3] );
 
    ctx->ptr    = 0;
    ctx->count0 = 0;
@@ -290,7 +288,7 @@ void shavite512_4way_close( shavite512_4way_context *ctx, void *dst )
     uint32_t vp = ctx->ptr>>6;
 
     // Terminating byte then zero pad
-    casti_m512i( buf, vp++ ) = m512_const1_i128( 0x0000000000000080 );
+    casti_m512i( buf, vp++ ) = mm512_bcast128lo_64( 0x0000000000000080 );
 
     // Zero pad full vectors up to count
     for ( ; vp < 6; vp++ )      
@@ -304,9 +302,9 @@ void shavite512_4way_close( shavite512_4way_context *ctx, void *dst )
     count.u32[2] = ctx->count2;
     count.u32[3] = ctx->count3;
 
-    casti_m512i( buf, 6 ) = m512_const1_128(
-                  _mm_insert_epi16( m128_zero, count.u16[0], 7 ) ); 
-    casti_m512i( buf, 7 ) = m512_const1_128( _mm_set_epi16(
+    casti_m512i( buf, 6 ) = mm512_bcast_m128(
+                  _mm_insert_epi16( v128_zero, count.u16[0], 7 ) ); 
+    casti_m512i( buf, 7 ) = mm512_bcast_m128( _mm_set_epi16(
                   0x0200,       count.u16[7], count.u16[6], count.u16[5],
                   count.u16[4], count.u16[3], count.u16[2], count.u16[1] ) );
                 
@@ -370,19 +368,19 @@ void shavite512_4way_update_close( shavite512_4way_context *ctx, void *dst,
 
    if ( vp == 0 )    // empty buf, xevan.
    { 
-      casti_m512i( buf, 0 ) = m512_const1_i128( 0x0000000000000080 );
+      casti_m512i( buf, 0 ) = mm512_bcast128lo_64( 0x0000000000000080 );
       memset_zero_512( (__m512i*)buf + 1, 5 );
       ctx->count0 = ctx->count1 = ctx->count2 = ctx->count3 = 0;
    }
    else     // half full buf, everyone else.
    {
-    casti_m512i( buf, vp++ ) = m512_const1_i128( 0x0000000000000080 );
+    casti_m512i( buf, vp++ ) = mm512_bcast128lo_64( 0x0000000000000080 );
       memset_zero_512( (__m512i*)buf + vp, 6 - vp );
    }
 
-    casti_m512i( buf, 6 ) = m512_const1_128(
-                  _mm_insert_epi16( m128_zero, count.u16[0], 7 ) ); 
-    casti_m512i( buf, 7 ) = m512_const1_128( _mm_set_epi16(
+    casti_m512i( buf, 6 ) = mm512_bcast_m128(
+                  _mm_insert_epi16( v128_zero, count.u16[0], 7 ) ); 
+    casti_m512i( buf, 7 ) = mm512_bcast_m128( _mm_set_epi16(
                   0x0200,       count.u16[7], count.u16[6], count.u16[5],
                   count.u16[4], count.u16[3], count.u16[2], count.u16[1] ) );
 
@@ -401,10 +399,10 @@ void shavite512_4way_full( shavite512_4way_context *ctx, void *dst,
     __m512i *h = (__m512i*)ctx->h;
     __m128i *iv = (__m128i*)IV512;
 
-   h[0] = m512_const1_128( iv[0] );
-   h[1] = m512_const1_128( iv[1] );
-   h[2] = m512_const1_128( iv[2] );
-   h[3] = m512_const1_128( iv[3] );
+   h[0] = mm512_bcast_m128( iv[0] );
+   h[1] = mm512_bcast_m128( iv[1] );
+   h[2] = mm512_bcast_m128( iv[2] );
+   h[3] = mm512_bcast_m128( iv[3] );
 
    ctx->ptr    = 
    ctx->count0 = 
@@ -461,19 +459,19 @@ void shavite512_4way_full( shavite512_4way_context *ctx, void *dst,
 
    if ( vp == 0 )    // empty buf, xevan.
    {
-      casti_m512i( buf, 0 ) = m512_const1_i128( 0x0000000000000080 );
+      casti_m512i( buf, 0 ) = mm512_bcast128lo_64( 0x0000000000000080 );
       memset_zero_512( (__m512i*)buf + 1, 5 );
       ctx->count0 = ctx->count1 = ctx->count2 = ctx->count3 = 0;
    }
    else     // half full buf, everyone else.
    {
-    casti_m512i( buf, vp++ ) = m512_const1_i128( 0x0000000000000080 );
+    casti_m512i( buf, vp++ ) = mm512_bcast128lo_64( 0x0000000000000080 );
       memset_zero_512( (__m512i*)buf + vp, 6 - vp );
    }
 
-    casti_m512i( buf, 6 ) = m512_const1_128(
-                  _mm_insert_epi16( m128_zero, count.u16[0], 7 ) );
-    casti_m512i( buf, 7 ) = m512_const1_128( _mm_set_epi16(
+    casti_m512i( buf, 6 ) = mm512_bcast_m128(
+                  _mm_insert_epi16( v128_zero, count.u16[0], 7 ) );
+    casti_m512i( buf, 7 ) = mm512_bcast_m128( _mm_set_epi16(
                   0x0200,       count.u16[7], count.u16[6], count.u16[5],
                   count.u16[4], count.u16[3], count.u16[2], count.u16[1] ) );
 

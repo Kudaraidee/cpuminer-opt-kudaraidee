@@ -114,7 +114,7 @@ int scanhash_skunk_8way( struct work *work, uint32_t max_nonce,
          submit_solution( work, hash+(i<<3), mythr );
       }
       *noncev = _mm512_add_epi32( *noncev,
-                                  m512_const1_64( 0x0000000800000000 ) );
+                                  _mm512_set1_epi64( 0x0000000800000000 ) );
       n +=8;
    } while ( likely( ( n < last_nonce ) && !( *restart ) ) );
    pdata[19] = n;
@@ -155,13 +155,13 @@ void skunk_4way_hash( void *output, const void *input )
      skein512_4way_final16( &ctx.skein, vhash, input + (64*4) );
      dintrlv_4x64( hash0, hash1, hash2, hash3, vhash, 512 );
 
-     cubehashUpdateDigest( &ctx.cube, (byte*) hash0, (const byte*)hash0, 64 );
+     cubehashUpdateDigest( &ctx.cube, hash0, hash0, 64 );
      memcpy( &ctx.cube, &skunk_4way_ctx.cube, sizeof(cubehashParam) );
-     cubehashUpdateDigest( &ctx.cube, (byte*)hash1, (const byte*) hash1, 64 );
+     cubehashUpdateDigest( &ctx.cube, hash1, hash1, 64 );
      memcpy( &ctx.cube, &skunk_4way_ctx.cube, sizeof(cubehashParam) );
-     cubehashUpdateDigest( &ctx.cube, (byte*)hash2, (const byte*) hash2, 64 );
+     cubehashUpdateDigest( &ctx.cube, hash2, hash2, 64 );
      memcpy( &ctx.cube, &skunk_4way_ctx.cube, sizeof(cubehashParam) );
-     cubehashUpdateDigest( &ctx.cube, (byte*)hash3, (const byte*) hash3, 64 );
+     cubehashUpdateDigest( &ctx.cube, hash3, hash3, 64 );
 
      fugue512_full( &ctx.fugue, hash0, hash0, 64 );
      fugue512_full( &ctx.fugue, hash1, hash1, 64 );
@@ -218,7 +218,7 @@ int scanhash_skunk_4way( struct work *work, uint32_t max_nonce,
          submit_solution( work, hash+(i<<3), mythr );
       }
       *noncev = _mm256_add_epi32( *noncev,
-                                  m256_const1_64( 0x0000000400000000 ) );
+                                  _mm256_set1_epi64x( 0x0000000400000000 ) );
       n +=4;
    } while ( likely( ( n < last_nonce ) && !( *restart ) ) );
    pdata[19] = n;

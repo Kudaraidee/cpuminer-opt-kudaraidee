@@ -67,7 +67,6 @@ void do_nothing   () {}
 bool return_true  () { return true;  }
 bool return_false () { return false; }
 void *return_null () { return NULL;  }
-void call_error   () { printf("ERR: Uninitialized function pointer\n"); }
 
 void algo_not_tested()
 {
@@ -95,7 +94,8 @@ int null_scanhash()
    return 0;
 }
 
-// Default generic scanhash can be used in many cases.
+// Default generic scanhash can be used in many cases. Not to be used when
+// prehashing can be done or when byte swapping the data can be avoided.
 int scanhash_generic( struct work *work, uint32_t max_nonce,
                       uint64_t *hashes_done, struct thr_info *mythr )
 {
@@ -109,7 +109,7 @@ int scanhash_generic( struct work *work, uint32_t max_nonce,
    const int thr_id = mythr->id;
    const bool bench = opt_benchmark;
 
-   mm128_bswap32_80( edata, pdata );
+   v128_bswap32_80( edata, pdata );
    do
    {
       edata[19] = n;
@@ -152,6 +152,9 @@ int scanhash_4way_64in_32out( struct work *work, uint32_t max_nonce,
    const bool bench = opt_benchmark;
 
    mm256_bswap32_intrlv80_4x64( vdata, pdata );
+   // overwrite byte swapped nonce with original byte order for proper
+   // incrementing. The nonce only needs to byte swapped if it is to be
+   // sumbitted.
    *noncev = mm256_intrlv_blend_32(
                    _mm256_set_epi32( n+3, 0, n+2, 0, n+1, 0, n, 0 ), *noncev );
    do
@@ -168,7 +171,7 @@ int scanhash_4way_64in_32out( struct work *work, uint32_t max_nonce,
          }
       }
       *noncev = _mm256_add_epi32( *noncev,
-                                  m256_const1_64( 0x0000000400000000 ) );
+                                  _mm256_set1_epi64x( 0x0000000400000000 ) );
       n += 4;
    } while ( likely( ( n <= last_nonce ) && !work_restart[thr_id].restart ) );
    pdata[19] = n;
@@ -181,7 +184,7 @@ int scanhash_4way_64in_32out( struct work *work, uint32_t max_nonce,
 
 #endif
 
-#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+#if defined(SIMD512)
 
 //int scanhash_8way_64_64( struct work *work, uint32_t max_nonce,
 //                      uint64_t *hashes_done, struct thr_info *mythr )
@@ -224,7 +227,7 @@ int scanhash_8way_64in_32out( struct work *work, uint32_t max_nonce,
          }
       }
       *noncev = _mm512_add_epi32( *noncev,
-                                  m512_const1_64( 0x0000000800000000 ) );
+                                  _mm512_set1_epi64( 0x0000000800000000 ) );
       n += 8;
    } while ( likely( ( n < last_nonce ) && !work_restart[thr_id].restart ) );
    pdata[19] = n;
@@ -245,7 +248,7 @@ int null_hash()
    return 0;
 };
 
-void init_algo_gate( algo_gate_t* gate )
+static void init_algo_gate( algo_gate_t* gate )
 {
    gate->miner_thread_init       = (void*)&return_true;
    gate->scanhash                = (void*)&scanhash_generic;
@@ -260,10 +263,8 @@ void init_algo_gate( algo_gate_t* gate )
    gate->build_block_header      = (void*)&std_build_block_header;
    gate->build_extraheader       = (void*)&std_build_extraheader;
    gate->set_work_data_endian    = (void*)&do_nothing;
-   gate->calc_network_diff       = (void*)&std_calc_network_diff;
-   gate->ready_to_mine           = (void*)&std_ready_to_mine;
-   gate->resync_threads          = (void*)&do_nothing;
-   gate->do_this_thread          = (void*)&return_true;
+//   gate->resync_threads          = (void*)&do_nothing;
+//   gate->do_this_thread          = (void*)&return_true;
    gate->longpoll_rpc_call       = (void*)&std_longpoll_rpc_call;
    gate->get_work_data_size      = (void*)&std_get_work_data_size;
    gate->optimizations           = EMPTY_SET;
@@ -294,9 +295,8 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
   {
     case ALGO_ALLIUM:       rc = register_allium_algo        ( gate ); break;
     case ALGO_ANIME:        rc = register_anime_algo         ( gate ); break;
-    case ALGO_ARGON2:       rc = register_argon2_algo        ( gate ); break;
-    case ALGO_ARGON2D250:   rc = register_argon2d_crds_algo  ( gate ); break;
-    case ALGO_ARGON2D500:   rc = register_argon2d_dyn_algo   ( gate ); break;
+    case ALGO_ARGON2D250:   rc = register_argon2d250_algo    ( gate ); break;
+    case ALGO_ARGON2D500:   rc = register_argon2d500_algo    ( gate ); break;
     case ALGO_ARGON2D4096:  rc = register_argon2d4096_algo   ( gate ); break;
     case ALGO_AXIOM:        rc = register_axiom_algo         ( gate ); break;
     case ALGO_BLAKE:        rc = register_blake_algo         ( gate ); break;
@@ -305,13 +305,11 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_BLAKECOIN:    rc = register_blakecoin_algo     ( gate ); break;
     case ALGO_BMW512:       rc = register_bmw512_algo        ( gate ); break;
     case ALGO_C11:          rc = register_c11_algo           ( gate ); break;
-    case ALGO_DECRED:       rc = register_decred_algo        ( gate ); break;
     case ALGO_DEEP:         rc = register_deep_algo          ( gate ); break;
     case ALGO_DMD_GR:       rc = register_dmd_gr_algo        ( gate ); break;
     case ALGO_GROESTL:      rc = register_groestl_algo       ( gate ); break;
     case ALGO_HEX:          rc = register_hex_algo           ( gate ); break;
     case ALGO_HMQ1725:      rc = register_hmq1725_algo       ( gate ); break;
-    case ALGO_HODL:         rc = register_hodl_algo          ( gate ); break;
     case ALGO_JHA:          rc = register_jha_algo           ( gate ); break;
     case ALGO_KECCAK:       rc = register_keccak_algo        ( gate ); break;
     case ALGO_KECCAKC:      rc = register_keccakc_algo       ( gate ); break;
@@ -324,6 +322,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_LYRA2Z330:    rc = register_lyra2z330_algo     ( gate ); break;
     case ALGO_M7M:          rc = register_m7m_algo           ( gate ); break;
     case ALGO_MINOTAUR:     rc = register_minotaur_algo      ( gate ); break;
+    case ALGO_MINOTAURX:    rc = register_minotaur_algo      ( gate ); break;
     case ALGO_MYR_GR:       rc = register_myriad_algo        ( gate ); break;
     case ALGO_NEOSCRYPT:    rc = register_neoscrypt_algo     ( gate ); break;
     case ALGO_NIST5:        rc = register_nist5_algo         ( gate ); break;
@@ -336,10 +335,11 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_QUBIT:        rc = register_qubit_algo         ( gate ); break;
     case ALGO_SCRYPT:       rc = register_scrypt_algo        ( gate ); break;
     case ALGO_SHA256D:      rc = register_sha256d_algo       ( gate ); break;
+    case ALGO_SHA256DT:     rc = register_sha256dt_algo      ( gate ); break;
     case ALGO_SHA256Q:      rc = register_sha256q_algo       ( gate ); break;
     case ALGO_SHA256T:      rc = register_sha256t_algo       ( gate ); break;
     case ALGO_SHA3D:        rc = register_sha3d_algo         ( gate ); break;
-    case ALGO_SHAVITE3:     rc = register_shavite_algo       ( gate ); break;
+    case ALGO_SHA512256D:   rc = register_sha512256d_algo    ( gate ); break;
     case ALGO_SKEIN:        rc = register_skein_algo         ( gate ); break;
     case ALGO_SKEIN2:       rc = register_skein2_algo        ( gate ); break;
     case ALGO_SKUNK:        rc = register_skunk_algo         ( gate ); break;
@@ -367,19 +367,16 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_X16RT_VEIL:   rc = register_x16rt_veil_algo    ( gate ); break;
     case ALGO_X16S:         rc = register_x16s_algo          ( gate ); break;
     case ALGO_X17:          rc = register_x17_algo           ( gate ); break;
+    case ALGO_X20R:         rc = register_x20r_algo          ( gate ); break;
     case ALGO_X21S:         rc = register_x21s_algo          ( gate ); break;
     case ALGO_X22I:         rc = register_x22i_algo          ( gate ); break;
     case ALGO_X25X:         rc = register_x25x_algo          ( gate ); break;
     case ALGO_XEVAN:        rc = register_xevan_algo         ( gate ); break;
-    case ALGO_YESCRYPT:     rc = register_yescrypt_05_algo   ( gate ); break;
-//    case ALGO_YESCRYPT:      register_yescrypt_algo      ( gate ); break;
-    case ALGO_YESCRYPTR8:   rc = register_yescryptr8_05_algo ( gate ); break;
-//    case ALGO_YESCRYPTR8:    register_yescryptr8_algo    ( gate ); break;
+    case ALGO_YESCRYPT:     rc = register_yescrypt_algo      ( gate ); break;
+    case ALGO_YESCRYPTR8:   rc = register_yescryptr8_algo    ( gate ); break;
     case ALGO_YESCRYPTR8G:  rc = register_yescryptr8g_algo   ( gate ); break;
-    case ALGO_YESCRYPTR16:  rc = register_yescryptr16_05_algo( gate ); break;
-//    case ALGO_YESCRYPTR16:   register_yescryptr16_algo   ( gate ); break;
-    case ALGO_YESCRYPTR32:  rc = register_yescryptr32_05_algo( gate ); break;
-//    case ALGO_YESCRYPTR32:   register_yescryptr32_algo   ( gate ); break;
+    case ALGO_YESCRYPTR16:  rc = register_yescryptr16_algo   ( gate ); break;
+    case ALGO_YESCRYPTR32:  rc = register_yescryptr32_algo   ( gate ); break;
     case ALGO_YESPOWER:     rc = register_yespower_algo      ( gate ); break;
     case ALGO_YESPOWERR16:  rc = register_yespowerr16_algo   ( gate ); break;
     case ALGO_YESPOWER_B2B: rc = register_yespower_b2b_algo  ( gate ); break;
@@ -419,15 +416,12 @@ void exec_hash_function( int algo, void *output, const void *pdata )
 const char* const algo_alias_map[][2] =
 {
 //   alias                proper
-  { "argon2d-dyn",       "argon2d500"     },
-  { "argon2d-uis",       "argon2d4096"    },
   { "bcd",               "x13bcd"         },
   { "bitcore",           "timetravel10"   },
   { "bitzeny",           "yescryptr8"     },
   { "blake256r8",        "blakecoin"      },
   { "blake256r8vnl",     "vanilla"        },
   { "blake256r14",       "blake"          },
-  { "blake256r14dcr",    "decred"         },
   { "diamond",           "dmd-gr"         },
   { "espers",            "hmq1725"        },
   { "flax",              "c11"            },

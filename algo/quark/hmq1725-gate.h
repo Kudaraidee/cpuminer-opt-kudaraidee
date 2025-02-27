@@ -4,7 +4,7 @@
 #include "algo-gate-api.h"
 #include <stdint.h>
 
-#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+#if defined(SIMD512)
   #define HMQ1725_8WAY 1
 #elif defined(__AVX2__) && defined(__AES__)
   #define HMQ1725_4WAY 1
@@ -29,7 +29,6 @@ int scanhash_hmq1725_4way( struct work *work, uint32_t max_nonce,
 void hmq1725hash( void *state, const void *input );
 int scanhash_hmq1725( struct work *work, uint32_t max_nonce,
                       uint64_t *hashes_done, struct thr_info *mythr );
-void init_hmq1725_ctx();
 
 #endif
 

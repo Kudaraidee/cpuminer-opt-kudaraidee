@@ -453,7 +453,7 @@ static void smix(uint32_t *B, size_t r, uint32_t N,
  *
  * Return 0 on success; or -1 on error.
  */
-int yespower( yespower_local_t *local, const uint8_t *src, size_t srclen,
+int yespower_ref( yespower_local_t *local, const uint8_t *src, size_t srclen,
     const yespower_params_t *params, yespower_binary_t *dst, int thrid ) 
 {
 	yespower_version_t version = params->version;
@@ -556,14 +556,14 @@ free_V:
 	return retval;
 }
 
-int yespower_tls(const uint8_t *src, size_t srclen,
+int yespower_tls_ref(const uint8_t *src, size_t srclen,
     const yespower_params_t *params, yespower_binary_t *dst, int thrid )
 {
 /* The reference implementation doesn't use thread-local storage */
-	return yespower(NULL, src, srclen, params, dst, thrid );
+	return yespower_ref(NULL, src, srclen, params, dst, thrid );
 }
 
-int yespower_init_local(yespower_local_t *local)
+int yespower_init_local_ref(yespower_local_t *local)
 {
 /* The reference implementation doesn't use the local structure */
 	local->base = local->aligned = NULL;
@@ -571,7 +571,7 @@ int yespower_init_local(yespower_local_t *local)
 	return 0;
 }
 
-int yespower_free_local(yespower_local_t *local)
+int yespower_free_local_ref(yespower_local_t *local)
 {
 /* The reference implementation frees its memory in yespower() */
 	(void)local; /* unused */

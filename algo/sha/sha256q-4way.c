@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include "sha-hash-4way.h"
+#include "sha256-hash.h"
 
 #if defined(SHA256T_16WAY)
 
@@ -68,7 +68,7 @@ int scanhash_sha256q_16way( struct work *work, const uint32_t max_nonce,
            submit_solution( work, lane_hash, mythr );
         }
       }
-      *noncev = _mm512_add_epi32( *noncev, m512_const1_32( 16 ) );
+      *noncev = _mm512_add_epi32( *noncev, _mm512_set1_epi32( 16 ) );
       n += 16;
    } while ( (n < last_nonce) && !work_restart[thr_id].restart );
    pdata[19] = n;
@@ -140,7 +140,7 @@ int scanhash_sha256q_8way( struct work *work, const uint32_t max_nonce,
            submit_solution( work, lane_hash, mythr );
         }
       }
-      *noncev = _mm256_add_epi32( *noncev, m256_const1_32( 8 ) );
+      *noncev = _mm256_add_epi32( *noncev, _mm256_set1_epi32( 8 ) );
       n += 8;
    } while ( (n < last_nonce) && !work_restart[thr_id].restart );
    pdata[19] = n;
@@ -188,7 +188,7 @@ int scanhash_sha256q_4way( struct work *work, uint32_t max_nonce,
    const uint32_t Htarg = ptarget[7];
    const uint32_t first_nonce = pdata[19];
    uint32_t n = first_nonce;
-   __m128i  *noncev = (__m128i*)vdata + 19;   // aligned
+   v128_t  *noncev = (v128_t*)vdata + 19;   // aligned
    int thr_id = mythr->id;  // thr_id arg is deprecated
 
    const uint64_t htmax[] = {          0,
@@ -204,7 +204,7 @@ int scanhash_sha256q_4way( struct work *work, uint32_t max_nonce,
                                0xFFFF0000,
                                         0 };
 
-   mm128_bswap32_intrlv80_4x32( vdata, pdata );
+   v128_bswap32_intrlv80_4x32( vdata, pdata );
    sha256_4way_init( &sha256_ctx4 );
    sha256_4way_update( &sha256_ctx4, vdata, 64 );
 
@@ -212,7 +212,7 @@ int scanhash_sha256q_4way( struct work *work, uint32_t max_nonce,
    {
       uint32_t mask = masks[m];
       do {
-         *noncev = mm128_bswap_32( _mm_set_epi32( n+3,n+2,n+1,n ) );
+         *noncev = v128_bswap32( v128_set32( n+3,n+2,n+1,n ) );
          pdata[19] = n;
 
          sha256q_4way_hash( hash, vdata );

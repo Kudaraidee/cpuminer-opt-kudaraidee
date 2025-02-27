@@ -61,23 +61,22 @@
 #ifndef HAVAL_HASH_4WAY_H__
 #define HAVAL_HASH_4WAY_H__ 1
 
-#if defined(__AVX__)
+#if defined(__AVX__) || defined(__ARM_NEON)
 
 #ifdef __cplusplus
 extern "C"{
 #endif
 
 #include <stddef.h>
-#include "algo/sha/sph_types.h"
 #include "simd-utils.h"
 
 #define SPH_SIZE_haval256_5   256
 
 typedef struct {
-   __m128i buf[32];
-   __m128i s0, s1, s2, s3, s4, s5, s6, s7;
+   v128_t buf[32];
+   v128_t s0, s1, s2, s3, s4, s5, s6, s7;
    unsigned olen, passes;
-   sph_u32 count_high, count_low;
+   uint32_t count_high, count_low;
 } haval_4way_context;
 
 typedef haval_4way_context haval256_5_4way_context;
@@ -107,6 +106,25 @@ void haval256_5_8way_update( void *cc, const void *data, size_t len );
 void haval256_5_8way_close( void *cc, void *dst );
 
 #endif // AVX2
+
+#if defined(SIMD512)
+
+typedef struct {
+   __m512i buf[32];
+   __m512i s0, s1, s2, s3, s4, s5, s6, s7;
+   unsigned olen, passes;
+   uint32_t count_high, count_low;
+} haval_16way_context __attribute__ ((aligned (64)));
+
+typedef haval_16way_context haval256_5_16way_context;
+
+void haval256_5_16way_init( void *cc );
+
+void haval256_5_16way_update( void *cc, const void *data, size_t len );
+
+void haval256_5_16way_close( void *cc, void *dst );
+
+#endif // AVX512
 
 #ifdef __cplusplus
 }

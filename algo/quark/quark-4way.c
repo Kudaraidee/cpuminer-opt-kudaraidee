@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
-#include "algo/blake/blake-hash-4way.h"
+#include "algo/blake/blake512-hash.h"
 #include "algo/bmw/bmw-hash-4way.h"
 #include "algo/skein/skein-hash-4way.h"
 #include "algo/jh/jh-hash-4way.h"
@@ -67,8 +67,7 @@ void quark_8way_hash( void *state, const void *input )
     __mmask8 vh_mask;
     quark_8way_ctx_holder ctx;
     const uint32_t mask = 8;
-    const __m512i bit3_mask = m512_const1_64( mask );
-    const __m512i zero = _mm512_setzero_si512();
+    const __m512i bit3_mask = _mm512_set1_epi64( mask );
 
     memcpy( &ctx, &quark_8way_ctx, sizeof(quark_8way_ctx) );
 
@@ -76,9 +75,7 @@ void quark_8way_hash( void *state, const void *input )
 
     bmw512_8way_full( &ctx.bmw, vhash, vhash, 64 );
     
-    vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], bit3_mask ),
-                                       zero );
-
+    vh_mask = _mm512_testn_epi64_mask( vh[0], bit3_mask );
     
 #if defined(__VAES__)
 
@@ -154,8 +151,7 @@ void quark_8way_hash( void *state, const void *input )
     jh512_8way_update( &ctx.jh, vhash, 64 );
     jh512_8way_close( &ctx.jh, vhash );
 
-    vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], bit3_mask ),
-                                       zero );
+    vh_mask = _mm512_testn_epi64_mask( vh[0], bit3_mask );
 
     if ( ( vh_mask & 0xff ) != 0xff )
        blake512_8way_full( &ctx.blake, vhashA, vhash, 64 );
@@ -169,8 +165,7 @@ void quark_8way_hash( void *state, const void *input )
 
     skein512_8way_full( &ctx.skein, vhash, vhash, 64 );
 
-    vh_mask = _mm512_cmpeq_epi64_mask( _mm512_and_si512( vh[0], bit3_mask ),
-                                       zero );
+    vh_mask = _mm512_testn_epi64_mask( vh[0], bit3_mask );
 
     if ( ( vh_mask & 0xff ) != 0xff )
     {
@@ -229,7 +224,7 @@ int scanhash_quark_8way( struct work *work, uint32_t max_nonce,
           }
        }
        *noncev = _mm512_add_epi32( *noncev,
-                                  m512_const1_64( 0x0000000800000000 ) );
+                                  _mm512_set1_epi64( 0x0000000800000000 ) );
        n += 8;
     } while ( likely( ( n < last_nonce ) && !work_restart[thr_id].restart ) );
 
@@ -276,7 +271,7 @@ void quark_4way_hash( void *state, const void *input )
     __m256i vh_mask;
     int h_mask;
     quark_4way_ctx_holder ctx;
-    const __m256i bit3_mask = m256_const1_64( 8 );
+    const __m256i bit3_mask = _mm256_set1_epi64x( 8 );
     const __m256i zero = _mm256_setzero_si256();
 
     memcpy( &ctx, &quark_4way_ctx, sizeof(quark_4way_ctx) );
@@ -402,7 +397,7 @@ int scanhash_quark_4way( struct work *work, uint32_t max_nonce,
           }
        }
        *noncev = _mm256_add_epi32( *noncev,
-                                  m256_const1_64( 0x0000000400000000 ) );
+                                  _mm256_set1_epi64x( 0x0000000400000000 ) );
        n += 4;
     } while ( likely( ( n < last_nonce ) && !work_restart[thr_id].restart ) );
 

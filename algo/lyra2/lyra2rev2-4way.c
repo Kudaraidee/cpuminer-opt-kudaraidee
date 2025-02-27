@@ -1,6 +1,6 @@
 #include "lyra2-gate.h"
 #include <memory.h>
-#include "algo/blake/blake-hash-4way.h"
+#include "algo/blake/blake256-hash.h"
 #include "algo/keccak/keccak-hash-4way.h"
 #include "algo/skein/skein-hash-4way.h"
 #include "algo/bmw/bmw-hash-4way.h"
@@ -75,7 +75,7 @@ void lyra2rev2_16way_hash( void *state, const void *input )
    keccak256_8way_close( &ctx.keccak, vhash );
 
    dintrlv_8x64( hash8,  hash9,  hash10,  hash11,
-                 hash12, hash13, hash14, hash5, vhash, 256 );
+                 hash12, hash13, hash14, hash15, vhash, 256 );
 
    cubehash_full( &ctx.cube, (byte*) hash0,  256, (const byte*) hash0,  32 );
    cubehash_full( &ctx.cube, (byte*) hash1,  256, (const byte*) hash1,  32 );
@@ -203,7 +203,7 @@ int scanhash_lyra2rev2_16way( struct work *work, const uint32_t max_nonce,
              submit_solution( work, lane_hash, mythr );
          }
       }
-      *noncev = _mm512_add_epi32( *noncev, m512_const1_32( 16 ) );
+      *noncev = _mm512_add_epi32( *noncev, _mm512_set1_epi32( 16 ) );
       n += 16;
    } while ( likely( (n < last_nonce) && !work_restart[thr_id].restart ) );
    pdata[19] = n;
@@ -345,7 +345,7 @@ int scanhash_lyra2rev2_8way( struct work *work, const uint32_t max_nonce,
              submit_solution( work, lane_hash, mythr );
          }
       }
-      *noncev = _mm256_add_epi32( *noncev, m256_const1_32( 8 ) );
+      *noncev = _mm256_add_epi32( *noncev, _mm256_set1_epi32( 8 ) );
       n += 8;
    } while ( likely( (n < last_nonce) && !work_restart[thr_id].restart ) );
    pdata[19] = n;
@@ -353,9 +353,6 @@ int scanhash_lyra2rev2_8way( struct work *work, const uint32_t max_nonce,
    return 0;
 }
 
-#endif
-
-/*
 #elif defined (LYRA2REV2_4WAY)
 
 typedef struct {
@@ -452,14 +449,14 @@ int scanhash_lyra2rev2_4way( struct work *work, uint32_t max_nonce,
    if ( opt_benchmark )
       ( (uint32_t*)ptarget )[7] = 0x0000ff;
 
-   mm128_bswap32_intrlv80_4x32( vdata, pdata );
+   v128_bswap32_intrlv80_4x32( vdata, pdata );
 
    blake256_4way_init( &l2v2_4way_ctx.blake );
    blake256_4way_update( &l2v2_4way_ctx.blake, vdata, 64 );
 
    do
    {
-      *noncev = mm128_bswap_32( _mm_set_epi32( n+3, n+2, n+1, n ) );
+      *noncev = v128_bswap32( _mm_set_epi32( n+3, n+2, n+1, n ) );
 
       lyra2rev2_4way_hash( hash, vdata );
 
@@ -480,4 +477,4 @@ int scanhash_lyra2rev2_4way( struct work *work, uint32_t max_nonce,
 }
 
 #endif
-*/
+

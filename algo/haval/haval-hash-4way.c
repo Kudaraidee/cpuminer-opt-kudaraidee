@@ -38,11 +38,12 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <stdint.h>
 #include "haval-hash-4way.h"
 
 // won't compile with sse4.2, not a problem, it's only used with AVX2 4 way.
 //#if defined (__SSE4_2__)
-#if defined(__AVX__)
+#if defined(__AVX__) || defined(__ARM_NEON)
 
 #ifdef __cplusplus
 extern "C"{
@@ -52,50 +53,101 @@ extern "C"{
 #define SPH_SMALL_FOOTPRINT_HAVAL   1
 //#endif
 
+#if defined(VL256)
+
+// ( ~( a ^ b ) ) & c
+#define v128_andnotxor( a, b, c ) \
+   _mm_ternarylogic_epi32( a, b, c, 0x82  )
+
+#else
+
+#define v128_andnotxor( a, b, c ) \
+   v128_andnot( v128_xor( a, b ), c )
+
+#endif
+
 #define F1(x6, x5, x4, x3, x2, x1, x0) \
-   _mm_xor_si128( x0, \
-       _mm_xor_si128( _mm_and_si128(_mm_xor_si128( x0, x4 ), x1 ), \
-                      _mm_xor_si128( _mm_and_si128( x2, x5 ), \
-                                     _mm_and_si128( x3, x6 ) ) ) ) \
+ v128_xor3( x0, v128_andxor( x1, x0, x4 ), \
+                 v128_xor( v128_and( x2, x5 ), \
+                                v128_and( x3, x6 ) ) ) \
 
 #define F2(x6, x5, x4, x3, x2, x1, x0) \
-   _mm_xor_si128( \
-      _mm_and_si128( x2, \
-         _mm_xor_si128( _mm_andnot_si128( x3, x1 ), \
-                        _mm_xor_si128( _mm_and_si128( x4, x5 ), \
-                                       _mm_xor_si128( x6, x0 ) ) ) ), \
-         _mm_xor_si128( \
-             _mm_and_si128( x4, _mm_xor_si128( x1, x5 ) ), \
-             _mm_xor_si128( _mm_and_si128( x3, x5 ), x0 ) ) ) \
+   v128_xor3( v128_andxor( x2, v128_andnot( x3, x1 ), \
+                       v128_xor3( v128_and( x4, x5 ), x6, x0 )  ), \
+               v128_andxor( x4, x1, x5 ), \
+               v128_xorand( x0, x3, x5 ) ) \
 
 #define F3(x6, x5, x4, x3, x2, x1, x0) \
-  _mm_xor_si128( \
-    _mm_and_si128( x3, \
-      _mm_xor_si128( _mm_and_si128( x1, x2 ), \
-                     _mm_xor_si128( x6, x0 ) ) ), \
-      _mm_xor_si128( _mm_xor_si128(_mm_and_si128( x1, x4 ), \
-                                   _mm_and_si128( x2, x5 ) ), x0 ) )
+  v128_xor3( x0, \
+              v128_and( x3, \
+                         v128_xor3( v128_and( x1, x2 ), x6, x0 ) ), \
+              v128_xor( v128_and( x1, x4 ), \
+                             v128_and( x2, x5 ) ) )
 
 #define F4(x6, x5, x4, x3, x2, x1, x0) \
-  _mm_xor_si128( \
-     _mm_xor_si128( \
-        _mm_and_si128( x3, \
-           _mm_xor_si128( _mm_xor_si128( _mm_and_si128( x1, x2 ), \
-                                         _mm_or_si128( x4, x6 ) ), x5 ) ), \
-        _mm_and_si128( x4, \
-           _mm_xor_si128( _mm_xor_si128( _mm_and_si128( mm128_not(x2), x5 ), \
-                          _mm_xor_si128( x1, x6 ) ), x0 ) ) ), \
-     _mm_xor_si128( _mm_and_si128( x2, x6 ), x0 ) )
+  v128_xor3( \
+      v128_andxor( x3, x5, \
+                    v128_xor( v128_and( x1, x2 ), \
+                                      v128_or( x4, x6 ) ) ), \
+      v128_and( x4, \
+                        v128_xor3( x0, v128_andnot( x2, x5 ), \
+                                    v128_xor( x1, x6 ) ) ), \
+      v128_xorand( x0, x2, x6 ) )
+
+#define F5(x6, x5, x4, x3, x2, x1, x0) \
+   v128_xor( \
+         v128_andnotxor( v128_and3( x1, x2, x3 ), x5, x0 ), \
+         v128_xor3( v128_and( x1, x4 ), \
+                     v128_and( x2, x5 ), \
+                     v128_and( x3, x6 ) ) )
+  
+
+/*
+#define F1(x6, x5, x4, x3, x2, x1, x0) \
+   v128_xor( x0, \
+       v128_xor( v128_and(v128_xor( x0, x4 ), x1 ), \
+                      v128_xor( v128_and( x2, x5 ), \
+                                     v128_and( x3, x6 ) ) ) ) \
+
+#define F2(x6, x5, x4, x3, x2, x1, x0) \
+   v128_xor( \
+      v128_and( x2, \
+         v128_xor( v128_andnot( x3, x1 ), \
+                        v128_xor( v128_and( x4, x5 ), \
+                                       v128_xor( x6, x0 ) ) ) ), \
+         v128_xor( \
+             v128_and( x4, v128_xor( x1, x5 ) ), \
+             v128_xor( v128_and( x3, x5 ), x0 ) ) ) \
+
+#define F3(x6, x5, x4, x3, x2, x1, x0) \
+  v128_xor( \
+    v128_and( x3, \
+      v128_xor( v128_and( x1, x2 ), \
+                     v128_xor( x6, x0 ) ) ), \
+      v128_xor( v128_xor(v128_and( x1, x4 ), \
+                                   v128_and( x2, x5 ) ), x0 ) )
+
+#define F4(x6, x5, x4, x3, x2, x1, x0) \
+  v128_xor( \
+     v128_xor( \
+        v128_and( x3, \
+           v128_xor( v128_xor( v128_and( x1, x2 ), \
+                                         v128_or( x4, x6 ) ), x5 ) ), \
+        v128_and( x4, \
+           v128_xor( v128_xor( v128_and( v128_not(x2), x5 ), \
+                          v128_xor( x1, x6 ) ), x0 ) ) ), \
+     v128_xor( v128_and( x2, x6 ), x0 ) )
 
 
 #define F5(x6, x5, x4, x3, x2, x1, x0) \
-   _mm_xor_si128( \
-       _mm_and_si128( x0, \
-            mm128_not( _mm_xor_si128( \
-                    _mm_and_si128( _mm_and_si128( x1, x2 ), x3 ), x5 ) ) ), \
-      _mm_xor_si128( _mm_xor_si128( _mm_and_si128( x1, x4 ), \
-                                    _mm_and_si128( x2, x5 ) ), \
-                                    _mm_and_si128( x3, x6 ) ) )
+   v128_xor( \
+       v128_and( x0, \
+            v128_not( v128_xor( \
+                    v128_and( v128_and( x1, x2 ), x3 ), x5 ) ) ), \
+      v128_xor( v128_xor( v128_and( x1, x4 ), \
+                                    v128_and( x2, x5 ) ), \
+                                    v128_and( x3, x6 ) ) )
+*/
 
 /*
  * The macros below integrate the phi() permutations, depending on the
@@ -135,10 +187,17 @@ extern "C"{
  */
 #define STEP(n, p, x7, x6, x5, x4, x3, x2, x1, x0, w, c) \
 do { \
-   __m128i t = FP ## n ## _ ## p(x6, x5, x4, x3, x2, x1, x0); \
-   x7 = _mm_add_epi32( _mm_add_epi32( mm128_ror_32( t, 7 ), \
-                                      mm128_ror_32( x7, 11 ) ), \
-                       _mm_add_epi32( w, _mm_set1_epi32( c ) ) ); \
+   v128_t t = FP ## n ## _ ## p(x6, x5, x4, x3, x2, x1, x0); \
+   x7 = v128_add32( v128_add32( v128_ror32( t, 7 ), \
+                                      v128_ror32( x7, 11 ) ), \
+                       v128_add32( w, v128_32( c ) ) ); \
+} while (0)
+
+#define STEP1(n, p, x7, x6, x5, x4, x3, x2, x1, x0, w) \
+do { \
+   v128_t t = FP ## n ## _ ## p(x6, x5, x4, x3, x2, x1, x0); \
+   x7 = v128_add32( v128_add32( v128_ror32( t, 7 ), \
+                                      v128_ror32( x7, 11 ) ), w ); \
 } while (0)
 
 /*
@@ -152,22 +211,22 @@ do { \
 #define PASS1(n, in)   do { \
 		unsigned pass_count; \
 		for (pass_count = 0; pass_count < 32; pass_count += 8) { \
-			STEP(n, 1, s7, s6, s5, s4, s3, s2, s1, s0, \
-				in(pass_count + 0), SPH_C32(0x00000000)); \
-			STEP(n, 1, s6, s5, s4, s3, s2, s1, s0, s7, \
-				in(pass_count + 1), SPH_C32(0x00000000)); \
-			STEP(n, 1, s5, s4, s3, s2, s1, s0, s7, s6, \
-				in(pass_count + 2), SPH_C32(0x00000000)); \
-			STEP(n, 1, s4, s3, s2, s1, s0, s7, s6, s5, \
-				in(pass_count + 3), SPH_C32(0x00000000)); \
-			STEP(n, 1, s3, s2, s1, s0, s7, s6, s5, s4, \
-				in(pass_count + 4), SPH_C32(0x00000000)); \
-			STEP(n, 1, s2, s1, s0, s7, s6, s5, s4, s3, \
-				in(pass_count + 5), SPH_C32(0x00000000)); \
-			STEP(n, 1, s1, s0, s7, s6, s5, s4, s3, s2, \
-				in(pass_count + 6), SPH_C32(0x00000000)); \
-			STEP(n, 1, s0, s7, s6, s5, s4, s3, s2, s1, \
-				in(pass_count + 7), SPH_C32(0x00000000)); \
+			STEP1(n, 1, s7, s6, s5, s4, s3, s2, s1, s0, \
+				in(pass_count + 0) ); \
+			STEP1(n, 1, s6, s5, s4, s3, s2, s1, s0, s7, \
+				in(pass_count + 1) ); \
+			STEP1(n, 1, s5, s4, s3, s2, s1, s0, s7, s6, \
+				in(pass_count + 2) ); \
+			STEP1(n, 1, s4, s3, s2, s1, s0, s7, s6, s5, \
+				in(pass_count + 3) ); \
+			STEP1(n, 1, s3, s2, s1, s0, s7, s6, s5, s4, \
+				in(pass_count + 4) ); \
+			STEP1(n, 1, s2, s1, s0, s7, s6, s5, s4, s3, \
+				in(pass_count + 5) ); \
+			STEP1(n, 1, s1, s0, s7, s6, s5, s4, s3, s2, \
+				in(pass_count + 6) ); \
+			STEP1(n, 1, s0, s7, s6, s5, s4, s3, s2, s1, \
+				in(pass_count + 7) ); \
    		} \
 	} while (0)
 
@@ -234,7 +293,9 @@ static const unsigned MP5[32] = {
 	 2, 23, 16, 22,  4,  1, 25, 15
 };
 
-static const sph_u32 RK2[32] = {
+#define SPH_C32(x) (x)
+
+static const uint32_t RK2[32] = {
 	SPH_C32(0x452821E6), SPH_C32(0x38D01377),
 	SPH_C32(0xBE5466CF), SPH_C32(0x34E90C6C),
 	SPH_C32(0xC0AC29B7), SPH_C32(0xC97C50DD),
@@ -253,7 +314,7 @@ static const sph_u32 RK2[32] = {
 	SPH_C32(0x7B54A41D), SPH_C32(0xC25A59B5)
 };
 
-static const sph_u32 RK3[32] = {
+static const uint32_t RK3[32] = {
 	SPH_C32(0x9C30D539), SPH_C32(0x2AF26013),
 	SPH_C32(0xC5D1B023), SPH_C32(0x286085F0),
 	SPH_C32(0xCA417918), SPH_C32(0xB8DB38EF),
@@ -272,7 +333,7 @@ static const sph_u32 RK3[32] = {
 	SPH_C32(0xAFD6BA33), SPH_C32(0x6C24CF5C)
 };
 
-static const sph_u32 RK4[32] = {
+static const uint32_t RK4[32] = {
 	SPH_C32(0x7A325381), SPH_C32(0x28958677),
 	SPH_C32(0x3B8F4898), SPH_C32(0x6B4BB9AF),
 	SPH_C32(0xC4BFE81B), SPH_C32(0x66282193),
@@ -291,7 +352,7 @@ static const sph_u32 RK4[32] = {
 	SPH_C32(0x6EEF0B6C), SPH_C32(0x137A3BE4)
 };
 
-static const sph_u32 RK5[32] = {
+static const uint32_t RK5[32] = {
 	SPH_C32(0xBA3BF050), SPH_C32(0x7EFB2A98),
 	SPH_C32(0xA1F1651D), SPH_C32(0x39AF0176),
 	SPH_C32(0x66CA593E), SPH_C32(0x82430E88),
@@ -311,7 +372,7 @@ static const sph_u32 RK5[32] = {
 };
 
 #define SAVE_STATE \
-   __m128i u0, u1, u2, u3, u4, u5, u6, u7; \
+   v128_t u0, u1, u2, u3, u4, u5, u6, u7; \
    do { \
       u0 = s0; \
       u1 = s1; \
@@ -325,14 +386,14 @@ static const sph_u32 RK5[32] = {
 
 #define UPDATE_STATE \
 do { \
-   s0 = _mm_add_epi32( s0, u0 ); \
-   s1 = _mm_add_epi32( s1, u1 ); \
-   s2 = _mm_add_epi32( s2, u2 ); \
-   s3 = _mm_add_epi32( s3, u3 ); \
-   s4 = _mm_add_epi32( s4, u4 ); \
-   s5 = _mm_add_epi32( s5, u5 ); \
-   s6 = _mm_add_epi32( s6, u6 ); \
-   s7 = _mm_add_epi32( s7, u7 ); \
+   s0 = v128_add32( s0, u0 ); \
+   s1 = v128_add32( s1, u1 ); \
+   s2 = v128_add32( s2, u2 ); \
+   s3 = v128_add32( s3, u3 ); \
+   s4 = v128_add32( s4, u4 ); \
+   s5 = v128_add32( s5, u5 ); \
+   s6 = v128_add32( s6, u6 ); \
+   s7 = v128_add32( s7, u7 ); \
 } while (0)
 
 /*
@@ -371,7 +432,7 @@ do { \
 /*
  * DSTATE declares the state variables "s0" to "s7".
  */
-#define DSTATE   __m128i s0, s1, s2, s3, s4, s5, s6, s7
+#define DSTATE   v128_t s0, s1, s2, s3, s4, s5, s6, s7
 
 /*
  * RSTATE fills the state variables from the context "sc".
@@ -411,14 +472,14 @@ do { \
 static void
 haval_4way_init( haval_4way_context *sc, unsigned olen, unsigned passes )
 {
-   sc->s0 = _mm_set1_epi32( 0x243F6A88UL );
-   sc->s1 = _mm_set1_epi32( 0x85A308D3UL );
-   sc->s2 = _mm_set1_epi32( 0x13198A2EUL );
-   sc->s3 = _mm_set1_epi32( 0x03707344UL );
-   sc->s4 = _mm_set1_epi32( 0xA4093822UL );
-   sc->s5 = _mm_set1_epi32( 0x299F31D0UL );
-   sc->s6 = _mm_set1_epi32( 0x082EFA98UL );
-   sc->s7 = _mm_set1_epi32( 0xEC4E6C89UL );
+   sc->s0 = v128_32( 0x243F6A88UL );
+   sc->s1 = v128_32( 0x85A308D3UL );
+   sc->s2 = v128_32( 0x13198A2EUL );
+   sc->s3 = v128_32( 0x03707344UL );
+   sc->s4 = v128_32( 0xA4093822UL );
+   sc->s5 = v128_32( 0x299F31D0UL );
+   sc->s6 = v128_32( 0x082EFA98UL );
+   sc->s7 = v128_32( 0xEC4E6C89UL );
    sc->olen = olen;
    sc->passes = passes;
    sc->count_high = 0;
@@ -426,7 +487,7 @@ haval_4way_init( haval_4way_context *sc, unsigned olen, unsigned passes )
 	
 }
 
-#define IN_PREPARE(indata) const __m128i *const load_ptr = (indata)
+#define IN_PREPARE(indata) const v128_t *const load_ptr = (indata)
 
 #define INW(i)   load_ptr[ i ] 
 
@@ -437,7 +498,7 @@ haval_4way_init( haval_4way_context *sc, unsigned olen, unsigned passes )
 static void
 haval_4way_out( haval_4way_context *sc, void *dst )
 {
-   __m128i *buf = (__m128i*)dst;
+   v128_t *buf = (v128_t*)dst;
    DSTATE;
    RSTATE;
 
@@ -522,7 +583,7 @@ do { \
 
 // Haval-256 8 way 32 bit avx2
 
-#if defined (__AVX512VL__)
+#if defined (VL256)
 
 // ( ~( a ^ b ) ) & c
 #define mm256_andnotxor( a, b, c ) \
@@ -602,28 +663,35 @@ do { \
    __m256i t = FP ## n ## _ ## p ## _8W(x6, x5, x4, x3, x2, x1, x0); \
    x7 = _mm256_add_epi32( _mm256_add_epi32( mm256_ror_32( t, 7 ), \
                                       mm256_ror_32( x7, 11 ) ), \
-                       _mm256_add_epi32( w, _mm256_set1_epi32( c ) ) ); \
+                       _mm256_add_epi32( w, v256_32( c ) ) ); \
 } while (0)
 
+#define STEP1_8W(n, p, x7, x6, x5, x4, x3, x2, x1, x0, w) \
+do { \
+   __m256i t = FP ## n ## _ ## p ## _8W(x6, x5, x4, x3, x2, x1, x0); \
+   x7 = _mm256_add_epi32( _mm256_add_epi32( mm256_ror_32( t, 7 ), \
+                                      mm256_ror_32( x7, 11 ) ), w ); \
+} while (0)
+   
 #define PASS1_8W(n, in)   do { \
       unsigned pass_count; \
       for (pass_count = 0; pass_count < 32; pass_count += 8) { \
-         STEP_8W(n, 1, s7, s6, s5, s4, s3, s2, s1, s0, \
-            in(pass_count + 0), SPH_C32(0x00000000)); \
-         STEP_8W(n, 1, s6, s5, s4, s3, s2, s1, s0, s7, \
-            in(pass_count + 1), SPH_C32(0x00000000)); \
-         STEP_8W(n, 1, s5, s4, s3, s2, s1, s0, s7, s6, \
-            in(pass_count + 2), SPH_C32(0x00000000)); \
-         STEP_8W(n, 1, s4, s3, s2, s1, s0, s7, s6, s5, \
-            in(pass_count + 3), SPH_C32(0x00000000)); \
-         STEP_8W(n, 1, s3, s2, s1, s0, s7, s6, s5, s4, \
-            in(pass_count + 4), SPH_C32(0x00000000)); \
-         STEP_8W(n, 1, s2, s1, s0, s7, s6, s5, s4, s3, \
-            in(pass_count + 5), SPH_C32(0x00000000)); \
-         STEP_8W(n, 1, s1, s0, s7, s6, s5, s4, s3, s2, \
-            in(pass_count + 6), SPH_C32(0x00000000)); \
-         STEP_8W(n, 1, s0, s7, s6, s5, s4, s3, s2, s1, \
-            in(pass_count + 7), SPH_C32(0x00000000)); \
+         STEP1_8W(n, 1, s7, s6, s5, s4, s3, s2, s1, s0, \
+            in(pass_count + 0) ); \
+         STEP1_8W(n, 1, s6, s5, s4, s3, s2, s1, s0, s7, \
+            in(pass_count + 1) ); \
+         STEP1_8W(n, 1, s5, s4, s3, s2, s1, s0, s7, s6, \
+            in(pass_count + 2) ); \
+         STEP1_8W(n, 1, s4, s3, s2, s1, s0, s7, s6, s5, \
+            in(pass_count + 3) ); \
+         STEP1_8W(n, 1, s3, s2, s1, s0, s7, s6, s5, s4, \
+            in(pass_count + 4) ); \
+         STEP1_8W(n, 1, s2, s1, s0, s7, s6, s5, s4, s3, \
+            in(pass_count + 5) ); \
+         STEP1_8W(n, 1, s1, s0, s7, s6, s5, s4, s3, s2, \
+            in(pass_count + 6) ); \
+         STEP1_8W(n, 1, s0, s7, s6, s5, s4, s3, s2, s1, \
+            in(pass_count + 7) ); \
          } \
    } while (0)
 
@@ -726,14 +794,14 @@ do { \
 static void
 haval_8way_init( haval_8way_context *sc, unsigned olen, unsigned passes )
 {
-   sc->s0 = m256_const1_32( 0x243F6A88UL );
-   sc->s1 = m256_const1_32( 0x85A308D3UL );
-   sc->s2 = m256_const1_32( 0x13198A2EUL );
-   sc->s3 = m256_const1_32( 0x03707344UL );
-   sc->s4 = m256_const1_32( 0xA4093822UL );
-   sc->s5 = m256_const1_32( 0x299F31D0UL );
-   sc->s6 = m256_const1_32( 0x082EFA98UL );
-   sc->s7 = m256_const1_32( 0xEC4E6C89UL );
+   sc->s0 = v256_32( 0x243F6A88UL );
+   sc->s1 = v256_32( 0x85A308D3UL );
+   sc->s2 = v256_32( 0x13198A2EUL );
+   sc->s3 = v256_32( 0x03707344UL );
+   sc->s4 = v256_32( 0xA4093822UL );
+   sc->s5 = v256_32( 0x299F31D0UL );
+   sc->s6 = v256_32( 0x082EFA98UL );
+   sc->s7 = v256_32( 0xEC4E6C89UL );
    sc->olen = olen;
    sc->passes = passes;
    sc->count_high = 0;
@@ -812,9 +880,299 @@ do { \
 
 #define INMSG_8W(i)   msg[i]
 
-
-
 #endif // AVX2
+
+#if defined(SIMD512) 
+
+// ( ~( a ^ b ) ) & c
+#define mm512_andnotxor( a, b, c ) \
+   _mm512_ternarylogic_epi32( a, b, c, 0x82  )
+
+#define F1_16W(x6, x5, x4, x3, x2, x1, x0) \
+ mm512_xor3( x0, mm512_andxor( x1, x0, x4 ), \
+                 _mm512_xor_si512( _mm512_and_si512( x2, x5 ), \
+                                   _mm512_and_si512( x3, x6 ) ) ) \
+
+#define F2_16W(x6, x5, x4, x3, x2, x1, x0) \
+   mm512_xor3( mm512_andxor( x2, _mm512_andnot_si512( x3, x1 ), \
+                       mm512_xor3( _mm512_and_si512( x4, x5 ), x6, x0 )  ), \
+               mm512_andxor( x4, x1, x5 ), \
+               mm512_xorand( x0, x3, x5 ) ) \
+
+#define F3_16W(x6, x5, x4, x3, x2, x1, x0) \
+  mm512_xor3( x0, \
+              _mm512_and_si512( x3, \
+                         mm512_xor3( _mm512_and_si512( x1, x2 ), x6, x0 ) ), \
+              _mm512_xor_si512( _mm512_and_si512( x1, x4 ), \
+                                _mm512_and_si512( x2, x5 ) ) )
+
+#define F4_16W(x6, x5, x4, x3, x2, x1, x0) \
+  mm512_xor3( \
+      mm512_andxor( x3, x5, \
+                    _mm512_xor_si512( _mm512_and_si512( x1, x2 ), \
+                                      _mm512_or_si512( x4, x6 ) ) ), \
+      _mm512_and_si512( x4, \
+                        mm512_xor3( x0, _mm512_andnot_si512( x2, x5 ), \
+                                    _mm512_xor_si512( x1, x6 ) ) ), \
+      mm512_xorand( x0, x2, x6 ) )
+
+#define F5_16W(x6, x5, x4, x3, x2, x1, x0) \
+   _mm512_xor_si512( \
+         mm512_andnotxor( mm512_and3( x1, x2, x3 ), x5, x0 ), \
+         mm512_xor3( _mm512_and_si512( x1, x4 ), \
+                     _mm512_and_si512( x2, x5 ), \
+                     _mm512_and_si512( x3, x6 ) ) )
+
+#define FP3_1_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F1_16W(x1, x0, x3, x5, x6, x2, x4)
+#define FP3_2_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F2_16W(x4, x2, x1, x0, x5, x3, x6)
+#define FP3_3_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F3_16W(x6, x1, x2, x3, x4, x5, x0)
+
+#define FP4_1_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F1_16W(x2, x6, x1, x4, x5, x3, x0)
+#define FP4_2_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F2_16W(x3, x5, x2, x0, x1, x6, x4)
+#define FP4_3_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F3_16W(x1, x4, x3, x6, x0, x2, x5)
+#define FP4_4_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F4_16W(x6, x4, x0, x5, x2, x1, x3)
+
+#define FP5_1_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F1_16W(x3, x4, x1, x0, x5, x2, x6)
+#define FP5_2_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F2_16W(x6, x2, x1, x0, x3, x4, x5)
+#define FP5_3_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F3_16W(x2, x6, x0, x4, x3, x1, x5)
+#define FP5_4_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F4_16W(x1, x5, x3, x2, x0, x4, x6)
+#define FP5_5_16W(x6, x5, x4, x3, x2, x1, x0) \
+   F5_16W(x2, x5, x0, x6, x4, x3, x1)
+
+#define STEP_16W(n, p, x7, x6, x5, x4, x3, x2, x1, x0, w, c) \
+do { \
+   __m512i t = FP ## n ## _ ## p ## _16W(x6, x5, x4, x3, x2, x1, x0); \
+   x7 = _mm512_add_epi32( _mm512_add_epi32( mm512_ror_32( t, 7 ), \
+                                      mm512_ror_32( x7, 11 ) ), \
+                       _mm512_add_epi32( w, v512_32( c ) ) ); \
+} while (0)
+   
+#define STEP1_16W(n, p, x7, x6, x5, x4, x3, x2, x1, x0, w) \
+do { \
+   __m512i t = FP ## n ## _ ## p ## _16W(x6, x5, x4, x3, x2, x1, x0); \
+   x7 = _mm512_add_epi32( _mm512_add_epi32( mm512_ror_32( t, 7 ), \
+                                      mm512_ror_32( x7, 11 ) ), w ); \
+} while (0)
+
+#define PASS1_16W(n, in)   do { \
+      unsigned pass_count; \
+      for (pass_count = 0; pass_count < 32; pass_count += 8) { \
+         STEP1_16W(n, 1, s7, s6, s5, s4, s3, s2, s1, s0, \
+            in(pass_count + 0) ); \
+         STEP1_16W(n, 1, s6, s5, s4, s3, s2, s1, s0, s7, \
+            in(pass_count + 1) ); \
+         STEP1_16W(n, 1, s5, s4, s3, s2, s1, s0, s7, s6, \
+            in(pass_count + 2) ); \
+         STEP1_16W(n, 1, s4, s3, s2, s1, s0, s7, s6, s5, \
+            in(pass_count + 3) ); \
+         STEP1_16W(n, 1, s3, s2, s1, s0, s7, s6, s5, s4, \
+            in(pass_count + 4) ); \
+         STEP1_16W(n, 1, s2, s1, s0, s7, s6, s5, s4, s3, \
+            in(pass_count + 5) ); \
+         STEP1_16W(n, 1, s1, s0, s7, s6, s5, s4, s3, s2, \
+            in(pass_count + 6) ); \
+         STEP1_16W(n, 1, s0, s7, s6, s5, s4, s3, s2, s1, \
+            in(pass_count + 7) ); \
+         } \
+   } while (0)
+
+#define PASSG_16W(p, n, in)   do { \
+      unsigned pass_count; \
+      for (pass_count = 0; pass_count < 32; pass_count += 8) { \
+         STEP_16W(n, p, s7, s6, s5, s4, s3, s2, s1, s0, \
+            in(MP ## p[pass_count + 0]), \
+            RK ## p[pass_count + 0]); \
+         STEP_16W(n, p, s6, s5, s4, s3, s2, s1, s0, s7, \
+            in(MP ## p[pass_count + 1]), \
+            RK ## p[pass_count + 1]); \
+         STEP_16W(n, p, s5, s4, s3, s2, s1, s0, s7, s6, \
+            in(MP ## p[pass_count + 2]), \
+            RK ## p[pass_count + 2]); \
+         STEP_16W(n, p, s4, s3, s2, s1, s0, s7, s6, s5, \
+            in(MP ## p[pass_count + 3]), \
+            RK ## p[pass_count + 3]); \
+         STEP_16W(n, p, s3, s2, s1, s0, s7, s6, s5, s4, \
+            in(MP ## p[pass_count + 4]), \
+            RK ## p[pass_count + 4]); \
+         STEP_16W(n, p, s2, s1, s0, s7, s6, s5, s4, s3, \
+            in(MP ## p[pass_count + 5]), \
+            RK ## p[pass_count + 5]); \
+         STEP_16W(n, p, s1, s0, s7, s6, s5, s4, s3, s2, \
+            in(MP ## p[pass_count + 6]), \
+            RK ## p[pass_count + 6]); \
+         STEP_16W(n, p, s0, s7, s6, s5, s4, s3, s2, s1, \
+            in(MP ## p[pass_count + 7]), \
+            RK ## p[pass_count + 7]); \
+         } \
+   } while (0)
+
+#define PASS2_16W(n, in)    PASSG_16W(2, n, in)
+#define PASS3_16W(n, in)    PASSG_16W(3, n, in)
+#define PASS4_16W(n, in)    PASSG_16W(4, n, in)
+#define PASS5_16W(n, in)    PASSG_16W(5, n, in)
+
+#define SAVE_STATE_16W \
+   __m512i u0, u1, u2, u3, u4, u5, u6, u7; \
+   do { \
+      u0 = s0; \
+      u1 = s1; \
+      u2 = s2; \
+      u3 = s3; \
+      u4 = s4; \
+      u5 = s5; \
+      u6 = s6; \
+      u7 = s7; \
+   } while (0)
+
+#define UPDATE_STATE_16W \
+do { \
+   s0 = _mm512_add_epi32( s0, u0 ); \
+   s1 = _mm512_add_epi32( s1, u1 ); \
+   s2 = _mm512_add_epi32( s2, u2 ); \
+   s3 = _mm512_add_epi32( s3, u3 ); \
+   s4 = _mm512_add_epi32( s4, u4 ); \
+   s5 = _mm512_add_epi32( s5, u5 ); \
+   s6 = _mm512_add_epi32( s6, u6 ); \
+   s7 = _mm512_add_epi32( s7, u7 ); \
+} while (0)
+
+#define CORE_16W5(in)  do { \
+      SAVE_STATE_16W; \
+      PASS1_16W(5, in); \
+      PASS2_16W(5, in); \
+      PASS3_16W(5, in); \
+      PASS4_16W(5, in); \
+      PASS5_16W(5, in); \
+      UPDATE_STATE_16W; \
+   } while (0)
+
+#define DSTATE_16W   __m512i s0, s1, s2, s3, s4, s5, s6, s7
+
+#define RSTATE_16W \
+do { \
+   s0 = sc->s0; \
+   s1 = sc->s1; \
+   s2 = sc->s2; \
+   s3 = sc->s3; \
+   s4 = sc->s4; \
+   s5 = sc->s5; \
+   s6 = sc->s6; \
+   s7 = sc->s7; \
+} while (0)
+
+#define WSTATE_16W \
+do { \
+   sc->s0 = s0; \
+   sc->s1 = s1; \
+   sc->s2 = s2; \
+   sc->s3 = s3; \
+   sc->s4 = s4; \
+   sc->s5 = s5; \
+   sc->s6 = s6; \
+   sc->s7 = s7; \
+} while (0)
+
+static void
+haval_16way_init( haval_16way_context *sc, unsigned olen, unsigned passes )
+{
+   sc->s0 = v512_32( 0x243F6A88UL );
+   sc->s1 = v512_32( 0x85A308D3UL );
+   sc->s2 = v512_32( 0x13198A2EUL );
+   sc->s3 = v512_32( 0x03707344UL );
+   sc->s4 = v512_32( 0xA4093822UL );
+   sc->s5 = v512_32( 0x299F31D0UL );
+   sc->s6 = v512_32( 0x082EFA98UL );
+   sc->s7 = v512_32( 0xEC4E6C89UL );
+   sc->olen = olen;
+   sc->passes = passes;
+   sc->count_high = 0;
+   sc->count_low = 0;
+
+}
+#define IN_PREPARE_16W(indata) const __m512i *const load_ptr_16w = (indata)
+
+#define INW_16W(i)   load_ptr_16w[ i ] 
+
+static void
+haval_16way_out( haval_16way_context *sc, void *dst )
+{
+   __m512i *buf = (__m512i*)dst;
+   DSTATE_16W;
+   RSTATE_16W;
+
+   buf[0] = s0;
+   buf[1] = s1;
+   buf[2] = s2;
+   buf[3] = s3;
+   buf[4] = s4;
+   buf[5] = s5;
+   buf[6] = s6;
+   buf[7] = s7;
+}
+
+#undef PASSES
+#define PASSES   5
+#include "haval-16way-helper.c"
+
+#define API_16W(xxx, y) \
+void \
+haval ## xxx ## _ ## y ## _16way_init(void *cc) \
+{ \
+   haval_16way_init(cc, xxx >> 5, y); \
+} \
+ \
+void \
+haval ## xxx ## _ ## y ## _16way_update (void *cc, const void *data, size_t len) \
+{ \
+   haval ## y ## _16way_update(cc, data, len); \
+} \
+ \
+void \
+haval ## xxx ## _ ## y ## _16way_close(void *cc, void *dst) \
+{ \
+   haval ## y ## _16way_close(cc, dst); \
+} \
+
+API_16W(256, 5)
+
+#define RVAL_16W \
+do { \
+   s0 = val[0]; \
+   s1 = val[1]; \
+   s2 = val[2]; \
+   s3 = val[3]; \
+   s4 = val[4]; \
+   s5 = val[5]; \
+   s6 = val[6]; \
+   s7 = val[7]; \
+} while (0)
+
+#define WVAL_16W \
+do { \
+   val[0] = s0; \
+   val[1] = s1; \
+   val[2] = s2; \
+   val[3] = s3; \
+   val[4] = s4; \
+   val[5] = s5; \
+   val[6] = s6; \
+   val[7] = s7; \
+} while (0)
+
+#define INMSG_16W(i)   msg[i]
+
+#endif
 
 #ifdef __cplusplus
 }

@@ -23,13 +23,12 @@ static void hex_getAlgoString(const uint32_t* prevblock, char *output)
    *sptr = '\0';
 }
 
-static __thread x16r_context_overlay hex_ctx;
 
 int hex_hash( void* output, const void* input, int thrid )
 {
    uint32_t _ALIGN(128) hash[16];
    x16r_context_overlay ctx;
-   memcpy( &ctx, &hex_ctx, sizeof(ctx) );
+   memcpy( &ctx, &x16r_ref_ctx, sizeof(ctx) );
    void *in = (void*) input;
    int size = 80;
 
@@ -41,9 +40,9 @@ int hex_hash( void* output, const void* input, int thrid )
       switch ( algo )
       {
          case BLAKE:
-            sph_blake512_init( &ctx.blake );
-            sph_blake512( &ctx.blake, in, size );
-            sph_blake512_close( &ctx.blake, hash );
+            blake512_init( &ctx.blake );
+            blake512_update( &ctx.blake, in, size );
+            blake512_close( &ctx.blake, hash );
          break;
          case BMW:
             sph_bmw512_init( &ctx.bmw );
@@ -52,7 +51,7 @@ int hex_hash( void* output, const void* input, int thrid )
          break;
          case GROESTL:
 #if defined(__AES__)
-            groestl512_full( &ctx.groestl, (char*)hash, (char*)in, size<<3 );
+            groestl512_full( &ctx.groestl, hash, in, size<<3 );
 #else
             sph_groestl512_init( &ctx.groestl );
             sph_groestl512( &ctx.groestl, in, size );
@@ -86,42 +85,37 @@ int hex_hash( void* output, const void* input, int thrid )
          break;
          case LUFFA:
             if ( i == 0 )
-            update_and_final_luffa( &ctx.luffa, (BitSequence*)hash,
-                                          (const BitSequence*)in+64, 16 );
+            {
+              update_and_final_luffa( &ctx.luffa, hash, in+64, 16 );
+            }
             else
             {
                init_luffa( &ctx.luffa, 512 );
-               update_and_final_luffa( &ctx.luffa, (BitSequence*)hash,
-                                             (const BitSequence*)in, size );
+               update_and_final_luffa( &ctx.luffa, hash, in, size );
             }
             break;
          case CUBEHASH:
             if ( i == 0 )
-               cubehashUpdateDigest( &ctx.cube, (byte*)hash,
-                                          (const byte*)in+64, 16 );
+               cubehashUpdateDigest( &ctx.cube, hash, in+64, 16 );
             else
             {
                cubehashInit( &ctx.cube, 512, 16, 32 );
-               cubehashUpdateDigest( &ctx.cube, (byte*)hash,
-                                          (const byte*)in, size );
+               cubehashUpdateDigest( &ctx.cube, hash, in, size );
             }
          break;
          case SHAVITE:
             shavite512_full( &ctx.shavite, hash, in, size );
          break;
          case SIMD:
-             init_sd( &ctx.simd, 512 );
-             update_final_sd( &ctx.simd, (BitSequence *)hash,
-                              (const BitSequence*)in, size<<3 );
+            simd512_ctx( &ctx.simd, hash, in, size<<3 );
          break;
          case ECHO:
-#if defined(__AES__)
-            echo_full( &ctx.echo, (BitSequence *)hash, 512,
-                              (const BitSequence *)in, size );
+#if defined(__AES__) || defined(__ARM_FEATURE_AES) 
+            echo_full( &ctx.echo, hash, 512, in, size );
 #else
-             sph_echo512_init( &ctx.echo );
-             sph_echo512( &ctx.echo, in, size );
-             sph_echo512_close( &ctx.echo, hash );
+            sph_echo512_init( &ctx.echo );
+            sph_echo512( &ctx.echo, in, size );
+            sph_echo512_close( &ctx.echo, hash );
 #endif
          break;
          case HAMSI:
@@ -192,7 +186,7 @@ int scanhash_hex( struct work *work, uint32_t max_nonce,
    const bool bench = opt_benchmark;
    if ( bench )  ptarget[7] = 0x0cff;
 
-   mm128_bswap32_80( edata, pdata );
+   v128_bswap32_80( edata, pdata );
    
    static __thread uint32_t s_ntime = UINT32_MAX;
    uint32_t ntime = swab32(pdata[17]);
@@ -210,39 +204,39 @@ int scanhash_hex( struct work *work, uint32_t max_nonce,
    switch ( algo )
    {
       case JH:
-         sph_jh512_init( &hex_ctx.jh );
-         sph_jh512( &hex_ctx.jh, edata, 64 );
+         sph_jh512_init( &x16r_ref_ctx.jh );
+         sph_jh512( &x16r_ref_ctx.jh, edata, 64 );
       break;
       case SKEIN:
-         sph_skein512_init( &hex_ctx.skein );
-         sph_skein512( &hex_ctx.skein, edata, 64 );
+         sph_skein512_init( &x16r_ref_ctx.skein );
+         sph_skein512( &x16r_ref_ctx.skein, edata, 64 );
       break;
       case LUFFA:
-         init_luffa( &hex_ctx.luffa, 512 );
-         update_luffa( &hex_ctx.luffa, (const BitSequence*)edata, 64 );
+         init_luffa( &x16r_ref_ctx.luffa, 512 );
+         update_luffa( &x16r_ref_ctx.luffa, edata, 64 );
       break;
       case CUBEHASH:
-         cubehashInit( &hex_ctx.cube, 512, 16, 32 );
-         cubehashUpdate( &hex_ctx.cube, (const byte*)edata, 64 );
+         cubehashInit( &x16r_ref_ctx.cube, 512, 16, 32 );
+         cubehashUpdate( &x16r_ref_ctx.cube, edata, 64 );
       break;
       case HAMSI:
-         sph_hamsi512_init( &hex_ctx.hamsi );
-         sph_hamsi512( &hex_ctx.hamsi, edata, 64 );
+         sph_hamsi512_init( &x16r_ref_ctx.hamsi );
+         sph_hamsi512( &x16r_ref_ctx.hamsi, edata, 64 );
       break;
       case SHABAL:
-         sph_shabal512_init( &hex_ctx.shabal );
-         sph_shabal512( &hex_ctx.shabal, edata, 64 );
+         sph_shabal512_init( &x16r_ref_ctx.shabal );
+         sph_shabal512( &x16r_ref_ctx.shabal, edata, 64 );
       break;
       case WHIRLPOOL:
-         sph_whirlpool_init( &hex_ctx.whirlpool );
-         sph_whirlpool( &hex_ctx.whirlpool, edata, 64 );
+         sph_whirlpool_init( &x16r_ref_ctx.whirlpool );
+         sph_whirlpool( &x16r_ref_ctx.whirlpool, edata, 64 );
       break;
    }
    
    do
    {
       edata[19] = nonce;
-      if ( hex_hash( hash32, edata, thr_id ) );
+      if ( hex_hash( hash32, edata, thr_id ) )
       if ( unlikely( valid_hash( hash32, ptarget ) && !bench ) )
       {
          be32enc( &pdata[19], nonce );

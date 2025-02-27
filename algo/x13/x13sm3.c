@@ -17,8 +17,7 @@
 #include "algo/fugue/sph_fugue.h"
 #include "algo/luffa/luffa_for_sse2.h"
 #include "algo/cubehash/cubehash_sse2.h"
-#include "algo/simd/nist.h"
-
+#include "algo/simd/simd-hash-2way.h"
 #if defined(__AES__)
   #include "algo/echo/aes_ni/hash_api.h"
   #include "algo/groestl/aes_ni/hash-groestl.h"
@@ -43,7 +42,7 @@ typedef struct {
    hashState_luffa         luffa;
    cubehashParam           cube;
    sph_shavite512_context  shavite;
-   hashState_sd            simd;
+   simd512_context         simd;
    sm3_ctx_t               sm3;
    sph_hamsi512_context    hamsi;
    sph_fugue512_context    fugue;
@@ -68,7 +67,6 @@ void init_x13sm3_ctx()
    init_luffa( &hsr_ctx.luffa,512 );
    cubehashInit( &hsr_ctx.cube,512,16,32 );
    sph_shavite512_init( &hsr_ctx.shavite );
-   init_sd( &hsr_ctx.simd,512 );
    sm3_init( &hsr_ctx.sm3 );
    sph_hamsi512_init( &hsr_ctx.hamsi );
    sph_fugue512_init( &hsr_ctx.fugue );
@@ -105,22 +103,14 @@ void x13sm3_hash(void *output, const void *input)
     sph_keccak512( &ctx.keccak, (const void*) hash, 64 );
     sph_keccak512_close( &ctx.keccak, hash );
 
+    update_and_final_luffa( &ctx.luffa, hash, hash, 64 );
 
-        //--- luffa7
-        update_and_final_luffa( &ctx.luffa, (BitSequence*)hash,
-                                (const BitSequence*)hash, 64 );
+    cubehashUpdateDigest( &ctx.cube, hash, hash, 64 );
 
-        // 8 Cube
-        cubehashUpdateDigest( &ctx.cube, (byte*) hash,
-                              (const byte*)hash, 64 );
-
-        // 9 Shavite
-        sph_shavite512( &ctx.shavite, hash, 64);
+    sph_shavite512( &ctx.shavite, hash, 64);
         sph_shavite512_close( &ctx.shavite, hash);
 
-        // 10 Simd
-        update_final_sd( &ctx.simd, (BitSequence *)hash,
-                         (const BitSequence *)hash, 512 );
+    simd512_ctx( &ctx.simd, hash, hash, 64 );
 
         //11---echo---
 #ifdef __AES__
@@ -143,7 +133,6 @@ void x13sm3_hash(void *output, const void *input)
         sph_fugue512(&ctx.fugue, hash, 64);
         sph_fugue512_close(&ctx.fugue, hash);
 
-        asm volatile ("emms");
 	memcpy(output, hash, 32);
 }
 

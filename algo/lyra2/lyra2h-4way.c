@@ -3,16 +3,15 @@
 #ifdef LYRA2H_4WAY
 
 #include <memory.h>
-#include <mm_malloc.h>
+//#include <mm_malloc.h>
 #include "lyra2.h"
-//#include "algo/blake/sph_blake.h"
-#include "algo/blake/blake-hash-4way.h"
+#include "algo/blake/blake256-hash.h"
 
 __thread uint64_t* lyra2h_4way_matrix;
 
 bool lyra2h_4way_thread_init()
 {
- return ( lyra2h_4way_matrix = _mm_malloc( LYRA2H_MATRIX_SIZE, 64 ) );
+ return ( lyra2h_4way_matrix = mm_malloc( LYRA2H_MATRIX_SIZE, 64 ) );
 }
 
 static __thread blake256_4way_context l2h_4way_blake_mid;
@@ -64,11 +63,11 @@ int scanhash_lyra2h_4way( struct work *work, uint32_t max_nonce,
    if ( opt_benchmark )
       ptarget[7] = 0x0000ff;
 
-   mm128_bswap32_intrlv80_4x32( vdata, pdata );
+   v128_bswap32_intrlv80_4x32( vdata, pdata );
    lyra2h_4way_midstate( vdata );
 
    do {
-     *noncev = mm128_bswap_32( _mm_set_epi32( n+3, n+2, n+1, n ) );
+     *noncev = v128_bswap32( _mm_set_epi32( n+3, n+2, n+1, n ) );
       lyra2h_4way_hash( hash, vdata );
 
       for ( int i = 0; i < 4; i++ )

@@ -1,9 +1,9 @@
 #if !defined(SIMD_128_H__)
 #define SIMD_128_H__ 1
 
-#if defined(__SSE2__)
+#if defined(__x86_64__) && defined(__SSE2__)
 
-///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 //
 //                 128 bit SSE vectors
 //
@@ -20,9 +20,9 @@
 // define a local const for repeated references to the same constant.
 //
 // One common use for simd constants is as a control index for vector
-// instructions like blend and shuffle. Alhough the ultimate instruction
-// may execute in a single clock cycle, generating the control index adds
-// several more cycles to the entire operation. 
+// shuffle instructions. Alhough the ultimate instruction may execute in a
+// single clock cycle, generating the control index adds several more cycles
+// to the entire operation. 
 //
 // All of the utilities here assume all data is in registers except
 // in rare cases where arguments are pointers.
@@ -32,21 +32,153 @@
 // Intrinsics automatically promote from REX to VEX when AVX is available
 // but ASM needs to be done manually.
 //
-///////////////////////////////////////////////////////////////////////////
+// APX supports EGPR which adds 16 more GPRs and 3 operand instructions.
+// This may affect ASM that include instructions that are superseded by APX
+// versions and are therefore incompatible with APX.
+// As a result GCC-14 disables EGPR by default and can be enabled with
+// "-mapx-inline-asm-use-gpr32"
+//TODO
+// Some ASM functions may need to be updated to support EGPR with APX.
+//
+///////////////////////////////////////////////////////////////////////////////
 
+// New architecturally agnostic syntax: 
+//
+//           __m128i -> v128_t
+//           _mm_    -> v128_
+// 
+//    There is also new syntax to accomodate ARM's stricter type checking of
+//    vector element size. They have no effect on x86_64.
 
-// Used instead if casting.
+// direct translation of native intrinsics
+
+#define v128_t                         __m128i 
+#define v128u64_t                      v128_t
+#define v128u32_t                      v128_t
+#define v128u16_t                      v128_t
+#define v128u8_t                       v128_t
+
+#define v128_load                      _mm_load_si128
+#define v128_store                     _mm_store_si128
+
+// Needed for ARM, Doesn't do anything special on x86_64
+#define v128_load1_64(p)               _mm_set1_epi64x(*(uint64_t*)(p) )
+#define v128_load1_32(p)               _mm_set1_epi32( *(uint32_t*)(p) )
+#define v128_load1_16(p)               _mm_set1_epi16( *(uint16_t*)(p) )
+#define v128_load1_8( p)               _mm_set1_epi8(  *(uint8_t*) (p) )
+
+// arithmetic
+#define v128_add64                     _mm_add_epi64
+#define v128_add32                     _mm_add_epi32
+#define v128_add16                     _mm_add_epi16
+#define v128_add8                      _mm_add_epi8
+
+#define v128_sub64                     _mm_sub_epi64
+#define v128_sub32                     _mm_sub_epi32
+#define v128_sub16                     _mm_sub_epi16
+#define v128_sub8                      _mm_sub_epi8
+
+// save low half
+#define v128_mul64                     _mm_mullo_epi64
+#define v128_mul32                     _mm_mullo_epi32
+#define v128_mul16                     _mm_mullo_epi16
+
+// widen
+#define v128_mulw32                    _mm_mul_epu32
+#define v128_mulw16                    _mm_mul_epu16
+
+// signed compare
+#define v128_cmpeq64                   _mm_cmpeq_epi64
+#define v128_cmpeq32                   _mm_cmpeq_epi32
+#define v128_cmpeq16                   _mm_cmpeq_epi16
+#define v128_cmpeq8                    _mm_cmpeq_epi8
+
+#define v128_cmpgt64                   _mm_cmpgt_epi64
+#define v128_cmpgt32                   _mm_cmpgt_epi32
+#define v128_cmpgt16                   _mm_cmpgt_epi16
+#define v128_cmpgt8                    _mm_cmpgt_epi8
+
+#define v128_cmplt64                   _mm_cmplt_epi64
+#define v128_cmplt32                   _mm_cmplt_epi32
+#define v128_cmplt16                   _mm_cmplt_epi16
+#define v128_cmplt8                    _mm_cmplt_epi8
+
+// bit shift
+#define v128_sl64                      _mm_slli_epi64
+#define v128_sl32                      _mm_slli_epi32
+#define v128_sl16                      _mm_slli_epi16
+#define v128_sl8                       _mm_slli_epi8
+
+#define v128_sr64                      _mm_srli_epi64
+#define v128_sr32                      _mm_srli_epi32
+#define v128_sr16                      _mm_srli_epi16
+#define v128_sr8                       _mm_srli_epi8
+
+#define v128_sra64                     _mm_srai_epi64
+#define v128_sra32                     _mm_srai_epi32
+#define v128_sra16                     _mm_srai_epi16
+#define v128_sra8                      _mm_srai_epi8
+
+// logic
+#define v128_or                        _mm_or_si128
+#define v128_and                       _mm_and_si128
+#define v128_xor                       _mm_xor_si128
+#define v128_xorq                      _mm_xor_si128
+#define v128_andnot                    _mm_andnot_si128
+
+// unpack
+#define v128_unpacklo64                _mm_unpacklo_epi64
+#define v128_unpackhi64                _mm_unpackhi_epi64
+#define v128_unpacklo32                _mm_unpacklo_epi32
+#define v128_unpackhi32                _mm_unpackhi_epi32
+#define v128_unpacklo16                _mm_unpacklo_epi16
+#define v128_unpackhi16                _mm_unpackhi_epi16
+#define v128_unpacklo8                 _mm_unpacklo_epi8
+#define v128_unpackhi8                 _mm_unpackhi_epi8
+
+// AES
+// Nokey means nothing on x86_64 but it saves an instruction and a register
+// on ARM.
+#define v128_aesenc                    _mm_aesenc_si128
+#define v128_aesenc_nokey(v)           _mm_aesenc_si128( v, v128_zero )
+#define v128_aesenclast                _mm_aesenclast_si128
+#define v128_aesenclast_nokey(v)       _mm_aesenclast_si128( v, v128_zero )
+#define v128_aesdec                    _mm_aesdec_si128
+#define v128_aesdec_nokey(v)           _mm_aesdec_si128( v, v128_zero )
+#define v128_aesdeclast                _mm_aesdeclast_si128
+#define v128_aesdeclast_nokey(v)       _mm_aesdeclast_si128( v, v128_zero )
+
+// Used instead of casting.
 typedef union
 {
-   __m128i m128;
+   v128_t   v128;
    uint32_t u32[4];
-} __attribute__ ((aligned (16))) m128_ovly;
+} __attribute__ ((aligned (16))) v128_ovly;
 
-// Efficient and convenient moving between GP & low bits of XMM.
-// Use VEX when available to give access to xmm8-15 and zero extend for
-// larger vectors.
+// use for immediate constants, use load1 for mem.
+#define v128_64                        _mm_set1_epi64x
+#define v128_32                        _mm_set1_epi32
+#define v128_16                        _mm_set1_epi16
+#define v128_8                         _mm_set1_epi8
 
-static inline __m128i mm128_mov64_128( const uint64_t n )
+#define v128_set64                     _mm_set_epi64x
+#define v128_set32                     _mm_set_epi32
+#define v128_set16                     _mm_set_epi16
+#define v128_set8                      _mm_set_epi8
+
+// Deprecated. AVX512 adds EVEX encoding (3rd operand) and other improvements
+// that make these functions either unnecessary or inefficient.
+// In cases where an explicit move betweeen GP & SIMD registers is still
+// necessary the cvt, set, or set1 intrinsics can be used allowing the
+// compiler to exploit new features to produce optimum code.
+// Currently only used internally and by Luffa.
+// It also has implications for APX EGPR feature.
+
+#define v128_mov64       _mm_cvtsi64_si128
+#define v128_mov32       _mm_cvtsi32_si128
+
+/*
+static inline __m128i v128_mov64( const uint64_t n )
 {
   __m128i a;
 #if defined(__AVX__)
@@ -54,10 +186,10 @@ static inline __m128i mm128_mov64_128( const uint64_t n )
 #else
   asm( "movq %1, %0\n\t" : "=x"(a) : "r"(n) );
 #endif
-  return  a;
+  return a;
 }
 
-static inline __m128i mm128_mov32_128( const uint32_t n )
+static inline __m128i v128_mov32( const uint32_t n )
 {
   __m128i a;
 #if defined(__AVX__)
@@ -65,82 +197,105 @@ static inline __m128i mm128_mov32_128( const uint32_t n )
 #else  
   asm( "movd %1, %0\n\t" : "=x"(a) : "r"(n) );
 #endif
-  return  a;
+  return a;
 }
+*/
 
-// Inconstant naming, prefix should reflect return value:
-// u64_mov128_64
+// broadcast lane 0 to all lanes
+#define v128_bcast64(v)                 _mm_shuffle_epi32( v, 0x44 )
+#define v128_bcast32(v)                 _mm_shuffle_epi32( v, 0x00 )
 
-static inline uint64_t u64_mov128_64( const __m128i a )
-{
-  uint64_t n;
-#if defined(__AVX__)
-  asm( "vmovq %1, %0\n\t" : "=r"(n) : "x"(a) );
-#else  
-  asm( "movq %1, %0\n\t" : "=r"(n) : "x"(a) );
-#endif
-  return  n;
-}
+// Not used, test first
+/*
+#if defined(__AVX2__)
 
-static inline uint32_t u32_mov128_32( const __m128i a )
-{
-  uint32_t n;
-#if defined(__AVX__)
-  asm( "vmovd %1, %0\n\t" : "=r"(n) : "x"(a) );
-#else  
-  asm( "movd %1, %0\n\t" : "=r"(n) : "x"(a) );
-#endif
-  return  n;
-}
+#define v128_bcast16(v)                 _mm_broadcastw_epi16(v)
 
-// Equivalent of set1, broadcast integer to all elements.
-#define m128_const_i128( i ) mm128_mov64_128( i )
-#define m128_const1_64( i ) _mm_shuffle_epi32( mm128_mov64_128( i ), 0x44 )
-#define m128_const1_32( i ) _mm_shuffle_epi32( mm128_mov32_128( i ), 0x00 )
+#else
 
-#if defined(__SSE4_1__)
-
-// Assign 64 bit integers to respective elements: {hi, lo}
-#define m128_const_64( hi, lo ) \
-   _mm_insert_epi64( mm128_mov64_128( lo ), hi, 1 )
-
-#else  // No insert in SSE2
-
-#define m128_const_64  _mm_set_epi64x
+#define v128_bcast16(v) \
+   _mm_shuffle_epi32( _mm_shufflelo_epi16( v, 0x00 ), 0x00 )
 
 #endif
+*/
+
+// Broadcast lane l to all lanes
+#define v128_duplane64( v, l ) \
+   ( (l) == 0 ) ? _mm_shuffle_epi32( v, 0x44 ) \
+                : _mm_shuffle_epi32( v, 0xee )
+
+#define v128_duplane32( v, l ) \
+    ( (l) == 0 ) ? _mm_shuffle_epi32( v, 0x00 ) \
+  : ( (l) == 1 ) ? _mm_shuffle_epi32( v, 0x55 ) \
+  : ( (l) == 2 ) ? _mm_shuffle_epi32( v, 0xaa ) \
+  :                _mm_shuffle_epi32( v, 0xff )
 
 // Pseudo constants
+#define v128_zero                       _mm_setzero_si128()
 
-#define m128_zero      _mm_setzero_si128()
-#define m128_one_128   mm128_mov64_128( 1 )
-#define m128_one_64    _mm_shuffle_epi32( mm128_mov64_128( 1 ), 0x44 )
-#define m128_one_32    _mm_shuffle_epi32( mm128_mov32_128( 1 ), 0x00 )
-#define m128_one_16    _mm_shuffle_epi32( \
-                                 mm128_mov32_128( 0x00010001 ), 0x00 )
-#define m128_one_8     _mm_shuffle_epi32( \
-                                 mm128_mov32_128( 0x01010101 ), 0x00 )
+//#define v128_one                         v128_mov64(1)
+#define v128_one                        _mm_cvtsi64_si128( 1 )
 
 // ASM avoids the need to initialize return variable to avoid compiler warning.
 // Macro abstracts function parentheses to look like an identifier.
-
-static inline __m128i mm128_neg1_fn()
+static inline __m128i v128_neg1_fn()
 {
    __m128i a;
-#if defined(__AVX__) 
+#if defined(__AVX__)
    asm( "vpcmpeqq %0, %0, %0\n\t" : "=x"(a) );
 #else
    asm( "pcmpeqq %0, %0\n\t" : "=x"(a) );
 #endif
    return a;
 }
-#define m128_neg1    mm128_neg1_fn()
+#define v128_neg1                        v128_neg1_fn()
+
+//
+// Vector pointer cast
+
+// p = any aligned pointer
+// returns p as pointer to vector type
+#define castp_v128(p)     ((__m128i*)(p))
+#define castp_v128u64     castp_v128
+#define castp_v128u32     castp_v128
+#define castp_v128u16     castp_v128
+#define castp_v128u8      castp_v128
+
+// p = any aligned pointer
+// returns *p, watch your pointer arithmetic
+#define cast_v128(p)      (*((__m128i*)(p)))
+#define cast_v128u64      cast_v128
+#define cast_v128u32      cast_v128
+#define cast_v128u16      cast_v128
+#define cast_v128u8       cast_v128
+
+// p = any aligned pointer, i = scaled array index
+// returns value p[i]
+#define casti_v128(p,i)    (((__m128i*)(p))[(i)])
+#define casti_v128u64      casti_v128
+#define casti_v128u32      casti_v128
+#define casti_v128u16      casti_v128
+#define casti_v128u8       casti_v128
+
+// p = any aligned pointer, o = scaled offset
+// returns pointer p+o
+#define casto_v128(p,o) (((__m128i*)(p))+(o))
 
 #if defined(__SSE4_1__)
 
-/////////////////////////////
+#define v128_get64( v, l )         _mm_extract_epi64( v, l )
+#define v128_get32( v, l )         _mm_extract_epi32( v, l )
+#define v128_get16( v, l )         _mm_extract_epi16( v, l )
+#define v128_get8(  v, l )         _mm_extract_epi8(  v, l )
+
+#define v128_put64( v, u64, l )    _mm_insert_epi64( v, u64, l )
+#define v128_put32( v, u32, l )    _mm_insert_epi32( v, u32, l )
+#define v128_put16( v, u16, l )    _mm_insert_epi16( v, u16, l )
+#define v128_put8(  v, u8,  l )    _mm_insert_epi8(  v, u8,  l )
+
+/////////////////////////////////////////////////////////////
 //
-//      _mm_insert_ps( _mm128i v1, __m128i v2, imm8 c )
+//      _mm_insert_ps( __m128i v1, __m128i v2, imm8 c )
 //
 // Fast and powerful but very limited in its application.
 // It requires SSE4.1 but only works with 128 bit vectors with 32 bit
@@ -149,7 +304,7 @@ static inline __m128i mm128_neg1_fn()
 // sizing. It's unique.
 //
 // It can:
-//   - zero 32 bit elements of a 128 bit vector.
+//   - zero any number of 32 bit elements of a 128 bit vector.
 //   - extract any 32 bit element from one 128 bit vector and insert the
 //     data to any 32 bit element of another 128 bit vector, or the same vector.
 //   - do both simultaneoulsly.
@@ -162,30 +317,28 @@ static inline __m128i mm128_neg1_fn()
 //    c[5:4] destination element selector
 //    c[7:6] source element selector
 
-// Convert type and abbreviate name: e"x"tract "i"nsert "m"ask
-#define mm128_xim_32( v1, v2, c ) \
+// Convert type and abbreviate name: eXtract Insert Mask = XIM
+#define v128_xim32( v1, v0, c ) \
    _mm_castps_si128( _mm_insert_ps( _mm_castsi128_ps( v1 ), \
-                                    _mm_castsi128_ps( v2 ), c ) )
+                                    _mm_castsi128_ps( v0 ), c ) )
 
-// Some examples of simple operations:
+// Examples of simple operations using xim:
+/*
+// Copy i32 to element c of dest and copy remaining elemnts from v.
+#define v128_put32( v, i32, c ) \
+      v128_xim_32( v, v128_mov32( i32 ), (c)<<4 )
+*/
 
-// Insert 32 bit integer into v at element c and return modified v.
-static inline __m128i mm128_insert_32( const __m128i v, const uint32_t i,
-                                       const int c )
-{   return mm128_xim_32( v, mm128_mov32_128( i ), c<<4 ); }
 
-// Extract 32 bit element c from v and return as integer.
-static inline uint32_t mm128_extract_32( const __m128i v, const int c )
-{   return u32_mov128_32( mm128_xim_32( v, v, c<<6 ) ); }
+#define v128_mask32( v, m )    v128_xim32( v, v, m & 0xf )
 
-// Clear (zero) 32 bit elements based on bits set in 4 bit mask.
-static inline __m128i mm128_mask_32( const __m128i v, const int m ) 
-{   return mm128_xim_32( v, v, m ); }
+// Zero 32 bit elements when corresponding bit in 4 bit mask is set.
+//static inline __m128i v128_mask32( const __m128i v, const int m ) 
+//{   return v128_xim32( v, v, m ); }
 
-// Move element i2 of v2 to element i1 of v1. For reference and convenience,
-// it's faster to precalculate the index.
-#define mm128_shuflmov_32( v1, i1, v2, i2 ) \
-  mm128_xim_32( v1, v2, ( (i1)<<4 ) | ( (i2)<<6 ) )
+// Copy element l0 of v0 to element l1 of dest and copy remaining elements from v1.
+#define v128_movlane32( v1, l1, v0, l0 ) \
+  v128_xim32( v1, v0, ( (l1)<<4 ) | ( (l0)<<6 ) )
 
 #endif  // SSE4_1
 
@@ -193,49 +346,42 @@ static inline __m128i mm128_mask_32( const __m128i v, const int m )
 // Basic operations without equivalent SIMD intrinsic
 
 // Bitwise not (~v)  
-#define mm128_not( v )          _mm_xor_si128( v, m128_neg1 ) 
+#if defined(VL256)
 
-// Unary negation of elements (-v)
-#define mm128_negate_64( v )    _mm_sub_epi64( m128_zero, v )
-#define mm128_negate_32( v )    _mm_sub_epi32( m128_zero, v )  
-#define mm128_negate_16( v )    _mm_sub_epi16( m128_zero, v )  
+static inline __m128i v128_not( const __m128i v )
+{  return _mm_ternarylogic_epi64( v, v, v, 1 ); }
+
+#else
+
+#define v128_not( v )          _mm_xor_si128( v, v128_neg1 ) 
+
+#endif
+
+static inline v128u64_t v128_negate_64( v128u64_t v )
+{ return _mm_sub_epi64( _mm_xor_si128( v, v ), v ); }
+
+static inline v128u32_t v128_negate_32( v128u32_t v )
+{ return _mm_sub_epi32( _mm_xor_si128( v, v ), v ); }
+
+static inline v128u16_t v128_negate_16( v128u16_t v ) 
+{ return _mm_sub_epi16( _mm_xor_si128( v, v ), v ); }
 
 
 // Add 4 values, fewer dependencies than sequential addition.
-#define mm128_add4_64( a, b, c, d ) \
+#define v128_add4_64( a, b, c, d ) \
    _mm_add_epi64( _mm_add_epi64( a, b ), _mm_add_epi64( c, d ) )
 
-#define mm128_add4_32( a, b, c, d ) \
+#define v128_add4_32( a, b, c, d ) \
    _mm_add_epi32( _mm_add_epi32( a, b ), _mm_add_epi32( c, d ) )
 
-#define mm128_add4_16( a, b, c, d ) \
+#define v128_add4_16( a, b, c, d ) \
    _mm_add_epi16( _mm_add_epi16( a, b ), _mm_add_epi16( c, d ) )
 
-#define mm128_add4_8( a, b, c, d ) \
+#define v128_add4_8( a, b, c, d ) \
    _mm_add_epi8( _mm_add_epi8( a, b ), _mm_add_epi8( c, d ) )
 
-#define mm128_xor4( a, b, c, d ) \
+#define v128_xor4( a, b, c, d ) \
    _mm_xor_si128( _mm_xor_si128( a, b ), _mm_xor_si128( c, d ) )
-
-
-//
-// Vector pointer cast
-
-// p = any aligned pointer
-// returns p as pointer to vector type
-#define castp_m128i(p) ((__m128i*)(p))
-
-// p = any aligned pointer
-// returns *p, watch your pointer arithmetic
-#define cast_m128i(p) (*((__m128i*)(p)))
-
-// p = any aligned pointer, i = scaled array index
-// returns value p[i]
-#define casti_m128i(p,i) (((__m128i*)(p))[(i)])
-
-// p = any aligned pointer, o = scaled offset
-// returns pointer p+o
-#define casto_m128i(p,o) (((__m128i*)(p))+(o))
 
 
 // Memory functions
@@ -243,127 +389,255 @@ static inline __m128i mm128_mask_32( const __m128i v, const int m )
 // Assumes data is alinged and integral.
 // n = number of __m128i, bytes/16
 
-static inline void memset_zero_128( __m128i *dst,  const int n )
-{   for ( int i = 0; i < n; i++ ) dst[i] = m128_zero; }
+static inline void v128_memset_zero( v128_t *dst,  const int n )
+{   for ( int i = 0; i < n; i++ ) dst[i] = v128_zero; }
+#define memset_zero_128      v128_memset_zero
 
-static inline void memset_128( __m128i *dst, const __m128i a, const int n )
+static inline void v128_memset( v128_t *dst, const v128_t a, const int n )
 {   for ( int i = 0; i < n; i++ ) dst[i] = a; }
 
-static inline void memcpy_128( __m128i *dst, const __m128i *src, const int n )
+static inline void v128_memcpy( v128_t *dst, const v128_t *src, const int n )
 {   for ( int i = 0; i < n; i ++ ) dst[i] = src[i]; }
+#define  memcpy_128           v128_memcpy  
 
-#if defined(__AVX512VL__)
+// Boolean operations
+#if defined(VL256)
+// Macros with duplicate references to the same argument are
+// not expression safe. Switch to inline function if required.
+
+// ~v1 | v0
+#define v128_ornot( v1, v0 )      _mm_ternarylogic_epi64( v1, v0, v0, 0xcf )
 
 // a ^ b ^ c
-#define mm128_xor3( a, b, c ) \
-   _mm_ternarylogic_epi64( a, b, c, 0x96 )
+#define v128_xor3( a, b, c )      _mm_ternarylogic_epi64( a, b, c, 0x96 )
+
+// a & b & c
+#define v128_and3( a, b, c )      _mm_ternarylogic_epi64( a, b, c, 0x80 )
+
+// a | b | c
+#define v128_or3( a, b, c )       _mm_ternarylogic_epi64( a, b, c, 0xfe )
 
 // a ^ ( b & c )
-#define mm128_xorand( a, b, c ) \
-   _mm_ternarylogic_epi64( a, b, c, 0x78 )
+#define v128_xorand( a, b, c )    _mm_ternarylogic_epi64( a, b, c, 0x78 )
+
+// a & ( b ^ c )
+#define v128_andxor( a, b, c )    _mm_ternarylogic_epi64( a, b, c, 0x60 )
+
+// a ^ ( b | c )
+#define v128_xoror( a, b, c )     _mm_ternarylogic_epi64( a, b, c, 0x1e )
+
+// a ^ ( ~b & c )
+#define v128_xorandnot( a, b, c ) _mm_ternarylogic_epi64( a, b, c, 0xd2 )
+
+// a | ( b & c )
+#define v128_orand( a, b, c )     _mm_ternarylogic_epi64( a, b, c, 0xf8 )
+
+// ~( a ^ b ), same as (~a) ^ b
+#define v128_xnor( a, b )         _mm_ternarylogic_epi64( a, b, b, 0x81 )
 
 #else
 
-#define mm128_xor3( a, b, c ) \
-   _mm_xor_si128( a, _mm_xor_si128( b, c ) )
+#define v128_ornot( v1, v0 )      _mm_or_si128( v128_not( v1 ), v0 )
 
-#define mm128_xorand( a, b, c ) \
-  _mm_xor_si128( a, _mm_and_si128( b, c ) )
+#define v128_xor3( a, b, c )      _mm_xor_si128( _mm_xor_si128( a, b ), c )
+
+#define v128_and3( a, b, c )      _mm_and_si128( _mm_and_si128( a, b ), c )
+
+#define v128_or3( a, b, c )       _mm_or_si128( _mm_or_si128( a, b ), c )
+
+#define v128_xorand( a, b, c )    _mm_xor_si128( a, _mm_and_si128( b, c ) )
+
+#define v128_andxor( a, b, c )    _mm_and_si128( a, _mm_xor_si128( b, c ))
+
+#define v128_xoror( a, b, c )     _mm_xor_si128( a, _mm_or_si128( b, c ) )
+
+#define v128_xorandnot( a, b, c ) _mm_xor_si128( a, _mm_andnot_si128( b, c ) )
+
+#define v128_orand( a, b, c )     _mm_or_si128( a, _mm_and_si128( b, c ) )
+
+#define v128_xnor( a, b )         v128_not( _mm_xor_si128( a, b ) )
 
 #endif
+
 
 // Mask making
-
 // Equivalent of AVX512 _mm_movepi64_mask & _mm_movepi32_mask.
-// Returns 2 or 4 bit integer mask from MSB of 64 or 32 bit elements.
+// Returns 2 or 4 bit integer mask from MSBit of 64 or 32 bit elements.
+// Effectively a sign test.
 
-#define mm_movmask_64( v ) \
-   _mm_castpd_si128( _mm_movmask_pd( _mm_castsi128_pd( v ) ) )
+#define v128_movmask64( v ) \
+   _mm_movemask_pd( (__m128d)(v) )
 
-#define mm_movmask_32( v ) \
-   _mm_castps_si128( _mm_movmask_ps( _mm_castsi128_ps( v ) ) )
+#define v128_movmask32( v ) \
+   _mm_movemask_ps( (__m128)(v) )
 
+// Shuffle 16 bit elements within 64 bit lanes.
+#define v128_shuffle16( v, c ) \
+       _mm_shufflehi_epi16( _mm_shufflelo_epi16( v, c ), c )
 
-// Diagonal blend
+#define v128_qrev32(v)      _mm_shuffle_epi32( v, 0xb1 )
+#define v128_swap64_32(v)   _mm_shuffle_epi32( v, 0xb1 )  // grandfathered
 
-// Blend 4 32 bit elements from 4 vectors
-
-#if defined (__AVX2__)
-
-#define mm128_diagonal_32( v3, v2, v1, v0 ) \
-  mm_blend_epi32( _mm_blend_epi32( s3, s2, 0x4 ), \
-                  _mm_blend_epi32( s1, s0, 0x1 ), 0x3 )
-
-#elif defined(__SSE4_1__)
-
-#define mm128_diagonal_32( v3, v2, v1, v0 ) \
-  mm_blend_epi16( _mm_blend_epi16( s3, s2, 0x30 ), \
-                  _mm_blend_epi16( s1, s0, 0x03 ), 0x0f )
-
-#endif
-
+#define v128_qrev16(v)      v128_shuffle16( v, 0x1b )
+#define v128_lrev16(v)      v128_shuffle16( v, 0xb1 )
 
 //
 // Bit rotations
 
-// AVX512VL has implemented bit rotation for 128 bit vectors with
-// 64 and 32 bit elements.
+// Internal use only, should never be callled from application code.
+#define v128_ror64_sse2( v, c ) \
+   _mm_or_si128( _mm_srli_epi64( v, c ), _mm_slli_epi64( v, 64-(c) ) )
 
+#define v128_rol64_sse2( v, c ) \
+   _mm_or_si128( _mm_slli_epi64( v, c ), _mm_srli_epi64( v, 64-(c) ) )
+
+#define v128_ror32_sse2( v, c ) \
+   _mm_or_si128( _mm_srli_epi32( v, c ), _mm_slli_epi32( v, 32-(c) ) )
+
+#define v128_rol32_sse2( v, c ) \
+   _mm_or_si128( _mm_slli_epi32( v, c ), _mm_srli_epi32( v, 32-(c) ) )
+
+#if defined(VL256)
+
+// AVX512 fastest for all rotations.
+#define v128_ror64                _mm_ror_epi64
+#define v128_rol64                _mm_rol_epi64
+#define v128_ror32                _mm_ror_epi32
+#define v128_rol32                _mm_rol_epi32
+
+// ror/rol will always find the fastest but these names may fit better with
+// application code performing byte operations rather than bit rotations.
+#define v128_shuflr64_8( v)         _mm_ror_epi64( v,  8 )
+#define v128_shufll64_8( v)         _mm_rol_epi64( v,  8 )
+#define v128_shuflr64_16(v)         _mm_ror_epi64( v, 16 )
+#define v128_shufll64_16(v)         _mm_rol_epi64( v, 16 )
+#define v128_shuflr64_24(v)         _mm_ror_epi64( v, 24 )
+#define v128_shufll64_24(v)         _mm_rol_epi64( v, 24 )
+#define v128_shuflr32_8( v)         _mm_ror_epi32( v,  8 )
+#define v128_shufll32_8( v)         _mm_rol_epi32( v,  8 )
+#define v128_shuflr32_16(v)         _mm_ror_epi32( v, 16 )
+#define v128_shufll32_16(v)         _mm_rol_epi32( v, 16 )
+
+#elif defined(__SSSE3__)
+// SSSE3: fastest 32 bit, very fast 16, fast 8
+
+#define v128_shuflr64_8( v ) \
+    _mm_shuffle_epi8( v, _mm_set_epi64x( \
+                                  0x080f0e0d0c0b0a09, 0x0007060504030201 ) )
+
+#define v128_shufll64_8( v ) \
+   _mm_shuffle_epi8( v, _mm_set_epi64x( \
+                                  0x0e0d0c0b0a09080f, 0x0605040302010007 ) )
+
+#define v128_shuflr64_24( v ) \
+    _mm_shuffle_epi8( v, _mm_set_epi64x( \
+                                  0x0a09080f0e0d0c0b, 0x0201000706050403 ) )
+
+#define v128_shufll64_24( v ) \
+   _mm_shuffle_epi8( v, _mm_set_epi64x( \
+                                  0x0c0b0a09080f0e0d, 0x0403020100070605 ) )
+
+#define v128_shuflr32_8( v ) \
+   _mm_shuffle_epi8( v, _mm_set_epi64x( \
+                                  0x0c0f0e0d080b0a09, 0x0407060500030201 ) )
+
+#define v128_shufll32_8( v ) \
+   _mm_shuffle_epi8( v, _mm_set_epi64x( \
+                                  0x0e0d0c0f0a09080b, 0x0605040702010003 ) )
+
+#define v128_ror64( v, c ) \
+   ( (c) ==  8 ) ? v128_shuflr64_8( v ) \
+ : ( (c) == 16 ) ? v128_shuffle16( v, 0x39 ) \
+ : ( (c) == 24 ) ? v128_shuflr64_24( v ) \
+ : ( (c) == 32 ) ? _mm_shuffle_epi32( v, 0xb1 ) \
+ : ( (c) == 40 ) ? v128_shufll64_24( v ) \
+ : ( (c) == 48 ) ? v128_shuffle16( v, 0x93 ) \
+ : ( (c) == 56 ) ? v128_shufll64_8( v ) \
+ : v128_ror64_sse2( v, c ) 
+
+#define v128_rol64( v, c ) \
+   ( (c) ==  8 ) ? v128_shufll64_8( v ) \
+ : ( (c) == 16 ) ? v128_shuffle16( v, 0x93 ) \
+ : ( (c) == 24 ) ? v128_shufll64_24( v ) \
+ : ( (c) == 32 ) ? _mm_shuffle_epi32( v, 0xb1 ) \
+ : ( (c) == 40 ) ? v128_shuflr64_24( v ) \
+ : ( (c) == 48 ) ? v128_shuffle16( v, 0x39 ) \
+ : ( (c) == 56 ) ? v128_shuflr64_8( v ) \
+ : v128_rol64_sse2( v, c ) 
+
+#define v128_ror32( v, c ) \
+   ( (c) ==  8 ) ? v128_shuflr32_8( v ) \
+ : ( (c) == 16 ) ? v128_lrev16( v ) \
+ : ( (c) == 24 ) ? v128_shufll32_8( v ) \
+ : v128_ror32_sse2( v, c ) 
+
+#define v128_rol32( v, c ) \
+   ( (c) ==  8 ) ? v128_shufll32_8( v ) \
+ : ( (c) == 16 ) ? v128_lrev16( v ) \
+ : ( (c) == 24 ) ? v128_shuflr32_8( v ) \
+ : v128_rol32_sse2( v, c )
+
+#elif defined(__SSE2__)
+// SSE2: fastest 32 bit, very fast 16, all else slow
+
+#define v128_ror64( v, c ) \
+   ( (c) == 16 ) ? v128_shuffle16( v, 0x39 ) \
+ : ( (c) == 32 ) ? _mm_shuffle_epi32( v, 0xb1 ) \
+ : ( (c) == 48 ) ? v128_shuffle16( v, 0x93 ) \
+ : v128_ror64_sse2( v, c )
+
+#define v128_rol64( v, c ) \
+   ( (c) == 16 ) ? v128_shuffle16( v, 0x93 ) \
+ : ( (c) == 32 ) ? _mm_shuffle_epi32( v, 0xb1 ) \
+ : ( (c) == 48 ) ? v128_shuffle16( v, 0x39 ) \
+ : v128_rol64_sse2( v, c )
+
+#define v128_ror32( v, c ) \
+  ( (c) == 16 ) ? v128_lrev16( v ) \
+ : v128_ror32_sse2( v, c )
+
+#define v128_rol32( v, c ) \
+  ( (c) == 16 ) ? v128_lrev16( v ) \
+ : v128_rol32_sse2( v, c )
+
+#else 
+
+#define v128_ror64         v128_ror64_sse2
+#define v128_rol64         v128_rol64_sse2
+#define v128_ror32         v128_ror32_sse2
+#define v128_rol32         v128_rol32_sse2
+
+#endif
+
+// (v1 ^ v0) >>> n, ARM NEON has optimized version
+#define v128_ror64xor( v1, v0, n )  v128_ror64( v128_xor( v1, v0 ), n ) 
+
+/* not used
 // x2 rotates elements in 2 individual vectors in a double buffered
 // optimization for SSE2, does nothing for AVX512 but is there for
 // transparency.
 
-// compiler doesn't like when a variable is used for the last arg of
-// _mm_rol_epi32, must be "8 bit immediate". Oddly _mm_slli has the same
-// specification but works with a variable. Therefore use rol_var where
-// necessary.
-// sm3-hash-4way.c has one instance where mm128_rol_var_32 is required.
+#if defined(VL256)
 
-#define mm128_ror_var_64( v, c ) \
-   _mm_or_si128( _mm_srli_epi64( v, c ), _mm_slli_epi64( v, 64-(c) ) )
-
-#define mm128_rol_var_64( v, c ) \
-   _mm_or_si128( _mm_slli_epi64( v, c ), _mm_srli_epi64( v, 64-(c) ) )
-
-#define mm128_ror_var_32( v, c ) \
-   _mm_or_si128( _mm_srli_epi32( v, c ), _mm_slli_epi32( v, 32-(c) ) )
-
-#define mm128_rol_var_32( v, c ) \
-   _mm_or_si128( _mm_slli_epi32( v, c ), _mm_srli_epi32( v, 32-(c) ) )
-
-
-#if defined(__AVX512VL__)
-//#if defined(__AVX512F__) && defined(__AVX512VL__)
-
-#define mm128_ror_64    _mm_ror_epi64
-#define mm128_rol_64    _mm_rol_epi64
-#define mm128_ror_32    _mm_ror_epi32
-#define mm128_rol_32    _mm_rol_epi32
-
-#define mm128_rorx2_64( v1, v0, c ) \
+#define v128_2ror64( v1, v0, c ) \
    _mm_ror_epi64( v0, c ); \
    _mm_ror_epi64( v1, c )
 
-#define mm128_rolx2_64( v1, v0, c ) \
+#define v128_2rol64( v1, v0, c ) \
    _mm_rol_epi64( v0, c ); \
    _mm_rol_epi64( v1, c )
 
-#define mm128_rorx2_32( v1, v0, c ) \
+#define v128_2ror32( v1, v0, c ) \
    _mm_ror_epi32( v0, c ); \
    _mm_ror_epi32( v1, c )
 
-#define mm128_rolx2_32( v1, v0, c ) \
+#define v128_2rol32( v1, v0, c ) \
    _mm_rol_epi32( v0, c ); \
    _mm_rol_epi32( v1, c )
 
 #else  // SSE2
 
-#define mm128_ror_64   mm128_ror_var_64
-#define mm128_rol_64   mm128_rol_var_64
-#define mm128_ror_32   mm128_ror_var_32
-#define mm128_rol_32   mm128_rol_var_32
-
-#define mm128_rorx2_64( v1, v0, c ) \
+#define v128_2ror64( v1, v0, c ) \
 { \
  __m128i t0 = _mm_srli_epi64( v0, c ); \
  __m128i t1 = _mm_srli_epi64( v1, c ); \
@@ -373,7 +647,7 @@ static inline void memcpy_128( __m128i *dst, const __m128i *src, const int n )
  v1 = _mm_or_si256( v1, t1 ); \
 }
 
-#define mm128_rolx2_64( v1, v0, c ) \
+#define v128_2rol64( v1, v0, c ) \
 { \
  __m128i t0 = _mm_slli_epi64( v0, c ); \
  __m128i t1 = _mm_slli_epi64( v1, c ); \
@@ -383,7 +657,7 @@ static inline void memcpy_128( __m128i *dst, const __m128i *src, const int n )
  v1 = _mm_or_si256( v1, t1 ); \
 }
 
-#define mm128_rorx2_32( v1, v0, c ) \
+#define v128_2ror32( v1, v0, c ) \
 { \
  __m128i t0 = _mm_srli_epi32( v0, c ); \
  __m128i t1 = _mm_srli_epi32( v1, c ); \
@@ -393,7 +667,7 @@ static inline void memcpy_128( __m128i *dst, const __m128i *src, const int n )
  v1 = _mm_or_si256( v1, t1 ); \
 }
 
-#define mm128_rolx2_32( v1, v0, c ) \
+#define v128_2rol32( v1, v0, c ) \
 { \
  __m128i t0 = _mm_slli_epi32( v0, c ); \
  __m128i t1 = _mm_slli_epi32( v1, c ); \
@@ -404,307 +678,268 @@ static inline void memcpy_128( __m128i *dst, const __m128i *src, const int n )
 }
 
 #endif   // AVX512 else SSE2
+*/
 
-#define mm128_ror_16( v, c ) \
-   _mm_or_si128( _mm_srli_epi16( v, c ), _mm_slli_epi16( v, 16-(c) ) )
+// Cross lane shuffles
 
-#define mm128_rol_16( v, c ) \
-   _mm_or_si128( _mm_slli_epi16( v, c ), _mm_srli_epi16( v, 16-(c) ) )
+// No NEON version
+#define v128_shuffle32     _mm_shuffle_epi32
 
-// Limited 2 input shuffle
-#define mm128_shuffle2_64( a, b, c ) \
-   _mm_castpd_si128( _mm_shuffle_pd( _mm_castsi128_pd( a ), \
-                                     _mm_castsi128_pd( b ), c ) ); 
+/* Not used, exists only for compatibility with NEON if ever needed.
+#define v128_shufflev32( v, vmask ) \
+  v128_shuffle32( v, v128_movmask32( vmask ) )
+*/
 
-#define mm128_shuffle2_32( a, b, c ) \
-   _mm_castps_si128( _mm_shuffle_ps( _mm_castsi128_ps( a ), \
-                                     _mm_castsi128_ps( b ), c ) ); 
+#define v128_shuffle8     _mm_shuffle_epi8
 
+// Limited 2 input shuffle, combines shuffle with blend. The destination low
+// half is always taken from v1, and the high half from v2.
+#define v128_shuffle2_64( v1, v2, c ) \
+   _mm_castpd_si128( _mm_shuffle_pd( _mm_castsi128_pd( v1 ), \
+                                     _mm_castsi128_pd( v2 ), c ) ); 
 
-//
+#define v128_shuffle2_32( v1, v2, c ) \
+   _mm_castps_si128( _mm_shuffle_ps( _mm_castsi128_ps( v1 ), \
+                                     _mm_castsi128_ps( v2 ), c ) ); 
+
 // Rotate vector elements accross all lanes
 
-#define mm128_swap_64( v )    _mm_shuffle_epi32( v, 0x4e )
-#define mm128_shuflr_64       mm128_swap_64
-#define mm128_shufll_64       mm128_swap_64
+// reverse elements in vector
+#define v128_swap64(v)      _mm_shuffle_epi32( v, 0x4e )  // grandfathered 
+#define v128_rev64(v)       _mm_shuffle_epi32( v, 0x4e )  // preferred
+#define v128_rev32(v)       _mm_shuffle_epi32( v, 0x1b )
 
-#define mm128_shuflr_32( v )   _mm_shuffle_epi32( v, 0x39 )
-#define mm128_shufll_32( v )   _mm_shuffle_epi32( v, 0x93 )
+// rotate vector elements
+#define v128_shuflr32(v)    _mm_shuffle_epi32( v, 0x39 )
+#define v128_shufll32(v)    _mm_shuffle_epi32( v, 0x93 )
 
-
-// Swap 32 bit elements in 64 bit lanes
-#define mm128_swap64_32( v )  _mm_shuffle_epi32( v, 0xb1 )
-#define mm128_shuflr64_32 mm128_swap64_32
-#define mm128_shufll64_32 mm128_swap64_32
+// Endian byte swap.
 
 #if defined(__SSSE3__)
 
-// Rotate right by c bytes, no SSE2 equivalent.
-static inline __m128i mm128_shuflr_x8( const __m128i v, const int c )
-{ return _mm_alignr_epi8( v, v, c ); }
+#define v128_bswap128( v ) \
+   _mm_shuffle_epi8( v, _mm_set_epi64x( 0x0001020304050607, \
+                                        0x08090a0b0c0d0e0f ) )
 
-//
-// Endian byte swap.
+#define v128_bswap64( v ) \
+   _mm_shuffle_epi8( v, _mm_set_epi64x( 0x08090a0b0c0d0e0f, \
+                                        0x0001020304050607 ) )
 
-#define mm128_bswap_64( v ) \
-   _mm_shuffle_epi8( v, m128_const_64( 0x08090a0b0c0d0e0f, \
-                                       0x0001020304050607 ) )
-
-#define mm128_bswap_32( v ) \
-   _mm_shuffle_epi8( v, m128_const_64( 0x0c0d0e0f08090a0b, \
-                                       0x0405060700010203 ) )
-
-#define mm128_bswap_16( v ) \
-   _mm_shuffle_epi8( v, m128_const_64( 0x0e0f0c0d0a0b0809, \
-                                       0x0607040502030001 )
+#define v128_bswap32( v ) \
+   _mm_shuffle_epi8( v, _mm_set_epi64x( 0x0c0d0e0f08090a0b, \
+                                        0x0405060700010203 ) )
+#define v128_bswap16( v ) \
+   _mm_shuffle_epi8( v, _mm_set_epi64x( 0x0e0f0c0d0a0b0809, \
+                                        0x0607040502030001 )
 
 // 8 byte qword * 8 qwords * 2 lanes = 128 bytes
-#define mm128_block_bswap_64( d, s ) do \
+#define v128_block_bswap64( d, s ) \
 { \
-   __m128i ctl = m128_const_64(  0x08090a0b0c0d0e0f, 0x0001020304050607 ); \
-  casti_m128i( d, 0 ) = _mm_shuffle_epi8( casti_m128i( s, 0 ), ctl ); \
-  casti_m128i( d, 1 ) = _mm_shuffle_epi8( casti_m128i( s, 1 ), ctl ); \
-  casti_m128i( d, 2 ) = _mm_shuffle_epi8( casti_m128i( s, 2 ), ctl ); \
-  casti_m128i( d, 3 ) = _mm_shuffle_epi8( casti_m128i( s, 3 ), ctl ); \
-  casti_m128i( d, 4 ) = _mm_shuffle_epi8( casti_m128i( s, 4 ), ctl ); \
-  casti_m128i( d, 5 ) = _mm_shuffle_epi8( casti_m128i( s, 5 ), ctl ); \
-  casti_m128i( d, 6 ) = _mm_shuffle_epi8( casti_m128i( s, 6 ), ctl ); \
-  casti_m128i( d, 7 ) = _mm_shuffle_epi8( casti_m128i( s, 7 ), ctl ); \
-} while(0)
+  v128_t ctl = _mm_set_epi64x(  0x08090a0b0c0d0e0f, 0x0001020304050607 ); \
+  casti_v128( d,0 ) = _mm_shuffle_epi8( casti_v128( s,0 ), ctl ); \
+  casti_v128( d,1 ) = _mm_shuffle_epi8( casti_v128( s,1 ), ctl ); \
+  casti_v128( d,2 ) = _mm_shuffle_epi8( casti_v128( s,2 ), ctl ); \
+  casti_v128( d,3 ) = _mm_shuffle_epi8( casti_v128( s,3 ), ctl ); \
+  casti_v128( d,4 ) = _mm_shuffle_epi8( casti_v128( s,4 ), ctl ); \
+  casti_v128( d,5 ) = _mm_shuffle_epi8( casti_v128( s,5 ), ctl ); \
+  casti_v128( d,6 ) = _mm_shuffle_epi8( casti_v128( s,6 ), ctl ); \
+  casti_v128( d,7 ) = _mm_shuffle_epi8( casti_v128( s,7 ), ctl ); \
+}
+#define v128_block_bswap64_512     v128_block_bswap64
+
+#define v128_block_bswap64_1024( d, s ) \
+{ \
+  v128_t ctl = _mm_set_epi64x(  0x08090a0b0c0d0e0f, 0x0001020304050607 ); \
+  casti_v128( d, 0 ) = _mm_shuffle_epi8( casti_v128( s, 0 ), ctl ); \
+  casti_v128( d, 1 ) = _mm_shuffle_epi8( casti_v128( s, 1 ), ctl ); \
+  casti_v128( d, 2 ) = _mm_shuffle_epi8( casti_v128( s, 2 ), ctl ); \
+  casti_v128( d, 3 ) = _mm_shuffle_epi8( casti_v128( s, 3 ), ctl ); \
+  casti_v128( d, 4 ) = _mm_shuffle_epi8( casti_v128( s, 4 ), ctl ); \
+  casti_v128( d, 5 ) = _mm_shuffle_epi8( casti_v128( s, 5 ), ctl ); \
+  casti_v128( d, 6 ) = _mm_shuffle_epi8( casti_v128( s, 6 ), ctl ); \
+  casti_v128( d, 7 ) = _mm_shuffle_epi8( casti_v128( s, 7 ), ctl ); \
+  casti_v128( d, 8 ) = _mm_shuffle_epi8( casti_v128( s, 8 ), ctl ); \
+  casti_v128( d, 9 ) = _mm_shuffle_epi8( casti_v128( s, 9 ), ctl ); \
+  casti_v128( d,10 ) = _mm_shuffle_epi8( casti_v128( s,10 ), ctl ); \
+  casti_v128( d,11 ) = _mm_shuffle_epi8( casti_v128( s,11 ), ctl ); \
+  casti_v128( d,12 ) = _mm_shuffle_epi8( casti_v128( s,12 ), ctl ); \
+  casti_v128( d,13 ) = _mm_shuffle_epi8( casti_v128( s,13 ), ctl ); \
+  casti_v128( d,14 ) = _mm_shuffle_epi8( casti_v128( s,14 ), ctl ); \
+  casti_v128( d,15 ) = _mm_shuffle_epi8( casti_v128( s,15 ), ctl ); \
+}
 
 // 4 byte dword * 8 dwords * 4 lanes = 128 bytes
-#define mm128_block_bswap_32( d, s ) do \
+#define v128_block_bswap32( d, s ) \
 { \
-   __m128i ctl = m128_const_64( 0x0c0d0e0f08090a0b, 0x0405060700010203 ); \
-  casti_m128i( d, 0 ) = _mm_shuffle_epi8( casti_m128i( s, 0 ), ctl ); \
-  casti_m128i( d, 1 ) = _mm_shuffle_epi8( casti_m128i( s, 1 ), ctl ); \
-  casti_m128i( d, 2 ) = _mm_shuffle_epi8( casti_m128i( s, 2 ), ctl ); \
-  casti_m128i( d, 3 ) = _mm_shuffle_epi8( casti_m128i( s, 3 ), ctl ); \
-  casti_m128i( d, 4 ) = _mm_shuffle_epi8( casti_m128i( s, 4 ), ctl ); \
-  casti_m128i( d, 5 ) = _mm_shuffle_epi8( casti_m128i( s, 5 ), ctl ); \
-  casti_m128i( d, 6 ) = _mm_shuffle_epi8( casti_m128i( s, 6 ), ctl ); \
-  casti_m128i( d, 7 ) = _mm_shuffle_epi8( casti_m128i( s, 7 ), ctl ); \
-} while(0)
+  v128_t ctl = _mm_set_epi64x( 0x0c0d0e0f08090a0b, 0x0405060700010203 ); \
+  casti_v128( d,0 ) = _mm_shuffle_epi8( casti_v128( s,0 ), ctl ); \
+  casti_v128( d,1 ) = _mm_shuffle_epi8( casti_v128( s,1 ), ctl ); \
+  casti_v128( d,2 ) = _mm_shuffle_epi8( casti_v128( s,2 ), ctl ); \
+  casti_v128( d,3 ) = _mm_shuffle_epi8( casti_v128( s,3 ), ctl ); \
+  casti_v128( d,4 ) = _mm_shuffle_epi8( casti_v128( s,4 ), ctl ); \
+  casti_v128( d,5 ) = _mm_shuffle_epi8( casti_v128( s,5 ), ctl ); \
+  casti_v128( d,6 ) = _mm_shuffle_epi8( casti_v128( s,6 ), ctl ); \
+  casti_v128( d,7 ) = _mm_shuffle_epi8( casti_v128( s,7 ), ctl ); \
+}
+#define v128_block_bswap32_256       v128_block_bswap32
+
+
+#define v128_block_bswap32_128( d, s ) \
+{ \
+  v128_t ctl = _mm_set_epi64x( 0x0c0d0e0f08090a0b, 0x0405060700010203 ); \
+  casti_v128( d,0 ) = _mm_shuffle_epi8( casti_v128( s,0 ), ctl ); \
+  casti_v128( d,1 ) = _mm_shuffle_epi8( casti_v128( s,1 ), ctl ); \
+  casti_v128( d,2 ) = _mm_shuffle_epi8( casti_v128( s,2 ), ctl ); \
+  casti_v128( d,3 ) = _mm_shuffle_epi8( casti_v128( s,3 ), ctl ); \
+}   
+
+#define v128_block_bswap32_512( d, s ) \
+{ \
+  v128_t ctl = _mm_set_epi64x( 0x0c0d0e0f08090a0b, 0x0405060700010203 ); \
+  casti_v128( d, 0 ) = _mm_shuffle_epi8( casti_v128( s, 0 ), ctl ); \
+  casti_v128( d, 1 ) = _mm_shuffle_epi8( casti_v128( s, 1 ), ctl ); \
+  casti_v128( d, 2 ) = _mm_shuffle_epi8( casti_v128( s, 2 ), ctl ); \
+  casti_v128( d, 3 ) = _mm_shuffle_epi8( casti_v128( s, 3 ), ctl ); \
+  casti_v128( d, 4 ) = _mm_shuffle_epi8( casti_v128( s, 4 ), ctl ); \
+  casti_v128( d, 5 ) = _mm_shuffle_epi8( casti_v128( s, 5 ), ctl ); \
+  casti_v128( d, 6 ) = _mm_shuffle_epi8( casti_v128( s, 6 ), ctl ); \
+  casti_v128( d, 7 ) = _mm_shuffle_epi8( casti_v128( s, 7 ), ctl ); \
+  casti_v128( d, 8 ) = _mm_shuffle_epi8( casti_v128( s, 8 ), ctl ); \
+  casti_v128( d, 9 ) = _mm_shuffle_epi8( casti_v128( s, 9 ), ctl ); \
+  casti_v128( d,10 ) = _mm_shuffle_epi8( casti_v128( s,10 ), ctl ); \
+  casti_v128( d,11 ) = _mm_shuffle_epi8( casti_v128( s,11 ), ctl ); \
+  casti_v128( d,12 ) = _mm_shuffle_epi8( casti_v128( s,12 ), ctl ); \
+  casti_v128( d,13 ) = _mm_shuffle_epi8( casti_v128( s,13 ), ctl ); \
+  casti_v128( d,14 ) = _mm_shuffle_epi8( casti_v128( s,14 ), ctl ); \
+  casti_v128( d,15 ) = _mm_shuffle_epi8( casti_v128( s,15 ), ctl ); \
+}
 
 #else  // SSE2
 
-static inline __m128i mm128_bswap_64( __m128i v )
+static inline v128_t v128_bswap64( __m128i v )
 {
       v = _mm_or_si128( _mm_slli_epi16( v, 8 ), _mm_srli_epi16( v, 8 ) );
       v = _mm_shufflelo_epi16( v, _MM_SHUFFLE( 0, 1, 2, 3 ) );
   return  _mm_shufflehi_epi16( v, _MM_SHUFFLE( 0, 1, 2, 3 ) );
 }
 
-static inline __m128i mm128_bswap_32( __m128i v )
+static inline v128_t v128_bswap32( __m128i v )
 {
       v = _mm_or_si128( _mm_slli_epi16( v, 8 ), _mm_srli_epi16( v, 8 ) );
       v = _mm_shufflelo_epi16( v, _MM_SHUFFLE( 2, 3, 0, 1 ) );
   return  _mm_shufflehi_epi16( v, _MM_SHUFFLE( 2, 3, 0, 1 ) );
 }
 
-static inline __m128i mm128_bswap_16( __m128i v )
+static inline v128_t v128_bswap16( __m128i v )
 {
   return _mm_or_si128( _mm_slli_epi16( v, 8 ), _mm_srli_epi16( v, 8 ) );
 }
 
-static inline void mm128_block_bswap_64( __m128i *d, const __m128i *s )
+#define v128_bswap128( v )   v128_qrev32( v128_bswap64( v ) )
+
+static inline void v128_block_bswap64( __m128i *d, const __m128i *s )
 {
-   d[0] = mm128_bswap_64( s[0] );
-   d[1] = mm128_bswap_64( s[1] );
-   d[2] = mm128_bswap_64( s[2] );
-   d[3] = mm128_bswap_64( s[3] );
-   d[4] = mm128_bswap_64( s[4] );
-   d[5] = mm128_bswap_64( s[5] );
-   d[6] = mm128_bswap_64( s[6] );
-   d[7] = mm128_bswap_64( s[7] );
+   d[0] = v128_bswap64( s[0] );
+   d[1] = v128_bswap64( s[1] );
+   d[2] = v128_bswap64( s[2] );
+   d[3] = v128_bswap64( s[3] );
+   d[4] = v128_bswap64( s[4] );
+   d[5] = v128_bswap64( s[5] );
+   d[6] = v128_bswap64( s[6] );
+   d[7] = v128_bswap64( s[7] );
 }
 
-static inline void mm128_block_bswap_32( __m128i *d, const __m128i *s )
+static inline void v128_block_bswap64_1024( __m128i *d, const __m128i *s )
 {
-   d[0] = mm128_bswap_32( s[0] );
-   d[1] = mm128_bswap_32( s[1] );
-   d[2] = mm128_bswap_32( s[2] );
-   d[3] = mm128_bswap_32( s[3] );
-   d[4] = mm128_bswap_32( s[4] );
-   d[5] = mm128_bswap_32( s[5] );
-   d[6] = mm128_bswap_32( s[6] );
-   d[7] = mm128_bswap_32( s[7] );
+   d[ 0] = v128_bswap64( s[ 0] );
+   d[ 1] = v128_bswap64( s[ 1] );
+   d[ 2] = v128_bswap64( s[ 2] );
+   d[ 3] = v128_bswap64( s[ 3] );
+   d[ 4] = v128_bswap64( s[ 4] );
+   d[ 5] = v128_bswap64( s[ 5] );
+   d[ 6] = v128_bswap64( s[ 6] );
+   d[ 7] = v128_bswap64( s[ 7] );
+   d[ 8] = v128_bswap64( s[ 8] );
+   d[ 9] = v128_bswap64( s[ 9] );
+   d[10] = v128_bswap64( s[10] );
+   d[11] = v128_bswap64( s[11] );
+   d[14] = v128_bswap64( s[12] );
+   d[13] = v128_bswap64( s[13] );
+   d[14] = v128_bswap64( s[14] );
+   d[15] = v128_bswap64( s[15] );
+}
+
+static inline void v128_block_bswap32( __m128i *d, const __m128i *s )
+{
+   d[0] = v128_bswap32( s[0] );
+   d[1] = v128_bswap32( s[1] );
+   d[2] = v128_bswap32( s[2] );
+   d[3] = v128_bswap32( s[3] );
+   d[4] = v128_bswap32( s[4] );
+   d[5] = v128_bswap32( s[5] );
+   d[6] = v128_bswap32( s[6] );
+   d[7] = v128_bswap32( s[7] );
+}
+#define v128_block_bswap32_256  v128_block_bswap32
+
+static inline void v128_block_bswap32_512( __m128i *d, const __m128i *s )
+{
+   d[ 0] = v128_bswap32( s[ 0] );
+   d[ 1] = v128_bswap32( s[ 1] );
+   d[ 2] = v128_bswap32( s[ 2] );
+   d[ 3] = v128_bswap32( s[ 3] );
+   d[ 4] = v128_bswap32( s[ 4] );
+   d[ 5] = v128_bswap32( s[ 5] );
+   d[ 6] = v128_bswap32( s[ 6] );
+   d[ 7] = v128_bswap32( s[ 7] );
+   d[ 8] = v128_bswap32( s[ 8] );
+   d[ 9] = v128_bswap32( s[ 9] );
+   d[10] = v128_bswap32( s[10] );
+   d[11] = v128_bswap32( s[11] );
+   d[12] = v128_bswap32( s[12] );
+   d[13] = v128_bswap32( s[13] );
+   d[14] = v128_bswap32( s[14] );
+   d[15] = v128_bswap32( s[15] );
 }
 
 #endif // SSSE3 else SSE2
 
-//
-// Rotate in place concatenated 128 bit vectors as one 256 bit vector.
-
-// Swap 128 bit vectorse.
-
-#define mm128_swap256_128( v1, v2 ) \
-   v1 = _mm_xor_si128( v1, v2 ); \
-   v2 = _mm_xor_si128( v1, v2 ); \
-   v1 = _mm_xor_si128( v1, v2 );
-
-
-// Two input shuffle-rotate.
-// Concatenate v1 & v2 and rotate as one 256 bit vector.
-// Continue to use vror/vrol for now to avoid confusion with
-// shufl2r/shufl2l function macros available with AVX512.
-
+// alignr instruction for 32 & 64 bit elements is only available with AVX512
+// but emulated here. Behaviour is consistent with Intel alignr intrinsics.
 #if defined(__SSSE3__)
 
-// Function macro with two inputs and one output, inputs are preserved.
-// Two input functions are not available without SSSE3. Use procedure
-// macros below instead.
+#define v128_alignr8                   _mm_alignr_epi8
+#define v128_alignr64( hi, lo, c )     _mm_alignr_epi8( hi, lo, (c)*8 )
+#define v128_alignr32( hi, lo, c )     _mm_alignr_epi8( hi, lo, (c)*4 )
 
-#define mm128_shufl2r_64( v1, v2 )     _mm_alignr_epi8( v2, v1, 8 )
-#define mm128_shufl2l_64( v1, v2 )     _mm_alignr_epi8( v1, v2, 8 )
+#else
 
-#define mm128_shufl2r_32( v1, v2 )     _mm_alignr_epi8( v2, v1, 4 )
-#define mm128_shufl2l_32( v1, v2 )     _mm_alignr_epi8( v1, v2, 4 )
+#define v128_alignr8( hi, lo, c ) \
+   _mm_or_si128( _mm_slli_si128( hi, 16-(c) ), _mm_srli_si128( lo, c ) )
 
-#define mm128_shufl2r_16( v1, v2 )     _mm_alignr_epi8( v2, v1, 2 )
-#define mm128_shufl2l_16( v1, v2 )     _mm_alignr_epi8( v1, v2, 2 )
+// c arg is trivial only valid value is 1
+#define v128_alignr64( hi, lo, c ) \
+   _mm_or_si128( _mm_slli_si128( hi, 16-((c)*8) ), _mm_srli_si128( lo, (c)*8 ) )
 
-#define mm128_shufl2r_8( v1, v2 )      _mm_alignr_epi8( v2, v1, 8 )
-#define mm128_shufl2l_8( v1, v2 )      _mm_alignr_epi8( v1, v2, 8 )
+#define v128_alignr32( hi, lo, c ) \
+   _mm_or_si128( _mm_slli_si128( hi, 16-((c)*4) ), _mm_srli_si128( lo, (c)*4 ) )
 
-// Procedure macros with 2 inputs and 2 outputs, inputs args are overwritten.
+#endif
 
-// These macros retain the vrol/vror name for now to avoid
-// confusion with the shufl2r/shuffle2l function macros above.
-// These may be renamed to something like shufl2r2 for 2 nputs and
-// 2 outputs, ie SHUFfLe 2 inputs Right with 2 outputs.
+// blend using vector mask
+#if defined(__SSE4_1__)
 
-#define mm128_vror256_64( v1, v2 ) \
-do { \
-   __m128i t  = _mm_alignr_epi8( v1, v2, 8 ); \
-           v1 = _mm_alignr_epi8( v2, v1, 8 ); \
-           v2 = t; \
-} while(0)
+// Bytewise using sign bit of each byte element of mask. Use full bitmask
+// for compatibility with SSE2 & NEON.
+#define v128_blendv                    _mm_blendv_epi8
 
-#define mm128_vrol256_64( v1, v2 ) \
-do { \
-   __m128i t  = _mm_alignr_epi8( v1, v2, 8 ); \
-           v2 = _mm_alignr_epi8( v2, v1, 8 ); \
-           v1 = t; \
-} while(0)
+#else
 
-#define mm128_vror256_32( v1, v2 ) \
-do { \
-   __m128i t  = _mm_alignr_epi8( v1, v2, 4 ); \
-           v1 = _mm_alignr_epi8( v2, v1, 4 ); \
-           v2 = t; \
-} while(0)
+// Bitwise, use only byte wise for compatibility with SSE4_1.
+#define v128_blendv( v1, v0, mask ) \
+   v128_or( v128_andnot( mask, v1 ), v128_and( mask, v0 ) )
 
-#define mm128_vrol256_32( v1, v2 ) \
-do { \
-   __m128i t  = _mm_alignr_epi8( v1, v2, 12 ); \
-           v2 = _mm_alignr_epi8( v2, v1, 12 ); \
-           v1 = t; \
-} while(0)
-
-#define mm128_vror256_16( v1, v2 ) \
-do { \
-   __m128i t  = _mm_alignr_epi8( v1, v2, 2 ); \
-           v1 = _mm_alignr_epi8( v2, v1, 2 ); \
-           v2 = t; \
-} while(0)
-
-#define mm128_vrol256_16( v1, v2 ) \
-do { \
-   __m128i t  = _mm_alignr_epi8( v1, v2, 14 ); \
-           v2 = _mm_alignr_epi8( v2, v1, 14 ); \
-           v1 = t; \
-} while(0)
-
-#define mm128_vror256_8( v1, v2 ) \
-do { \
-   __m128i t  = _mm_alignr_epi8( v1, v2, 1 ); \
-           v1 = _mm_alignr_epi8( v2, v1, 1 ); \
-           v2 = t; \
-} while(0)
-
-#define mm128_vrol256_8( v1, v2 ) \
-do { \
-   __m128i t  = _mm_alignr_epi8( v1, v2, 15 ); \
-           v2 = _mm_alignr_epi8( v2, v1, 15 ); \
-           v1 = t; \
-} while(0)
-
-#else  // SSE2
-
-#define mm128_vror256_64( v1, v2 ) \
-do { \
-   __m128i t  = _mm_or_si128( _mm_srli_si128( v1, 8 ), \
-                              _mm_slli_si128( v2, 8 ) ); \
-           v2 = _mm_or_si128( _mm_srli_si128( v2, 8 ), \
-                              _mm_slli_si128( v1, 8 ) ); \
-           v1 = t; \
-} while(0)
-
-#define mm128_vrol256_64( v1, v2 ) \
-do { \
-   __m128i t  = _mm_or_si128( _mm_slli_si128( v1, 8 ), \
-                              _mm_srli_si128( v2, 8 ) ); \
-           v2 = _mm_or_si128( _mm_slli_si128( v2, 8 ), \
-                              _mm_srli_si128( v1, 8 ) ); \
-           v1 = t; \
-} while(0)
-
-#define mm128_vror256_32( v1, v2 ) \
-do { \
-   __m128i t  = _mm_or_si128( _mm_srli_si128( v1, 4 ), \
-                              _mm_slli_si128( v2, 12 ) ); \
-           v2 = _mm_or_si128( _mm_srli_si128( v2, 4 ), \
-                              _mm_slli_si128( v1, 12 ) ); \
-           v1 = t; \
-} while(0)
-
-#define mm128_vrol256_32( v1, v2 ) \
-do { \
-   __m128i t  = _mm_or_si128( _mm_slli_si128( v1, 4 ), \
-                              _mm_srli_si128( v2, 12 ) ); \
-           v2 = _mm_or_si128( _mm_slli_si128( v2, 4 ), \
-                              _mm_srli_si128( v1, 12 ) ); \
-           v1 = t; \
-} while(0)
-
-#define mm128_vror256_16( v1, v2 ) \
-do { \
-   __m128i t  = _mm_or_si128( _mm_srli_si128( v1, 2 ), \
-                              _mm_slli_si128( v2, 14 ) ); \
-           v2 = _mm_or_si128( _mm_srli_si128( v2, 2 ), \
-                              _mm_slli_si128( v1, 14 ) ); \
-           v1 = t; \
-} while(0)
-
-#define mm128_vrol256_16( v1, v2 ) \
-do { \
-   __m128i t  = _mm_or_si128( _mm_slli_si128( v1, 2 ), \
-                              _mm_srli_si128( v2, 14 ) ); \
-           v2 = _mm_or_si128( _mm_slli_si128( v2, 2 ), \
-                              _mm_srli_si128( v1, 14 ) ); \
-           v1 = t; \
-} while(0)
-
-#define mm128_vror256_8( v1, v2 ) \
-do { \
-   __m128i t  = _mm_or_si128( _mm_srli_si128( v1, 1 ), \
-                              _mm_slli_si128( v2, 15 ) ); \
-           v2 = _mm_or_si128( _mm_srli_si128( v2, 1 ), \
-                              _mm_slli_si128( v1, 15 ) ); \
-           v1 = t; \
-} while(0)
-
-#define mm128_vrol256_8( v1, v2 ) \
-do { \
-   __m128i t  = _mm_or_si128( _mm_slli_si128( v1, 1 ), \
-                              _mm_srli_si128( v2, 15 ) ); \
-           v2 = _mm_or_si128( _mm_slli_si128( v2, 1 ), \
-                              _mm_srli_si128( v1, 15 ) ); \
-           v1 = t; \
-} while(0)
-
-#endif  // SSE4.1 else SSE2
+#endif
 
 #endif // __SSE2__
 #endif // SIMD_128_H__

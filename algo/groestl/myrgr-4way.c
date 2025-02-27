@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "aes_ni/hash-groestl.h"
-#include "algo/sha/sha-hash-4way.h"
+#include "algo/sha/sha256-hash.h"
 #if defined(__VAES__)
   #include "groestl512-hash-4way.h"
 #endif
@@ -211,9 +211,9 @@ int scanhash_myriad_4way( struct work *work, uint32_t max_nonce,
    if ( opt_benchmark )
       ( (uint32_t*)ptarget )[7] = 0x0000ff;
 
-   mm128_bswap32_intrlv80_4x32( vdata, pdata );
+   v128_bswap32_intrlv80_4x32( vdata, pdata );
    do {
-      *noncev = mm128_bswap_32( _mm_set_epi32( n+3,n+2,n+1,n ) );
+      *noncev = v128_bswap32( _mm_set_epi32( n+3,n+2,n+1,n ) );
 
       myriad_4way_hash( hash, vdata );
       pdata[19] = n;

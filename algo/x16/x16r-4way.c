@@ -16,14 +16,15 @@
 
 #if defined (X16R_8WAY)
 
-// Perform midstate prehash of hash functions with block size <= 72 bytes.
+// Perform midstate prehash of hash functions with block size <= 72 bytes,
+// 76 bytes for hash functions that operate on 32 bit data.
 
-void x16r_8way_prehash( void *vdata, void *pdata )
+void x16r_8way_prehash( void *vdata, void *pdata, const char *hash_order )
 {
    uint32_t vdata2[20*8] __attribute__ ((aligned (64)));
    uint32_t edata[20] __attribute__ ((aligned (64)));
 
-   const char elem = x16r_hash_order[0];
+   const char elem = hash_order[0];
    const uint8_t algo = elem >= 'A' ? elem - 'A' + 10 : elem - '0';
 
    switch ( algo )
@@ -44,18 +45,36 @@ void x16r_8way_prehash( void *vdata, void *pdata )
          skein512_8way_update( &x16r_ctx.skein, vdata, 64 );
       break;
       case LUFFA:
-         mm128_bswap32_80( edata, pdata );
-         intrlv_4x128( vdata2, edata, edata, edata, edata, 640 );
-         luffa_4way_init( &x16r_ctx.luffa, 512 );
-         luffa_4way_update( &x16r_ctx.luffa, vdata2, 64 );
-         rintrlv_4x128_8x64( vdata, vdata2, vdata2, 640 );
+      {
+         hashState_luffa ctx_luffa;
+         v128_bswap32_80( edata, pdata );
+         intrlv_8x64( vdata, edata, edata, edata, edata,
+                             edata, edata, edata, edata, 640 );            
+         init_luffa( &ctx_luffa, 512 );
+         update_luffa( &ctx_luffa, (const BitSequence*)edata, 64 );
+         intrlv_4x128( x16r_ctx.luffa.buffer, ctx_luffa.buffer,
+                  ctx_luffa.buffer, ctx_luffa.buffer, ctx_luffa.buffer, 512 );
+         intrlv_4x128( x16r_ctx.luffa.chainv, ctx_luffa.chainv,
+                  ctx_luffa.chainv, ctx_luffa.chainv, ctx_luffa.chainv, 1280 );
+         x16r_ctx.luffa.hashbitlen = ctx_luffa.hashbitlen;
+         x16r_ctx.luffa.rembytes = ctx_luffa.rembytes;
+      }
       break;
       case CUBEHASH:
-         mm128_bswap32_80( edata, pdata );
-         intrlv_4x128( vdata2, edata, edata, edata, edata, 640 );
-         cube_4way_init( &x16r_ctx.cube, 512, 16, 32 );
-         cube_4way_update( &x16r_ctx.cube, vdata2, 64 );
-         rintrlv_4x128_8x64( vdata, vdata2, vdata2, 640 );
+      {
+         cubehashParam ctx_cube;
+         v128_bswap32_80( edata, pdata );
+         intrlv_8x64( vdata, edata, edata, edata, edata,
+                             edata, edata, edata, edata, 640 );            
+         cubehashInit( &ctx_cube, 512, 16, 32 );
+         cubehashUpdate( &ctx_cube, (const byte*)edata, 64 );
+         x16r_ctx.cube.hashlen = ctx_cube.hashlen;
+         x16r_ctx.cube.rounds = ctx_cube.rounds;
+         x16r_ctx.cube.blocksize = ctx_cube.blocksize;
+         x16r_ctx.cube.pos = ctx_cube.pos;
+         intrlv_4x128( x16r_ctx.cube.h, ctx_cube.x, ctx_cube.x, ctx_cube.x,
+                                        ctx_cube.x, 1024 );
+      }
       break;
       case HAMSI:
          mm512_bswap32_intrlv80_8x64( vdata, pdata );
@@ -63,7 +82,7 @@ void x16r_8way_prehash( void *vdata, void *pdata )
          hamsi512_8way_update( &x16r_ctx.hamsi, vdata, 72 );
       break;
       case FUGUE:
-         mm128_bswap32_80( edata, pdata );
+         v128_bswap32_80( edata, pdata );
          fugue512_init( &x16r_ctx.fugue );
          fugue512_update( &x16r_ctx.fugue, edata, 76 );
          intrlv_8x64( vdata, edata, edata, edata, edata,
@@ -76,7 +95,7 @@ void x16r_8way_prehash( void *vdata, void *pdata )
          rintrlv_8x32_8x64( vdata, vdata2, 640 );
       break;
       case WHIRLPOOL:
-         mm128_bswap32_80( edata, pdata );
+         v128_bswap32_80( edata, pdata );
          sph_whirlpool_init( &x16r_ctx.whirlpool );
          sph_whirlpool( &x16r_ctx.whirlpool, edata, 64 );
          intrlv_8x64( vdata, edata, edata, edata, edata,
@@ -91,17 +110,18 @@ void x16r_8way_prehash( void *vdata, void *pdata )
 // Called by wrapper hash function to optionally continue hashing and
 // convert to final hash.
 
-int x16r_8way_hash_generic( void* output, const void* input, int thrid )
+int x16r_8way_hash_generic( void* output, const void* input, int thrid,
+     const char *hash_order, const int func_count )
 {
    uint32_t vhash[20*8] __attribute__ ((aligned (128)));
-   uint32_t hash0[20] __attribute__ ((aligned (64)));
-   uint32_t hash1[20] __attribute__ ((aligned (64)));
-   uint32_t hash2[20] __attribute__ ((aligned (64)));
-   uint32_t hash3[20] __attribute__ ((aligned (64)));
-   uint32_t hash4[20] __attribute__ ((aligned (64)));
-   uint32_t hash5[20] __attribute__ ((aligned (64)));
-   uint32_t hash6[20] __attribute__ ((aligned (64)));
-   uint32_t hash7[20] __attribute__ ((aligned (64)));
+   uint32_t hash0[20] __attribute__ ((aligned (16)));
+   uint32_t hash1[20] __attribute__ ((aligned (16)));
+   uint32_t hash2[20] __attribute__ ((aligned (16)));
+   uint32_t hash3[20] __attribute__ ((aligned (16)));
+   uint32_t hash4[20] __attribute__ ((aligned (16)));
+   uint32_t hash5[20] __attribute__ ((aligned (16)));
+   uint32_t hash6[20] __attribute__ ((aligned (16)));
+   uint32_t hash7[20] __attribute__ ((aligned (16)));
    x16r_8way_context_overlay ctx;
    memcpy( &ctx, &x16r_ctx, sizeof(ctx) );
    void *in0 = (void*) hash0;
@@ -117,9 +137,9 @@ int x16r_8way_hash_generic( void* output, const void* input, int thrid )
    dintrlv_8x64( hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7,
                  input, 640 );
 
-   for ( int i = 0; i < 16; i++ )
+   for ( int i = 0; i < func_count; i++ )
    {
-      const char elem = x16r_hash_order[i];
+      const char elem = hash_order[i];
       const uint8_t algo = elem >= 'A' ? elem - 'A' + 10 : elem - '0';
 
       switch ( algo )
@@ -144,7 +164,7 @@ int x16r_8way_hash_generic( void* output, const void* input, int thrid )
             {
                intrlv_8x64( vhash, in0, in1, in2, in3, in4, in5, in6, in7,
                             size<<3 );
-            bmw512_8way_update( &ctx.bmw, vhash, size );
+               bmw512_8way_update( &ctx.bmw, vhash, size );
             }
             bmw512_8way_close( &ctx.bmw, vhash );
             dintrlv_8x64_512( hash0, hash1, hash2, hash3, hash4, hash5, hash6,
@@ -455,7 +475,8 @@ int x16r_8way_hash_generic( void* output, const void* input, int thrid )
 int x16r_8way_hash( void* output, const void* input, int thrid )
 {
    uint8_t hash[64*8] __attribute__ ((aligned (128)));
-   if ( !x16r_8way_hash_generic( hash, input, thrid ) )
+   if ( !x16r_8way_hash_generic( hash, input, thrid, x16r_hash_order, 
+                                 X16R_HASH_FUNC_COUNT ) )
       return 0;
 
    memcpy( output,     hash,     32 );
@@ -476,7 +497,6 @@ int scanhash_x16r_8way( struct work *work, uint32_t max_nonce,
 {
    uint32_t hash[16*8] __attribute__ ((aligned (128)));
    uint32_t vdata[20*8] __attribute__ ((aligned (64)));
-   uint32_t bedata1[2] __attribute__((aligned(64)));
    uint32_t *pdata = work->data;
    uint32_t *ptarget = work->target;
    const uint32_t first_nonce = pdata[19];
@@ -489,27 +509,24 @@ int scanhash_x16r_8way( struct work *work, uint32_t max_nonce,
 
    if ( bench )   ptarget[7] = 0x0cff;
 
-   bedata1[0] = bswap_32( pdata[1] );
-   bedata1[1] = bswap_32( pdata[2] );
-
-   static __thread uint32_t s_ntime = UINT32_MAX;
-   const uint32_t ntime = bswap_32( pdata[17] );
-   if ( s_ntime != ntime )
+   static __thread uint32_t saved_height = UINT32_MAX;
+   if ( work->height != saved_height )
    {
-      x16_r_s_getAlgoString( (const uint8_t*)bedata1, x16r_hash_order );
-      s_ntime = ntime;
-
-      if ( opt_debug && !thr_id )
-          applog( LOG_INFO, "hash order %s (%08x)", x16r_hash_order, ntime );
+      vdata[1] = bswap_32( pdata[1] );
+      vdata[2] = bswap_32( pdata[2] );
+      saved_height = work->height;
+      x16_r_s_getAlgoString( (const uint8_t*)(&vdata[1]), x16r_hash_order );
+      if ( !opt_quiet && !thr_id )
+           applog( LOG_INFO, "hash order %s", x16r_hash_order );
    }
 
-   x16r_8way_prehash( vdata, pdata );
+   x16r_8way_prehash( vdata, pdata, x16r_hash_order );
    *noncev = mm512_intrlv_blend_32( _mm512_set_epi32(
                              n+7, 0, n+6, 0, n+5, 0, n+4, 0,
                              n+3, 0, n+2, 0, n+1, 0, n,   0 ), *noncev );
    do
    {
-      if( x16r_8way_hash( hash, vdata, thr_id ) );
+      if ( x16r_8way_hash( hash, vdata, thr_id ) )
       for ( int i = 0; i < 8; i++ )
       if ( unlikely( valid_hash( hash + (i<<3), ptarget ) && !bench ) )
       {
@@ -517,7 +534,7 @@ int scanhash_x16r_8way( struct work *work, uint32_t max_nonce,
          submit_solution( work, hash+(i<<3), mythr );
       }
       *noncev = _mm512_add_epi32( *noncev,
-                                  m512_const1_64( 0x0000000800000000 ) );
+                                  _mm512_set1_epi64( 0x0000000800000000 ) );
       n += 8;
    } while ( likely( ( n < last_nonce ) && !(*restart) ) );
    pdata[19] = n;
@@ -527,12 +544,12 @@ int scanhash_x16r_8way( struct work *work, uint32_t max_nonce,
 
 #elif defined (X16R_4WAY)
 
-void x16r_4way_prehash( void *vdata, void *pdata )
+void x16r_4way_prehash( void *vdata, void *pdata, const char *hash_order )
 {
    uint32_t vdata2[20*4] __attribute__ ((aligned (64)));
    uint32_t edata[20] __attribute__ ((aligned (64)));
 
-   const char elem = x16r_hash_order[0];
+   const char elem = hash_order[0];
    const uint8_t algo = elem >= 'A' ? elem - 'A' + 10 : elem - '0';
 
    switch ( algo )
@@ -552,18 +569,33 @@ void x16r_4way_prehash( void *vdata, void *pdata )
          skein512_4way_prehash64( &x16r_ctx.skein, vdata );
       break;
       case LUFFA:
-         mm128_bswap32_80( edata, pdata );
-         intrlv_2x128( vdata2, edata, edata, 640 );
-         luffa_2way_init( &x16r_ctx.luffa, 512 );
-         luffa_2way_update( &x16r_ctx.luffa, vdata2, 64 );
-         rintrlv_2x128_4x64( vdata, vdata2, vdata2, 640 );
-         break;
+      {
+         hashState_luffa ctx_luffa;
+         v128_bswap32_80( edata, pdata );
+         intrlv_4x64( vdata, edata, edata, edata, edata, 640 );
+         init_luffa( &ctx_luffa, 512 );
+         update_luffa( &ctx_luffa, (const BitSequence*)edata, 64 );
+         intrlv_2x128( x16r_ctx.luffa.buffer, ctx_luffa.buffer,
+                                              ctx_luffa.buffer, 512 );
+         intrlv_2x128( x16r_ctx.luffa.chainv, ctx_luffa.chainv,
+                                              ctx_luffa.chainv, 1280 );
+         x16r_ctx.luffa.hashbitlen = ctx_luffa.hashbitlen;
+         x16r_ctx.luffa.rembytes = ctx_luffa.rembytes;
+      }
+      break;
       case CUBEHASH:
-         mm128_bswap32_80( edata, pdata );
-         intrlv_2x128( vdata2, edata, edata, 640 );
-         cube_2way_init( &x16r_ctx.cube, 512, 16, 32 );
-         cube_2way_update( &x16r_ctx.cube, vdata2, 64 );
-         rintrlv_2x128_4x64( vdata, vdata2, vdata2, 640 );
+      {
+         cubehashParam ctx_cube;
+         v128_bswap32_80( edata, pdata );
+         intrlv_4x64( vdata, edata, edata, edata, edata, 640 );
+         cubehashInit( &ctx_cube, 512, 16, 32 );
+         cubehashUpdate( &ctx_cube, (const byte*)edata, 64 );
+         x16r_ctx.cube.hashlen = ctx_cube.hashlen;
+         x16r_ctx.cube.rounds = ctx_cube.rounds;
+         x16r_ctx.cube.blocksize = ctx_cube.blocksize;
+         x16r_ctx.cube.pos = ctx_cube.pos;
+         intrlv_2x128( x16r_ctx.cube.h, ctx_cube.x, ctx_cube.x, 1024 );
+      }
       break;
       case HAMSI:
          mm256_bswap32_intrlv80_4x64( vdata, pdata );
@@ -571,19 +603,19 @@ void x16r_4way_prehash( void *vdata, void *pdata )
          hamsi512_4way_update( &x16r_ctx.hamsi, vdata, 72 );
       break;
       case FUGUE:
-         mm128_bswap32_80( edata, pdata );
+         v128_bswap32_80( edata, pdata );
          fugue512_init( &x16r_ctx.fugue );
          fugue512_update( &x16r_ctx.fugue, edata, 76 );
          intrlv_4x64( vdata, edata, edata, edata, edata, 640 );
       break;
       case SHABAL:
-         mm128_bswap32_intrlv80_4x32( vdata2, pdata );
+         v128_bswap32_intrlv80_4x32( vdata2, pdata );
          shabal512_4way_init( &x16r_ctx.shabal );
          shabal512_4way_update( &x16r_ctx.shabal, vdata2, 64 );
          rintrlv_4x32_4x64( vdata, vdata2, 640 );
       break;
       case WHIRLPOOL:
-         mm128_bswap32_80( edata, pdata );
+         v128_bswap32_80( edata, pdata );
          sph_whirlpool_init( &x16r_ctx.whirlpool );
          sph_whirlpool( &x16r_ctx.whirlpool, edata, 64 );
          intrlv_4x64( vdata, edata, edata, edata, edata, 640 );
@@ -593,13 +625,14 @@ void x16r_4way_prehash( void *vdata, void *pdata )
    }
 }
 
-int x16r_4way_hash_generic( void* output, const void* input, int thrid )
+int x16r_4way_hash_generic( void* output, const void* input, int thrid,
+                            const char *hash_order, const int func_count )
 {
    uint32_t vhash[20*4] __attribute__ ((aligned (128)));
-   uint32_t hash0[20] __attribute__ ((aligned (64)));
-   uint32_t hash1[20] __attribute__ ((aligned (64)));
-   uint32_t hash2[20] __attribute__ ((aligned (64)));
-   uint32_t hash3[20] __attribute__ ((aligned (64)));
+   uint32_t hash0[20] __attribute__ ((aligned (32)));
+   uint32_t hash1[20] __attribute__ ((aligned (32)));
+   uint32_t hash2[20] __attribute__ ((aligned (32)));
+   uint32_t hash3[20] __attribute__ ((aligned (32)));
    x16r_4way_context_overlay ctx;
    memcpy( &ctx, &x16r_ctx, sizeof(ctx) );
    void *in0 = (void*) hash0;
@@ -610,9 +643,9 @@ int x16r_4way_hash_generic( void* output, const void* input, int thrid )
 
    dintrlv_4x64( hash0, hash1, hash2, hash3, input, 640 );
 
-   for ( int i = 0; i < 16; i++ )
+   for ( int i = 0; i < func_count; i++ )
    {
-      const char elem = x16r_hash_order[i];
+      const char elem = hash_order[i];
       const uint8_t algo = elem >= 'A' ? elem - 'A' + 10 : elem - '0';
 
       switch ( algo )
@@ -874,7 +907,8 @@ int x16r_4way_hash_generic( void* output, const void* input, int thrid )
 int x16r_4way_hash( void* output, const void* input, int thrid )
 {
    uint8_t hash[64*4] __attribute__ ((aligned (64)));
-   if ( !x16r_4way_hash_generic( hash, input, thrid ) )
+   if ( !x16r_4way_hash_generic( hash, input, thrid, x16r_hash_order,
+                                 X16R_HASH_FUNC_COUNT ) )
       return 0;
 
    memcpy( output,     hash,     32 );
@@ -890,7 +924,6 @@ int scanhash_x16r_4way( struct work *work, uint32_t max_nonce,
 {
    uint32_t hash[16*4] __attribute__ ((aligned (64)));
    uint32_t vdata[20*4] __attribute__ ((aligned (64)));
-   uint32_t bedata1[2] __attribute__((aligned(64)));
    uint32_t *pdata = work->data;
    uint32_t *ptarget = work->target;
    const uint32_t first_nonce = pdata[19];
@@ -903,25 +936,23 @@ int scanhash_x16r_4way( struct work *work, uint32_t max_nonce,
 
    if ( bench )  ptarget[7] = 0x0cff;
 
-   bedata1[0] = bswap_32( pdata[1] );
-   bedata1[1] = bswap_32( pdata[2] );
-
-   static __thread uint32_t s_ntime = UINT32_MAX;
-   const uint32_t ntime = bswap_32( pdata[17] );
-   if ( s_ntime != ntime )
+   static __thread uint32_t saved_height = UINT32_MAX;
+   if ( work->height != saved_height )
    {
-      x16_r_s_getAlgoString( (const uint8_t*)bedata1, x16r_hash_order );
-      s_ntime = ntime;
-      if ( opt_debug && !thr_id )
-         applog( LOG_INFO, "hash order %s (%08x)", x16r_hash_order, ntime );
+      vdata[1] = bswap_32( pdata[1] );
+      vdata[2] = bswap_32( pdata[2] );
+      saved_height = work->height;
+      x16_r_s_getAlgoString( (const uint8_t*)(&vdata[1]), x16r_hash_order );
+      if ( !opt_quiet && !thr_id )
+           applog( LOG_INFO, "hash order %s", x16r_hash_order );
    }
 
-   x16r_4way_prehash( vdata, pdata );
+   x16r_4way_prehash( vdata, pdata, x16r_hash_order );
    *noncev = mm256_intrlv_blend_32(
                    _mm256_set_epi32( n+3, 0, n+2, 0, n+1, 0, n, 0 ), *noncev );
    do
    {
-      if ( x16r_4way_hash( hash, vdata, thr_id ) );
+      if ( x16r_4way_hash( hash, vdata, thr_id ) )
       for ( int i = 0; i < 4; i++ )
       if ( unlikely( valid_hash( hash + (i<<3), ptarget ) && !bench ) )
       {
@@ -929,8 +960,408 @@ int scanhash_x16r_4way( struct work *work, uint32_t max_nonce,
          submit_solution( work, hash+(i<<3), mythr );
       }
       *noncev = _mm256_add_epi32( *noncev,
-                                  m256_const1_64( 0x0000000400000000 ) );
+                                  _mm256_set1_epi64x( 0x0000000400000000 ) );
       n += 4;
+   } while ( likely( ( n < last_nonce ) && !(*restart) ) );
+   pdata[19] = n;
+   *hashes_done = n - first_nonce;
+   return 0;
+}
+
+#elif defined (X16R_2WAY)
+
+void x16r_2x64_prehash( void *vdata, void *pdata, const char *hash_order )
+{
+   uint32_t edata[20] __attribute__ ((aligned (64)));
+   const char elem = hash_order[0];
+   const uint8_t algo = elem >= 'A' ? elem - 'A' + 10 : elem - '0';
+
+   switch ( algo )
+   {
+      case JH:
+         v128_bswap32_intrlv80_2x64( vdata, pdata );
+         jh512_2x64_init( &x16r_ctx.jh );
+         jh512_2x64_update( &x16r_ctx.jh, vdata, 64 );
+      break;
+      case KECCAK:
+         v128_bswap32_intrlv80_2x64( vdata, pdata );
+         keccak512_2x64_init( &x16r_ctx.keccak );
+         keccak512_2x64_update( &x16r_ctx.keccak, vdata, 72 );
+      break;
+      case SKEIN:
+         v128_bswap32_intrlv80_2x64( vdata, pdata );
+         skein512_2x64_prehash64( &x16r_ctx.skein, vdata );
+      break;
+      case LUFFA:
+      {
+         v128_bswap32_80( edata, pdata );
+         init_luffa( &x16r_ctx.luffa, 512 );
+         update_luffa( &x16r_ctx.luffa, edata, 64 );
+         intrlv_2x64( vdata, edata, edata, 640 );
+      }
+      break;
+      case CUBEHASH:
+      {
+         v128_bswap32_80( edata, pdata );
+         cubehashInit( &x16r_ctx.cube, 512, 16, 32 );
+         cubehashUpdate( &x16r_ctx.cube, edata, 64 );
+         intrlv_2x64( vdata, edata, edata, 640 );
+      }
+      break;
+      case HAMSI:
+#if defined(__SSE4_2__) || defined(__ARM_NEON)
+         v128_bswap32_intrlv80_2x64( vdata, pdata );
+         hamsi512_2x64_init( &x16r_ctx.hamsi );
+         hamsi512_2x64_update( &x16r_ctx.hamsi, vdata, 72 );
+#else
+         v128_bswap32_80( edata, pdata );
+         sph_hamsi512_init( &x16r_ctx.hamsi );
+         sph_hamsi512( &x16r_ctx.hamsi, edata, 72 );
+         intrlv_2x64( vdata, edata, edata, 640 );
+#endif
+      break;
+      case FUGUE:
+         v128_bswap32_80( edata, pdata );
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
+         fugue512_init( &x16r_ctx.fugue );
+         fugue512_update( &x16r_ctx.fugue, edata, 76 );
+#else         
+         sph_fugue512_init( &x16r_ctx.fugue );
+         sph_fugue512( &x16r_ctx.fugue, edata, 76 );
+#endif
+         intrlv_2x64( vdata, edata, edata, 640 );
+      break;
+      case SHABAL:
+         v128_bswap32_80( edata, pdata );
+         sph_shabal512_init( &x16r_ctx.shabal );
+         sph_shabal512( &x16r_ctx.shabal, edata, 64);
+         intrlv_2x64( vdata, edata, edata, 640 );
+      break;
+      case WHIRLPOOL:
+         v128_bswap32_80( edata, pdata );
+         sph_whirlpool_init( &x16r_ctx.whirlpool );
+         sph_whirlpool( &x16r_ctx.whirlpool, edata, 64 );
+         intrlv_2x64( vdata, edata, edata, 640 );
+      break;
+      default:
+         v128_bswap32_intrlv80_2x64( vdata, pdata );
+   }
+}
+
+int x16r_2x64_hash_generic( void* output, const void* input, int thrid,
+                            const char *hash_order, const int func_count )
+{
+   uint32_t vhash[20*2] __attribute__ ((aligned (64)));
+   uint32_t hash0[20] __attribute__ ((aligned (32)));
+   uint32_t hash1[20] __attribute__ ((aligned (32)));
+   x16r_2x64_context_overlay ctx;
+   memcpy( &ctx, &x16r_ctx, sizeof(ctx) );
+   void *in0 = (void*) hash0;
+   void *in1 = (void*) hash1;
+   int size = 80;
+
+   dintrlv_2x64( hash0, hash1, input, 640 );
+
+   for ( int i = 0; i < func_count; i++ )
+   {
+      const char elem = hash_order[i];
+      const uint8_t algo = elem >= 'A' ? elem - 'A' + 10 : elem - '0';
+
+      switch ( algo )
+      {
+         case BLAKE:
+            if ( i == 0 )
+               blake512_2x64_full( &ctx.blake, vhash, input, size );
+            else
+            {
+               intrlv_2x64( vhash, in0, in1, size<<3 );
+               blake512_2x64_full( &ctx.blake, vhash, vhash, size );
+            }
+            dintrlv_2x64( hash0, hash1, vhash, 512 );
+         break;
+         case BMW:
+            bmw512_2x64_init( &ctx.bmw );
+            if ( i == 0 )
+               bmw512_2x64_update( &ctx.bmw, input, size );
+            else
+            {
+               intrlv_2x64( vhash, in0, in1, size<<3 );
+               bmw512_2x64_update( &ctx.bmw, vhash, size );
+            }
+            bmw512_2x64_close( &ctx.bmw, vhash );
+            dintrlv_2x64( hash0, hash1, vhash, 512 );
+         break;
+         case GROESTL:
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
+            groestl512_full( &ctx.groestl, hash0, in0, size<<3 );
+            groestl512_full( &ctx.groestl, hash1, in1, size<<3 );
+#else
+            sph_groestl512_init( &ctx.groestl );
+            sph_groestl512( &ctx.groestl, in0, size );
+            sph_groestl512_close( &ctx.groestl, hash0 );
+            sph_groestl512_init( &ctx.groestl );
+            sph_groestl512( &ctx.groestl, in1, size );
+            sph_groestl512_close( &ctx.groestl, hash1 );
+#endif
+          break;
+         case JH:
+            if ( i == 0 )
+               jh512_2x64_update( &ctx.jh, input + (64*2), 16 );
+            else
+            {
+               intrlv_2x64( vhash, in0, in1, size<<3 );
+               jh512_2x64_init( &ctx.jh );
+               jh512_2x64_update( &ctx.jh, vhash, size );
+            }
+            jh512_2x64_close( &ctx.jh, vhash );
+            dintrlv_2x64( hash0, hash1, vhash, 512 );
+         break;
+         case KECCAK:
+           if ( i == 0 )
+               keccak512_2x64_update( &ctx.keccak, input + (72*2), 8 );
+            else
+            {
+               intrlv_2x64( vhash, in0, in1, size<<3 );
+               keccak512_2x64_init( &ctx.keccak );
+               keccak512_2x64_update( &ctx.keccak, vhash, size );
+            }
+            keccak512_2x64_close( &ctx.keccak, vhash );
+            dintrlv_2x64( hash0, hash1, vhash, 512 );
+         break;
+         case SKEIN:
+            if ( i == 0 )
+               skein512_2x64_final16( &ctx.skein, vhash, input + (64*2) );
+            else
+            {
+               intrlv_2x64( vhash, in0, in1, size<<3 );
+               skein512_2x64_full( &ctx.skein, vhash, vhash, size );
+            }
+            dintrlv_2x64( hash0, hash1, vhash, 512 );
+         break;
+         case LUFFA:
+            if ( i == 0 )
+            {
+               update_and_final_luffa( &ctx.luffa, hash0, in0 + 64, 16 );
+               memcpy( &ctx, &x16r_ctx, sizeof(ctx) );
+               update_and_final_luffa( &ctx.luffa, hash1, in1 + 64, 16 );
+            }
+            else
+            {
+               luffa_full( &ctx.luffa, hash0, 512, hash0, size );
+               luffa_full( &ctx.luffa, hash1, 512, hash1, size );
+            }
+         break;
+         case CUBEHASH:
+            if ( i == 0 )
+            {
+               cubehashUpdateDigest( &ctx.cube, hash0, in0 + 64, 16 );
+               memcpy( &ctx, &x16r_ctx, sizeof(ctx) );
+               cubehashUpdateDigest( &ctx.cube, hash1, in1 + 64, 16 );
+            }
+            else
+            {
+               cubehash_full( &ctx.cube, hash0, 512, hash0, size );
+               cubehash_full( &ctx.cube, hash1, 512, hash1, size );
+            }
+         break;
+         case SHAVITE:
+            shavite512_full( &ctx.shavite, hash0, in0, size );
+            shavite512_full( &ctx.shavite, hash1, in1, size );
+          break;
+         case SIMD:
+            simd512_ctx( &ctx.simd, hash0, in0, size );
+            simd512_ctx( &ctx.simd, hash1, in1, size );
+         break;
+         case ECHO:
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
+            echo_full( &ctx.echo, hash0, 512, in0, size );
+            echo_full( &ctx.echo, hash1, 512, in1, size );
+#else
+            sph_echo512_init( &ctx.echo );
+            sph_echo512( &ctx.echo, in0, size );
+            sph_echo512_close( &ctx.echo, hash0 );
+            sph_echo512_init( &ctx.echo );
+            sph_echo512( &ctx.echo, in1, size );
+            sph_echo512_close( &ctx.echo, hash1 );
+#endif
+          break;
+         case HAMSI:
+#if defined(__SSE4_2__) || defined(__ARM_NEON)
+            if ( i == 0 )
+               hamsi512_2x64_update( &ctx.hamsi, input + (72*2), 8 );
+            else
+            {
+               intrlv_2x64( vhash, hash0, hash1, size<<3 );
+               hamsi512_2x64_init( &ctx.hamsi );
+               hamsi512_2x64_update( &ctx.hamsi, vhash, size );
+            }
+            hamsi512_2x64_close( &ctx.hamsi, vhash );
+            dintrlv_2x64( hash0, hash1, vhash, 512 );
+#else
+            if ( i == 0 )
+            {
+               sph_hamsi512( &ctx.hamsi, in0 + 72, 8 );
+               sph_hamsi512_close( &ctx.hamsi, hash0 );
+               memcpy( &ctx, &x16r_ctx, sizeof(ctx) );
+               sph_hamsi512( &ctx.hamsi, in1 + 72, 8 );
+               sph_hamsi512_close( &ctx.hamsi, hash1 );
+            }
+            else
+            {
+               sph_hamsi512_init( &ctx.hamsi );
+               sph_hamsi512( &ctx.hamsi, hash0, size );
+               sph_hamsi512_close( &ctx.hamsi, hash0 );
+               sph_hamsi512_init( &ctx.hamsi );
+               sph_hamsi512( &ctx.hamsi, hash1, size );
+               sph_hamsi512_close( &ctx.hamsi, hash1 );
+             }
+#endif
+            break;
+         case FUGUE:
+#if defined(__AES__) || defined(__ARM_FEATURE_AES)
+            if ( i == 0 )
+            {
+               fugue512_update( &ctx.fugue, in0 + 76, 4 );
+               fugue512_final( &ctx.fugue, hash0 );
+               memcpy( &ctx, &x16r_ctx, sizeof(hashState_fugue) );
+               fugue512_update( &ctx.fugue, in1 + 76, 4 );
+               fugue512_final( &ctx.fugue, hash1 );
+            }
+            else
+            {
+               fugue512_full( &ctx.fugue, hash0, hash0, size );
+               fugue512_full( &ctx.fugue, hash1, hash1, size );
+            }
+#else
+            if ( i == 0 )
+            {
+               sph_fugue512( &ctx.fugue, in0 + 76, 4 );
+               sph_fugue512_close( &ctx.fugue, hash0 );
+               memcpy( &ctx, &x16r_ctx, sizeof(sph_fugue512_context) );
+               sph_fugue512( &ctx.fugue, in1 + 76, 4 );
+               sph_fugue512_close( &ctx.fugue, hash1 );
+            }
+             else
+             {
+                sph_fugue512_full( &ctx.fugue, hash0, hash0, size );
+                sph_fugue512_full( &ctx.fugue, hash1, hash1, size );
+             }
+#endif
+             break;
+         case SHABAL:
+            if ( i == 0 )
+            {
+               sph_shabal512( &ctx.shabal, in0 + 64, 16 );
+               sph_shabal512_close( &ctx.shabal, hash0 );
+               memcpy( &ctx, &x16r_ctx, sizeof(ctx) );
+               sph_shabal512( &ctx.shabal, in1 + 64, 16 );
+               sph_shabal512_close( &ctx.shabal, hash1 );
+            }
+            else
+            {
+               sph_shabal512_init( &ctx.shabal );
+               sph_shabal512( &ctx.shabal, hash0, size );
+               sph_shabal512_close( &ctx.shabal, hash0 );
+               sph_shabal512_init( &ctx.shabal );
+               sph_shabal512( &ctx.shabal, hash1, size );
+               sph_shabal512_close( &ctx.shabal, hash1 );
+             }
+         break;
+         case WHIRLPOOL:
+            if ( i == 0 )
+            {
+               sph_whirlpool( &ctx.whirlpool, in0 + 64, 16 );
+               sph_whirlpool_close( &ctx.whirlpool, hash0 );
+               memcpy( &ctx, &x16r_ctx, sizeof(ctx) );
+               sph_whirlpool( &ctx.whirlpool, in1 + 64, 16 );
+               sph_whirlpool_close( &ctx.whirlpool, hash1 );
+               memcpy( &ctx, &x16r_ctx, sizeof(ctx) );
+            }
+            else
+            {
+               sph_whirlpool512_full( &ctx.whirlpool, hash0, hash0, size );
+               sph_whirlpool512_full( &ctx.whirlpool, hash1, hash1, size );
+            }
+         break;
+         case SHA_512:
+            sha512_2x64_init( &ctx.sha512 );
+            if ( i == 0 )
+               sha512_2x64_update( &ctx.sha512, input, size );
+            else
+            {
+               intrlv_2x64( vhash, in0, in1, size<<3 );
+               sha512_2x64_init( &ctx.sha512 );
+               sha512_2x64_update( &ctx.sha512, vhash, size );
+            }
+            sha512_2x64_close( &ctx.sha512, vhash );
+            dintrlv_2x64( hash0, hash1, vhash, 512 );
+         break;
+      }
+
+      if ( work_restart[thrid].restart ) return 0;
+
+      size = 64;
+   }
+   memcpy( output,     hash0, 64 );
+   memcpy( output+64,  hash1, 64 );
+
+   return 1;
+}
+
+int x16r_2x64_hash( void* output, const void* input, int thrid )
+{
+   uint8_t hash[64*2] __attribute__ ((aligned (64)));
+   if ( !x16r_2x64_hash_generic( hash, input, thrid, x16r_hash_order,
+                                 X16R_HASH_FUNC_COUNT ) )
+      return 0;
+
+   memcpy( output,     hash,     32 );
+   memcpy( output+32,  hash+64,  32 );
+
+   return 1;
+}
+
+int scanhash_x16r_2x64( struct work *work, uint32_t max_nonce,
+                        uint64_t *hashes_done, struct thr_info *mythr)
+{
+   uint32_t hash[16*2] __attribute__ ((aligned (64)));
+   uint32_t vdata[20*2] __attribute__ ((aligned (64)));
+   uint32_t *pdata = work->data;
+   uint32_t *ptarget = work->target;
+   const uint32_t first_nonce = pdata[19];
+   const uint32_t last_nonce = max_nonce - 2;
+   uint32_t n = first_nonce;
+   v128_t *noncev = (v128_t*)vdata + 9;
+   const int thr_id = mythr->id;
+   const bool bench = opt_benchmark;
+   volatile uint8_t *restart = &(work_restart[thr_id].restart);
+
+   if ( bench )  ptarget[7] = 0x0cff;
+
+   static __thread uint32_t saved_height = UINT32_MAX;
+   if ( work->height != saved_height )
+   {
+      vdata[1] = bswap_32( pdata[1] );
+      vdata[2] = bswap_32( pdata[2] );
+      saved_height = work->height;
+      x16_r_s_getAlgoString( (const uint8_t*)(&vdata[1]), x16r_hash_order );
+      if ( !opt_quiet && !thr_id )
+           applog( LOG_INFO, "hash order %s", x16r_hash_order );
+   }
+
+   x16r_2x64_prehash( vdata, pdata, x16r_hash_order );
+   *noncev = v128_intrlv_blend_32( v128_set32( n+1, 0, n, 0 ), *noncev );
+   do
+   {
+      if ( x16r_2x64_hash( hash, vdata, thr_id ) )
+      for ( int i = 0; i < 2; i++ )
+      if ( unlikely( valid_hash( hash + (i<<3), ptarget ) && !bench ) )
+      {
+         pdata[19] = bswap_32( n+i );
+         submit_solution( work, hash+(i<<3), mythr );
+      }
+      *noncev = v128_add32( *noncev, v128_64( 0x0000000200000000 ) );
+      n += 2;
    } while ( likely( ( n < last_nonce ) && !(*restart) ) );
    pdata[19] = n;
    *hashes_done = n - first_nonce;

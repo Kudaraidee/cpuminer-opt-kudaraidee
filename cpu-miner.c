@@ -3,7 +3,7 @@
  * Copyright 2012-2014 pooler
  * Copyright 2014 Lucas Jones
  * Copyright 2014-2016 Tanguy Pruvot
- * Copyright 2016-2021 Jay D Dee
+ * Copyright 2016-2023 Jay D Dee
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -36,7 +36,8 @@
 #include <memory.h>
 #include <curl/curl.h>
 #include <jansson.h>
-#include <openssl/sha.h>
+//#include <openssl/sha.h>
+//#include <mm_malloc.h>
 #include "sysinfos.c"
 #include "algo/sha/sha256d.h"
 
@@ -69,6 +70,7 @@
 
 #include "miner.h"
 #include "algo-gate-api.h"
+#include "algo/sha/sha256-hash.h"
 
 #ifdef WIN32
 #include "compat/winansi.h"
@@ -105,8 +107,9 @@ bool opt_randomize = false;
 static int opt_retries = -1;
 static int opt_fail_pause = 10;
 static int opt_time_limit = 0;
+static unsigned int time_limit_stop = 0;
 int opt_timeout = 300;
-static int opt_scantime = 5;
+static int opt_scantime = 0;
 const int min_scantime = 1;
 //static const bool opt_time = true;
 enum algos opt_algo = ALGO_NULL;
@@ -119,7 +122,6 @@ static uint64_t opt_affinity = 0xFFFFFFFFFFFFFFFFULL;  // default, use all cores
 int opt_priority = 0;  // deprecated
 int num_cpus = 1;
 int num_cpugroups = 1;  // For Windows
-#define max_cpus 256   // max for affinity
 char *rpc_url = NULL;
 char *rpc_userpass = NULL;
 char *rpc_user, *rpc_pass;
@@ -130,9 +132,8 @@ bool opt_verify = false;
 static bool opt_stratum_keepalive = false;
 static struct timeval stratum_keepalive_timer;
 // Stratum typically times out in 5 minutes or 300 seconds
-#define stratum_keepalive_timeout 180  // 3 minutes
+#define stratum_keepalive_timeout 150  // 2.5 minutes
 static struct timeval stratum_reset_time;
-
 
 // pk_buffer_size is used as a version selector by b58 code, therefore
 // it must be set correctly to work.
@@ -172,9 +173,11 @@ double net_diff = 0.;
 double net_hashrate = 0.;
 uint64_t net_blocks = 0;
 uint32_t opt_work_size = 0;
+bool     opt_bell = false;
 
 // conditional mining
-bool conditional_state[MAX_CPUS] = { 0 };
+bool *conditional_state = NULL;
+//bool conditional_state[MAX_CPUS] = { 0 };
 double opt_max_temp = 0.0;
 double opt_max_diff = 0.0;
 double opt_max_rate = 0.0;
@@ -203,7 +206,7 @@ static uint32_t last_block_height = 0;
 static double   highest_share = 0;   // highest accepted share diff
 static double   lowest_share = 9e99; // lowest accepted share diff
 static double   last_targetdiff = 0.;
-#if !(defined(__WINDOWS__) || defined(_WIN64) || defined(_WIN32))
+#if !(defined(__WINDOWS__) || defined(_WIN64) || defined(_WIN32) || defined(__APPLE__))
 static uint32_t hi_temp = 0;
 static uint32_t prev_temp = 0;
 #endif
@@ -223,8 +226,7 @@ char*  lp_id;
 
 static void   workio_cmd_free(struct workio_cmd *wc);
 
-// array mapping thread to cpu
-static uint8_t thread_affinity_map[ max_cpus ];
+static int *thread_affinity_map;
 
 // display affinity mask graphically
 static void format_affinity_mask( char *mask_str, uint64_t mask )
@@ -284,15 +286,15 @@ static inline void drop_policy(void) { }
 static void affine_to_cpu( struct thr_info *thr )
 {
    int thread = thr->id;
-   unsigned long last_error;    
-   bool ok;
+   unsigned long last_error = 0;    
+   bool ok = true;
 
 #if defined(WINDOWS_CPU_GROUPS_ENABLED)
    unsigned long group_size = GetActiveProcessorCount( 0 );
    unsigned long group      = thread / group_size;
    unsigned long cpu        = thread_affinity_map[ thread % group_size ];
 
-   GROUP_AFFINITY affinity;
+   GROUP_AFFINITY affinity = {0};
    affinity.Group = group;
    affinity.Mask = 1ULL << cpu;
 
@@ -317,8 +319,8 @@ static void affine_to_cpu( struct thr_info *thr )
    if ( !ok )
    {
       last_error = GetLastError();
-      applog( LOG_WARNING, "affine_to_cpu_mask for %u returned 0x%x",
-                           thread, last_error );
+      if ( !thread )
+         applog( LOG_WARNING, "Set affinity returned error 0x%x", last_error );
    }
 }   
 
@@ -341,6 +343,7 @@ void get_currentalgo(char* buf, int sz)
 
 void proper_exit(int reason)
 {
+   if (opt_debug) applog(LOG_INFO,"Program exit");
 #ifdef WIN32
 	if (opt_background) {
 		HWND hcon = GetConsoleWindow();
@@ -388,11 +391,11 @@ bool std_le_work_decode( struct work *work )
 {
     int i;
     const int adata_sz    = algo_gate.get_work_data_size() / 4;
-    const int atarget_sz  = ARRAY_SIZE(work->target);
+//    const int atarget_sz  = ARRAY_SIZE(work->target);
 
     for ( i = 0; i < adata_sz; i++ )
           work->data[i] = le32dec( work->data + i );
-    for ( i = 0; i < atarget_sz; i++ )
+    for ( i = 0; i < 8; i++ )
           work->target[i] = le32dec( work->target + i );
     return true;
 }
@@ -401,11 +404,11 @@ bool std_be_work_decode( struct work *work )
 {
     int i;
     const int adata_sz    = algo_gate.get_work_data_size() / 4;
-    const int atarget_sz  = ARRAY_SIZE(work->target);
+//    const int atarget_sz  = ARRAY_SIZE(work->target);
 
     for ( i = 0; i < adata_sz; i++ )
           work->data[i] = be32dec( work->data + i );
-    for ( i = 0; i < atarget_sz; i++ )
+    for ( i = 0; i < 8; i++ )
           work->target[i] = le32dec( work->target + i );
     return true;
 }
@@ -429,20 +432,18 @@ static bool work_decode( const json_t *val, struct work *work )
     if ( unlikely( !algo_gate.work_decode( work ) ) )
         return false;
 
-    if ( !allow_mininginfo )
-        net_diff = algo_gate.calc_network_diff( work );
-    else
-        net_diff = hash_to_diff( work->target );
-
-    work->targetdiff = net_diff;
-    stratum_diff = last_targetdiff = work->targetdiff;
+    // many of these aren't used solo.
+    net_diff =
+    work->targetdiff = 
+    stratum_diff =
+    last_targetdiff = hash_to_diff( work->target );
     work->sharediff = 0;
     algo_gate.decode_extra_data( work, &net_blocks );
 
     return true;
 }
 
-// good alternative for wallet mining, difficulty and net hashrate
+// Only used for net_hashrate with GBT/getwork, data is from previous block.
 static const char *info_req =
 "{\"method\": \"getmininginfo\", \"params\": [], \"id\":8}\r\n";
 
@@ -468,17 +469,14 @@ static bool get_mininginfo( CURL *curl, struct work *work )
    // "networkhashps": 56475980
    if ( res )
    {
-      // net_diff is a global that is set from the work hash target by
-      // both getwork and GBT. Don't overwrite it, define a local to override
-      // the global.
-      double net_diff = 0.;
+      double difficulty = 0.;
   		json_t *key = json_object_get( res, "difficulty" );
    	if ( key )
       {
 	   	if ( json_is_object( key ) )
 		   	key = json_object_get( key, "proof-of-work" );
 		   if ( json_is_real( key ) )
-			   net_diff = json_real_value( key );
+			   difficulty = json_real_value( key );
 	   }
 
       key = json_object_get( res, "networkhashps" );
@@ -495,12 +493,13 @@ static bool get_mininginfo( CURL *curl, struct work *work )
 		  	net_blocks = json_integer_value( key );
 
       if ( opt_debug )
-         applog(LOG_INFO,"Mining info: diff %.5g, net_hashrate %f, height %d",
-                              net_diff, net_hashrate, net_blocks );
-      
+         applog( LOG_INFO,"getmininginfo: difficulty %.5g, networkhashps %.5g, blocks %d", difficulty, net_hashrate, net_blocks );
+
       if ( !work->height )
       {
 	      // complete missing data from getwork
+         if ( opt_debug )
+            applog( LOG_DEBUG, "work height set by getmininginfo" );
 	      work->height = (uint32_t) net_blocks + 1;
 	      if ( work->height > g_work.height )
             restart_threads();
@@ -516,11 +515,10 @@ static bool get_mininginfo( CURL *curl, struct work *work )
 
 static bool gbt_work_decode( const json_t *val, struct work *work )
 {
-   int i, n;
+   uint32_t prevhash[8] __attribute__ ((aligned (32)));
+   uint32_t target[8] __attribute__ ((aligned (32)));
+   unsigned char final_sapling_hash[32] __attribute__ ((aligned (32)));
    uint32_t version, curtime, bits;
-   uint32_t prevhash[8];
-   uint32_t target[8];
-   unsigned char final_sapling_hash[32];
    int cbtx_size;
    uchar *cbtx = NULL;
    int tx_count, tx_size;
@@ -532,9 +530,9 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
    bool version_reduce = false;
    json_t *tmp, *txa;
    bool rc = false;
-
-// Segwit BEGIN
+   int i, n;
    bool segwit = false;
+
    tmp = json_object_get( val, "rules" );
    if ( tmp && json_is_array( tmp ) )
    {
@@ -552,8 +550,7 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
          }
       }
    }
-// Segwit END
-   
+
    tmp = json_object_get( val, "mutable" );
    if ( tmp && json_is_array( tmp ) )
    {
@@ -635,7 +632,7 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
          goto out;
       }
    }
-   
+
    /* find count and size of transactions */
    txa = json_object_get(val, "transactions" );
    if ( !txa || !json_is_array( txa ) )
@@ -710,12 +707,7 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
       cbtx[41] = cbtx_size - 42; /* scriptsig length */
       le32enc( (uint32_t *)( cbtx+cbtx_size ), 0xffffffff ); /* sequence */
       cbtx_size += 4;
-
-// Segwit BEGIN
-      //cbtx[cbtx_size++] = 1; /* out-counter */
-        cbtx[cbtx_size++] = segwit ? 2 : 1; /* out-counter */
-// Segwit END
-
+      cbtx[cbtx_size++] = segwit ? 2 : 1; /* out-counter */
       le32enc( (uint32_t *)( cbtx+cbtx_size) , (uint32_t)cbvalue ); /* value */
       le32enc( (uint32_t *)( cbtx+cbtx_size+4 ), cbvalue >> 32 );
       cbtx_size += 8;
@@ -723,7 +715,6 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
       memcpy( cbtx+cbtx_size, pk_script, pk_script_size );
       cbtx_size += (int) pk_script_size;
 
-// Segwit BEGIN
        if ( segwit )
        {
           unsigned char (*wtree)[32] = calloc(tx_count + 2, 32);
@@ -758,12 +749,11 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
             for ( i = 0; i < n; i++ )
                sha256d( wtree[i], wtree[2*i], 64 );
          }
-         memset( wtree[1], 0, 32 );  /* witness reserved value = 0 */
+         memset( wtree[1], 0, 32 );  // witness reserved value = 0
          sha256d( cbtx+cbtx_size, wtree[0], 64 );
          cbtx_size += 32;
          free( wtree );
       }
-// Segwit END
 
       le32enc( (uint32_t *)( cbtx+cbtx_size ), 0 ); /* lock time */
       cbtx_size += 4;
@@ -782,10 +772,8 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
             xsig_len += n;
          }
          else
-         {
             applog( LOG_WARNING,
                         "Signature does not fit in coinbase, skipping" );
-         }
       }
       tmp = json_object_get( val, "coinbaseaux" );
       if ( tmp && json_is_object( tmp ) )
@@ -812,8 +800,8 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
       if ( xsig_len )
       {
          unsigned char *ssig_end = cbtx + 42 + cbtx[41];
-         int push_len = cbtx[41] + xsig_len < 76 ? 1 :
-		               cbtx[41] + 2 + xsig_len > 100 ? 0 : 2;
+         int push_len = cbtx[41] + xsig_len < 76
+                        ? 1 : cbtx[41] + 2 + xsig_len > 100 ? 0 : 2;
          n = xsig_len + push_len;
          memmove( ssig_end + n, ssig_end, cbtx_size - 42 - cbtx[41] );
          cbtx[41] += n;
@@ -840,7 +828,6 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
       const char *tx_hex = json_string_value( json_object_get( tmp, "data" ) );
       const int tx_size = tx_hex ? (int) ( strlen( tx_hex ) / 2 ) : 0;
 
-// Segwit BEGIN      
       if ( segwit )
       {
          const char *txid = json_string_value( json_object_get( tmp, "txid" ) );
@@ -853,8 +840,6 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
       }
       else
       {
-// Segwit END
-
          unsigned char *tx = (uchar*) malloc( tx_size );
          if ( !tx_hex || !hex2bin( tx, tx_hex, tx_size ) )
          {
@@ -864,10 +849,7 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
          }
          sha256d( merkle_tree[1 + i], tx, tx_size );
          free( tx );
-
-// Segwit BEGIN      
       }
-// Segwit END
 
       if ( !submit_coinbase )
          strcat( work->txs, tx_hex );
@@ -885,6 +867,8 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
          sha256d( merkle_tree[i], merkle_tree[2*i], 64 );
    }
 
+   work->tx_count = tx_count;
+
    /* assemble block header */
    algo_gate.build_block_header( work, swab32( version ),
                                  (uint32_t*) prevhash, (uint32_t*) merkle_tree,
@@ -896,10 +880,12 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
       applog( LOG_ERR, "JSON invalid target" );
       goto out;
    }
-   for ( i = 0; i < ARRAY_SIZE( work->target ); i++ )
-      work->target[7 - i] = be32dec( target + i );
+
+   // reverse the bytes in target
+   casti_v128( work->target, 0 ) = v128_bswap128( casti_v128( target, 1 ) );
+   casti_v128( work->target, 1 ) = v128_bswap128( casti_v128( target, 0 ) );
    net_diff = work->targetdiff = hash_to_diff( work->target );
-   
+
    tmp = json_object_get( val, "workid" );
    if ( tmp )
    {
@@ -970,10 +956,10 @@ static inline void sprintf_et( char *str, long unsigned int seconds )
       sprintf( str, "%lum%02lus", min, sec );
 }
 
-const long double exp32 = EXP32;                                  // 2**32
-const long double exp48 = EXP32 * EXP16;                          // 2**48
-const long double exp64 = EXP32 * EXP32;                          // 2**64
-const long double exp96 = EXP32 * EXP32 * EXP32;                  // 2**96
+const long double exp32  = EXP32;                                 // 2**32
+const long double exp48  = EXP32 * EXP16;                         // 2**48
+const long double exp64  = EXP32 * EXP32;                         // 2**64
+const long double exp96  = EXP32 * EXP32 * EXP32;                 // 2**96
 const long double exp128 = EXP32 * EXP32 * EXP32 * EXP32;         // 2**128
 const long double exp160 = EXP32 * EXP32 * EXP32 * EXP32 * EXP16; // 2**160
 
@@ -1003,10 +989,21 @@ void report_summary_log( bool force )
 {
    struct timeval now, et, uptime, start_time;
 
+  if ( rejected_share_count > 10 )
+  {
+     if ( rejected_share_count > ( submitted_share_count / 2 ) )
+     {
+        applog(LOG_ERR,"Excessive rejected share rate, exiting...");
+        exit(1);
+     } 
+     else if ( rejected_share_count > ( submitted_share_count / 10 ) )
+       applog(LOG_WARNING,"High rejected share rate, check settings.");
+   }
+
    gettimeofday( &now, NULL );
    timeval_subtract( &et, &now, &five_min_start );
 
-#if !(defined(__WINDOWS__) || defined(_WIN64) || defined(_WIN32))
+#if !(defined(__WINDOWS__) || defined(_WIN64) || defined(_WIN32) || defined(__APPLE__))
 
    // Display CPU temperature and clock rate.
    int curr_temp = cpu_temp(0); 
@@ -1015,8 +1012,9 @@ void report_summary_log( bool force )
 
    if ( !opt_quiet || ( curr_temp >= 80 ) )
    {
-      int wait_time = curr_temp >= 90 ? 5 : curr_temp >= 80 ? 30 :
-                                            curr_temp >= 70 ? 60 : 120;
+      int wait_time = curr_temp >= 90 ? 5
+                    : curr_temp >= 80 ? 30
+                    : curr_temp >= 70 ? 60 : 120;
       timeval_subtract( &diff, &now, &cpu_temp_time );
       if ( ( diff.tv_sec > wait_time )
         || ( ( curr_temp > prev_temp ) && ( curr_temp >= 75 ) ) )
@@ -1075,12 +1073,11 @@ void report_summary_log( bool force )
    timeval_subtract( &et, &now, &start_time );
    timeval_subtract( &uptime, &total_hashes_time, &session_start );
    
-   double share_time = (double)et.tv_sec + (double)et.tv_usec / 1e6;
+   double share_time = (double)et.tv_sec + (double)et.tv_usec * 1e-6;
    double ghrate = safe_div( total_hashes, (double)uptime.tv_sec, 0. );
    double target_diff = exp32 * last_targetdiff;
    double shrate = safe_div( target_diff * (double)(accepts),
                              share_time, 0. );
-//   global_hashrate = ghrate;
    double sess_hrate = safe_div( exp32 * norm_diff_sum,
                                  (double)uptime.tv_sec, 0. );
    double submit_rate = safe_div( (double)submits * 60., share_time, 0. );
@@ -1097,11 +1094,11 @@ void report_summary_log( bool force )
    sprintf_et( et_str, et.tv_sec );
    sprintf_et( upt_str, uptime.tv_sec );
 
-   applog( LOG_BLUE, "%s: %s", algo_names[ opt_algo ], short_url );
+   applog( LOG_BLUE, "%s: %s", algo_names[ opt_algo ], rpc_url );
    applog2( LOG_NOTICE, "Periodic Report     %s        %s", et_str, upt_str );
    applog2( LOG_INFO, "Share rate        %.2f/min     %.2f/min",
             submit_rate, safe_div( (double)submitted_share_count*60.,
-              ( (double)uptime.tv_sec + (double)uptime.tv_usec / 1e6 ), 0. ) );
+              ( (double)uptime.tv_sec + (double)uptime.tv_usec * 1e-6 ), 0. ) );
    applog2( LOG_INFO, "Hash rate       %7.2f%sh/s   %7.2f%sh/s   (%.2f%sh/s)",
             shrate, shr_units, sess_hrate, sess_hr_units, ghrate, ghr_units );
 
@@ -1294,40 +1291,15 @@ static int share_result( int result, struct work *work,
      else              rcol = CL_LRD;
    }
 
-   applog( LOG_INFO, "%d %s%s %s%s %s%s %s%s%s, %.3f sec (%dms)",
-           my_stats.share_count, acol, ares, scol, sres, rcol, rres, bcol,
-           bres, CL_N, share_time, latency );
-
-   if ( unlikely( opt_debug || !result || solved ) )
-   {
-      if ( have_stratum )
-         applog2( LOG_INFO, "Diff %.5g, Block %d, Job %s",
-               my_stats.share_diff, my_stats.height, my_stats.job_id );
-      else
-         applog2( LOG_INFO, "Diff %.5g, Block %d",
-               my_stats.share_diff, work ? work->height : last_block_height );
-   }
-
+   const char *bell = !result && opt_bell ? &ASCII_BELL : "";
+   applog( LOG_INFO, "%s%d %s%s %s%s %s%s %s%s%s, %.3f sec (%dms)",
+           bell, my_stats.share_count, acol, ares, scol, sres, rcol, rres,
+           bcol, bres, use_colors ? CL_N : "", share_time, latency );
    if ( unlikely( !( opt_quiet || result || stale ) ) )
    {
-      uint32_t str[8];
-      uint32_t *targ;
-
-      if ( reason ) applog( LOG_MINR, "Reject reason: %s", reason );
-         
-      diff_to_hash( str, my_stats.share_diff );
-      applog2( LOG_INFO, "Hash:   %08x%08x%08x%08x%08x%08x", str[7], str[6],
-               str[5], str[4], str[3],str[2], str[1], str[0] );
-
-      if ( work )
-         targ = work->target;
-      else
-      {
-         diff_to_hash( str, my_stats.target_diff );
-         targ = &str[0];
-      }
-      applog2( LOG_INFO, "Target: %08x%08x%08x%08x%08x%08x", targ[7], targ[6],
-               targ[5], targ[4], targ[3], targ[2], targ[1], targ[0] );
+      applog2( LOG_INFO, "%sReject reason: %s", bell, reason ? reason : "" );
+      applog2( LOG_INFO, "Share diff: %.5g, Target: %.5g",
+                        my_stats.share_diff, my_stats.target_diff );
    }
    return 1;
 }
@@ -1441,6 +1413,7 @@ char* std_malloc_txs_request( struct work *work )
   json_t *val;
   char data_str[2 * sizeof(work->data) + 1];
   int i;
+  // datasize is an ugly hack, it should go through the gate
   int datasize = work->sapling ? 112 : 80;
 
   for ( i = 0; i < ARRAY_SIZE(work->data); i++ )
@@ -1531,24 +1504,14 @@ const char *getwork_req =
 
 #define GBT_CAPABILITIES "[\"coinbasetxn\", \"coinbasevalue\", \"longpoll\", \"workid\"]"
 
-// Segwit BEGIN
 #define GBT_RULES "[\"segwit\"]"
+
 static const char *gbt_req =
    "{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
    GBT_CAPABILITIES ", \"rules\": " GBT_RULES "}], \"id\":0}\r\n";
 const char *gbt_lp_req =
    "{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
    GBT_CAPABILITIES ", \"rules\": " GBT_RULES ", \"longpollid\": \"%s\"}], \"id\":0}\r\n";
-
-/*
-static const char *gbt_req =
-	"{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
-	GBT_CAPABILITIES "}], \"id\":0}\r\n";
-const char *gbt_lp_req =
-	"{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
-	GBT_CAPABILITIES ", \"longpollid\": \"%s\"}], \"id\":0}\r\n";
-*/
-// Segwit END
 
 static bool get_upstream_work( CURL *curl, struct work *work )
 {
@@ -1600,18 +1563,21 @@ start:
          json_decref( val );
          goto start;
       }
+      allow_getwork = false;  // GBT is working, disable fallback
    } 
    else
       rc = work_decode( json_object_get( val, "result" ), work );
 
    if ( rc ) 
    {
+      bool new_work = true;
+
       json_decref( val );
 
       get_mininginfo( curl, work );
       report_summary_log( false );
       
-      if ( opt_protocol | opt_debug )
+      if ( opt_protocol || opt_debug )
       {
          timeval_subtract( &diff, &tv_end, &tv_start );
          applog( LOG_INFO, "%s new work received in %.2f ms",
@@ -1624,10 +1590,19 @@ start:
          last_block_height = work->height;
          last_targetdiff = net_diff;
 
-         applog( LOG_BLUE, "New Block %d, Net Diff %.5g, Ntime %08x",
-                                work->height, net_diff,
-                                work->data[ algo_gate.ntime_index ] );
+         applog( LOG_BLUE, "New Block %d, Tx %d, Net Diff %.5g, Ntime %08x",
+                             work->height, work->tx_count, net_diff,
+                             bswap_32( work->data[ algo_gate.ntime_index ] ) );
+      }
+      else if ( memcmp( work->data, g_work.data, algo_gate.work_cmp_size ) )
+         applog( LOG_BLUE, "New Work: Block %d, Tx %d, Net Diff %.5g, Ntime %08x",
+                             work->height, work->tx_count, net_diff,
+                             bswap_32( work->data[ algo_gate.ntime_index ] ) );
+      else
+        new_work = false;
 
+      if ( new_work )
+      {
          if ( !opt_quiet )
          {
             double miner_hr = 0.;
@@ -1658,15 +1633,12 @@ start:
             scale_hash_for_display ( &miner_hr, miner_hr_units );
             scale_hash_for_display ( &net_hr, net_hr_units );
             applog2( LOG_INFO,
-                     "Miner TTF @ %.2f %sh/s %s, Net TTF @ %.2f %sh/s %s",
-                     miner_hr, miner_hr_units, miner_ttf, net_hr,
-                     net_hr_units, net_ttf );
+                  "Miner TTF @ %.2f %sh/s %s, Net TTF @ %.2f %sh/s %s",
+                  miner_hr, miner_hr_units, miner_ttf, net_hr,
+                  net_hr_units, net_ttf );
          }
-      }  // work->height > last_block_height
-      else if ( memcmp( &work->data[1], &g_work.data[1], 32 ) )
-         applog( LOG_BLUE, "New Work: Block %d, Net Diff %.5g, Ntime %08x",
-                                      work->height, net_diff,
-                                      work->data[ algo_gate.ntime_index ] );
+         restart_threads();
+      }
    }  // rc
 
    return rc;
@@ -1692,35 +1664,35 @@ static void workio_cmd_free(struct workio_cmd *wc)
 
 static bool workio_get_work( struct workio_cmd *wc, CURL *curl )
 {
-   struct work *ret_work;
+   struct work *work_heap;
    int failures = 0;
 
-   ret_work = (struct work*) calloc( 1, sizeof(*ret_work) );
-   if ( !ret_work )
-	return false;
+   work_heap = calloc( 1, sizeof(struct work) );
+   if ( !work_heap )  return false;
 
    /* obtain new work from bitcoin via JSON-RPC */
-   while ( !get_upstream_work( curl, ret_work ) )
+   while ( !get_upstream_work( curl, work_heap ) )
    {
       if ( unlikely( ( opt_retries >= 0 ) && ( ++failures > opt_retries ) ) )
       {
          applog( LOG_ERR, "json_rpc_call failed, terminating workio thread" );
-         free( ret_work );
-	      return false;
+         free( work_heap );
+         return false;
       }
 
       /* pause, then restart work-request loop */
-	   applog( LOG_ERR, "json_rpc_call failed, retry after %d seconds",
-		        opt_fail_pause );
+      applog( LOG_ERR, "json_rpc_call failed, retry after %d seconds",
+              opt_fail_pause );
       sleep( opt_fail_pause );
    }
 
    /* send work to requesting thread */
-   if ( !tq_push(wc->thr->q, ret_work ) )
-   	free( ret_work );
+   if ( !tq_push(wc->thr->q, work_heap ) )
+      free( work_heap );
 
    return true;
 }
+
 
 static bool workio_submit_work(struct workio_cmd *wc, CURL *curl)
 {
@@ -1792,7 +1764,7 @@ static void *workio_thread(void *userdata)
 static bool get_work(struct thr_info *thr, struct work *work)
 {
 	struct workio_cmd *wc;
-	struct work *work_heap;
+   struct work *work_heap;
 
 	if unlikely( opt_benchmark )
    {
@@ -1817,17 +1789,16 @@ static bool get_work(struct thr_info *thr, struct work *work)
 	wc->thr = thr;
 	/* send work request to workio thread */
 	if (!tq_push(thr_info[work_thr_id].q, wc))
-        {
+   {
 		workio_cmd_free(wc);
 		return false;
 	}
 	/* wait for response, a unit of work */
 	work_heap = (struct work*) tq_pop(thr->q, NULL);
-	if (!work_heap)
-		return false;
-	/* copy returned work into storage provided by caller */
-	memcpy(work, work_heap, sizeof(*work));
-	free(work_heap);
+	if ( !work_heap ) return false;
+   /* copy returned work into storage provided by caller */
+	memcpy( work, work_heap, sizeof(*work) );
+	free( work_heap );
 	return true;
 }
 
@@ -1877,9 +1848,9 @@ static void update_submit_stats( struct work *work, const void *hash )
 bool submit_solution( struct work *work, const void *hash,
                       struct thr_info *thr )
 {
-   // Job went stale during hashing of a valid share.
-   if ( !opt_quiet && work_restart[ thr->id ].restart )
-      applog( LOG_INFO, CL_LBL "Share may be stale, submitting anyway..." CL_N );
+// Job went stale during hashing of a valid share.
+//   if ( !opt_quiet && work_restart[ thr->id ].restart )
+//      applog( LOG_INFO, CL_LBL "Share may be stale, submitting anyway..." CL_N );
    
    work->sharediff = hash_to_diff( hash );
    if ( likely( submit_work( thr, work ) ) )
@@ -1897,32 +1868,38 @@ bool submit_solution( struct work *work, const void *hash,
      if ( !opt_quiet )
      {
         if ( have_stratum )
+        {
            applog( LOG_INFO, "%d Submitted Diff %.5g, Block %d, Job %s",
                    submitted_share_count, work->sharediff, work->height,
                    work->job_id );
+           if ( opt_debug && opt_extranonce )
+           {
+              unsigned char *xnonce2str = abin2hex( work->xnonce2,
+                                                    work->xnonce2_len );
+              applog( LOG_INFO, "Xnonce2 %s", xnonce2str );
+              free( xnonce2str );
+           }
+        }
         else
            applog( LOG_INFO, "%d Submitted Diff %.5g, Block %d, Ntime %08x",
                    submitted_share_count, work->sharediff, work->height,
                    work->data[ algo_gate.ntime_index ] );
-     }
 
-     if ( opt_debug )
-     {
-        uint32_t* h = (uint32_t*)hash;
-        uint32_t* t = (uint32_t*)work->target;
-        uint32_t* d = (uint32_t*)work->data;
+        if ( opt_debug )
+        {
+           uint32_t* h = (uint32_t*)hash;
+           uint32_t* t = (uint32_t*)work->target;
+           uint32_t* d = (uint32_t*)work->data;
 
-        unsigned char *xnonce2str = abin2hex( work->xnonce2,
-                                              work->xnonce2_len );
-        applog(LOG_INFO,"Thread %d, Nonce %08x, Xnonce2 %s", thr->id,
-                       work->data[ algo_gate.nonce_index ], xnonce2str );
-        free( xnonce2str );
-        applog(LOG_INFO,"Data[0:19]: %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x", d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7],d[8],d[9] );
-        applog(LOG_INFO,"          : %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x", d[10],d[11],d[12],d[13],d[14],d[15],d[16],d[17],d[18],d[19]);
-        applog(LOG_INFO,"Hash[7:0]: %08x %08x %08x %08x %08x %08x %08x %08x",
-                                    h[7],h[6],h[5],h[4],h[3],h[2],h[1],h[0]);
-        applog(LOG_INFO,"Targ[7:0]: %08x %08x %08x %08x %08x %08x %08x %08x",
-                                    t[7],t[6],t[5],t[4],t[3],t[2],t[1],t[0]);
+           applog( LOG_INFO, "Data[ 0: 9]: %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x",
+                                                 d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7],d[8],d[9] );
+           applog( LOG_INFO, "Data[10:19]: %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x",
+                                        d[10],d[11],d[12],d[13],d[14],d[15],d[16],d[17],d[18],d[19] );
+           applog( LOG_INFO, "Hash[ 7: 0]: %08x %08x %08x %08x %08x %08x %08x %08x",
+                                                            h[7],h[6],h[5],h[4],h[3],h[2],h[1],h[0] );
+           applog( LOG_INFO, "Targ[ 7: 0]: %08x %08x %08x %08x %08x %08x %08x %08x",
+                                                            t[7],t[6],t[5],t[4],t[3],t[2],t[1],t[0] );
+        }
      }
      return true;
    }
@@ -1935,20 +1912,26 @@ static bool wanna_mine(int thr_id)
 {
 	bool state = true;
 
+#if !(defined(__WINDOWS__) || defined(_WIN64) || defined(_WIN32) || defined(__APPLE__))
+  
 	if (opt_max_temp > 0.0)
    {
 		float temp = cpu_temp(0);
 		if (temp > opt_max_temp)
       {
-			if (!thr_id && !conditional_state[thr_id] && !opt_quiet)
-				applog(LOG_INFO, "temperature too high (%.0fC), waiting...", temp);
-			state = false;
+         if ( !thr_id && !conditional_state[thr_id] && !opt_quiet )
+           applog(LOG_NOTICE, "CPU temp too high: %.0fC max %.0f, waiting...", temp, opt_max_temp );
+         state = false;
 		}
+      if ( temp > hi_temp ) hi_temp = temp;
 	}
-	if (opt_max_diff > 0.0 && net_diff > opt_max_diff)
+
+#endif
+
+   if (opt_max_diff > 0.0 && net_diff > opt_max_diff)
    {
 		if (!thr_id && !conditional_state[thr_id] && !opt_quiet)
-			applog(LOG_INFO, "network diff too high, waiting...");
+			applog(LOG_NOTICE, "network diff too high, waiting...");
 		state = false;
 	}
 	if (opt_max_rate > 0.0 && net_hashrate > opt_max_rate)
@@ -1957,18 +1940,20 @@ static bool wanna_mine(int thr_id)
       {
 			char rate[32];
 			format_hashrate(opt_max_rate, rate);
-			applog(LOG_INFO, "network hashrate too high, waiting %s...", rate);
+			applog(LOG_NOTICE, "network hashrate too high (%s), waiting...", rate);
 		}
 		state = false;
 	}
-	if (thr_id < MAX_CPUS)
-		conditional_state[thr_id] = (uint8_t) !state;
+  
+   if ( conditional_state[thr_id] && state && !thr_id && !opt_quiet )
+      applog(LOG_NOTICE, "...resuming" );
+	conditional_state[thr_id] = (uint8_t) !state;
 	return state;
 }
 
 // Common target functions, default usually listed first.
 
-// default
+// default, double sha256 for root hash
 void sha256d_gen_merkle_root( char* merkle_root, struct stratum_ctx* sctx )
 {
   sha256d( merkle_root, sctx->job.coinbase, (int) sctx->job.coinbase_size );
@@ -1978,9 +1963,10 @@ void sha256d_gen_merkle_root( char* merkle_root, struct stratum_ctx* sctx )
      sha256d( merkle_root, merkle_root, 64 );
   }
 }
-void SHA256_gen_merkle_root( char* merkle_root, struct stratum_ctx* sctx )
+// single sha256 root hash
+void sha256_gen_merkle_root( char* merkle_root, struct stratum_ctx* sctx )
 {
-  SHA256( sctx->job.coinbase, (int)sctx->job.coinbase_size, merkle_root );
+  sha256_full( merkle_root, sctx->job.coinbase, (int)sctx->job.coinbase_size );
   for ( int i = 0; i < sctx->job.merkle_count; i++ )
   {
      memcpy( merkle_root + 32, sctx->job.merkle[i], 32 );
@@ -1994,33 +1980,6 @@ void set_work_data_big_endian( struct work *work )
    int nonce_index = algo_gate.nonce_index;
    for ( int i = 0; i < nonce_index; i++ )
         be32enc( work->data + i, work->data[i] );
-}
-
-// calculate net diff from nbits.
-double std_calc_network_diff( struct work* work )
-{
-   uint32_t nbits = work->data[ algo_gate.nbits_index ];
-   uint32_t shift = nbits & 0xff;
-   uint32_t bits = bswap_32( nbits ) & 0x00ffffff;
-/*
-   // sample for diff 43.281 : 1c05ea29
-   // todo: endian reversed on longpoll could be zr5 specific...
-   int nbits_index = algo_gate.nbits_index;
-   uint32_t nbits = have_longpoll ? work->data[ nbits_index]
-                                  : swab32( work->data[ nbits_index ] );
-   uint32_t bits  = ( nbits & 0xffffff );
-   int16_t  shift = ( swab32(nbits) & 0xff ); // 0x1c = 28
-*/
-
-   int m;
-   long double d = (long double)0x0000ffff / (long double)bits;
-   for ( m = shift; m < 29; m++ )
-       d *= 256.0;
-   for ( m = 29; m < shift; m++ )
-       d /= 256.0;
-   if ( opt_debug_diff )
-      applog(LOG_DEBUG, "net diff: %8f -> shift %u, bits %08x", (double)d, shift, bits);
-   return (double)d;
 }
 
 void std_get_new_work( struct work* work, struct work* g_work, int thr_id,
@@ -2046,17 +2005,6 @@ void std_get_new_work( struct work* work, struct work* g_work, int thr_id,
        ++(*nonceptr);
 }
 
-bool std_ready_to_mine( struct work* work, struct stratum_ctx* stratum,
-                           int thr_id )
-{
-   if ( have_stratum && !work->data[0] && !opt_benchmark )
-   {
-      sleep(1);
-      return false;
-   }
-   return true;
-}
-
 static void stratum_gen_work( struct stratum_ctx *sctx, struct work *g_work )
 {
    bool new_job;
@@ -2073,7 +2021,7 @@ static void stratum_gen_work( struct stratum_ctx *sctx, struct work *g_work )
    g_work->xnonce2 = (uchar*) realloc( g_work->xnonce2, sctx->xnonce2_size );
    memcpy( g_work->xnonce2, sctx->job.xnonce2, sctx->xnonce2_size );
    algo_gate.build_extraheader( g_work, sctx );
-   net_diff = algo_gate.calc_network_diff( g_work );
+   net_diff = nbits_to_diff( g_work->data[ algo_gate.nbits_index ] );
    algo_gate.set_work_data_endian( g_work );
    g_work->height = sctx->block_height;
    g_work->targetdiff = sctx->job.diff
@@ -2102,15 +2050,18 @@ static void stratum_gen_work( struct stratum_ctx *sctx, struct work *g_work )
    pthread_mutex_unlock( &stats_lock );
 
    if ( stratum_diff != sctx->job.diff )
-      applog( LOG_BLUE, "New Stratum Diff %g, Block %d, Job %s",
-                        sctx->job.diff, sctx->block_height, g_work->job_id );
+      applog( LOG_BLUE, "New Stratum Diff %g, Block %d, Tx %d, Job %s",
+                        sctx->job.diff, sctx->block_height,
+                        sctx->job.merkle_count, g_work->job_id );
    else if ( last_block_height != sctx->block_height )
-      applog( LOG_BLUE, "New Block %d, Net diff %.5g, Job %s",
-                        sctx->block_height, net_diff, g_work->job_id );
+      applog( LOG_BLUE, "New Block %d, Tx %d, Netdiff %.5g, Job %s",
+                        sctx->block_height, sctx->job.merkle_count,
+                        net_diff, g_work->job_id );
    else if ( g_work->job_id && new_job )
-      applog( LOG_BLUE, "New Work: Block %d, Net diff %.5g, Job %s",
-                         sctx->block_height, net_diff, g_work->job_id );
-   else if ( !opt_quiet )
+      applog( LOG_BLUE, "New Work: Block %d, Tx %d, Netdiff %.5g, Job %s",
+                         sctx->block_height, sctx->job.merkle_count,
+                         net_diff, g_work->job_id );
+   else if ( opt_debug )
    {
       unsigned char *xnonce2str = bebin2hex( g_work->xnonce2,
                                              g_work->xnonce2_len );
@@ -2123,8 +2074,6 @@ static void stratum_gen_work( struct stratum_ctx *sctx, struct work *g_work )
    if ( ( stratum_diff != sctx->job.diff )
    || ( last_block_height != sctx->block_height ) )
    {
-      static bool multipool = false;
-      if ( stratum.block_height < last_block_height ) multipool = true;
       if ( unlikely( !session_first_block ) )
          session_first_block = stratum.block_height;
       last_block_height = stratum.block_height;
@@ -2132,56 +2081,47 @@ static void stratum_gen_work( struct stratum_ctx *sctx, struct work *g_work )
       last_targetdiff   = g_work->targetdiff;
       if ( lowest_share < last_targetdiff )
          lowest_share = 9e99;
+    }
 
-      if ( !opt_quiet )
-      {
-         applog2( LOG_INFO, "Diff: Net %.5g, Stratum %.5g, Target %.5g",
-                            net_diff, stratum_diff, g_work->targetdiff );
+    if ( new_job && !opt_quiet )
+    {
+       applog2( LOG_INFO, "Diff: Net %.5g, Stratum %.5g, Target %.5g",
+                          net_diff, stratum_diff, g_work->targetdiff );
 
-         if ( likely( hr > 0. ) )
-         {
-            double nd = net_diff * exp32;
-            char hr_units[4] = {0};
-            char block_ttf[32];
-            char share_ttf[32];
+       if ( likely( hr > 0. ) )
+       {
+          double nd = net_diff * exp32;
+          char hr_units[4] = {0};
+          char block_ttf[32];
+          char share_ttf[32];
+          static bool multipool = false;
+      
+          if ( stratum.block_height < last_block_height ) multipool = true;
+            
+          sprintf_et( block_ttf, nd / hr );
+          sprintf_et( share_ttf, ( g_work->targetdiff * exp32 ) / hr );
+          scale_hash_for_display ( &hr, hr_units );
+          applog2( LOG_INFO, "TTF @ %.2f %sh/s: Block %s, Share %s",
+                             hr, hr_units, block_ttf, share_ttf );
 
-            sprintf_et( block_ttf, nd /  hr );
-            sprintf_et( share_ttf, ( g_work->targetdiff * exp32 ) / hr );
-            scale_hash_for_display ( &hr, hr_units );
-            applog2( LOG_INFO, "TTF @ %.2f %sh/s: Block %s, Share %s",
-                               hr, hr_units, block_ttf, share_ttf );
-
-            if ( !multipool && last_block_height > session_first_block )
-            {
-               struct timeval now, et;
-               gettimeofday( &now, NULL );
-               timeval_subtract( &et, &now, &session_start );
-               uint64_t net_ttf =
-                    ( last_block_height - session_first_block ) == 0 ? 0
-                    : et.tv_sec / ( last_block_height - session_first_block );
-               if ( net_diff > 0. && net_ttf )
-               {
-                  double net_hr = nd / net_ttf;
-                  char net_hr_units[4] = {0};
-                  scale_hash_for_display ( &net_hr, net_hr_units );
-                  applog2( LOG_INFO, "Net hash rate (est) %.2f %sh/s",
-                                     net_hr, net_hr_units );
-               }
-            }
-         }  // hr > 0
-      } // !quiet
-   }  // new diff/block
-
-   if ( new_job && !( opt_quiet || stratum_errors ) )
-   {
-      int mismatch = submitted_share_count - ( accepted_share_count
-                                             + stale_share_count
-                                             + rejected_share_count );
-      if ( mismatch )
-         applog( LOG_INFO,
-                 CL_LBL "%d Submitted share pending, maybe stale" CL_N,
-                 submitted_share_count );
-   }
+          if ( !multipool && last_block_height > session_first_block )
+          {
+             struct timeval now, et;
+             gettimeofday( &now, NULL );
+             timeval_subtract( &et, &now, &session_start );
+             uint64_t net_ttf = safe_div( et.tv_sec,
+                                 last_block_height - session_first_block, 0 );
+             if ( net_diff > 0. && net_ttf )
+             {
+                double net_hr = safe_div( nd, net_ttf, 0. );
+                char net_hr_units[4] = {0};
+                scale_hash_for_display ( &net_hr, net_hr_units );
+                applog2( LOG_INFO, "Net hash rate (est) %.2f %sh/s",
+                                   net_hr, net_hr_units );
+             }
+          }
+       }  // hr > 0
+    } // !quiet
 }
 
 static void *miner_thread( void *userdata )
@@ -2199,10 +2139,8 @@ static void *miner_thread( void *userdata )
 //   uint32_t end_nonce = opt_benchmark
 //                      ? ( 0xffffffffU / opt_n_threads ) * (thr_id + 1) - 0x20
 //                      : 0;
-   uint32_t end_nonce = 0xffffffffU / opt_n_threads  * (thr_id + 1) - 0x20;
+   uint32_t end_nonce = 0xffffffffU / opt_n_threads  * (thr_id + 1) - opt_n_threads;
 
-   time_t   firstwork_time = 0;
-   int  i;
    memset( &work, 0, sizeof(work) );
  
    /* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
@@ -2268,82 +2206,75 @@ static void *miner_thread( void *userdata )
 //       int64_t max64 = 1000;
        int nonce_found = 0;
 
-       if ( likely( algo_gate.do_this_thread( thr_id ) ) )
+       if ( have_stratum ) 
        {
-          if ( have_stratum ) 
+          while ( unlikely( stratum_down ) )
+             sleep( 1 );
+          if ( unlikely( ( *nonceptr >= end_nonce )
+                        && !work_restart[thr_id].restart ) )
           {
-             while ( unlikely( stratum_down ) )
-                sleep( 1 );
-             if ( unlikely( ( *nonceptr >= end_nonce )
-                         && !work_restart[thr_id].restart ) )
+             if ( opt_extranonce )
+                stratum_gen_work( &stratum, &g_work );
+             else
              {
-                if ( opt_extranonce )
-                   stratum_gen_work( &stratum, &g_work );
-                else
+                if ( !thr_id )
                 {
-                   if ( !thr_id )
-                   {
-                      applog( LOG_WARNING, "nonce range exhausted, extranonce not subscribed" );
-                      applog( LOG_WARNING, "waiting for new work...");
-                   }
-                   while ( !work_restart[thr_id].restart )
-                      sleep ( 1 );
+                   applog( LOG_WARNING, "Nonce range exhausted, extranonce not subscribed." );
+                   applog( LOG_WARNING, "Waiting for new work...");
                 }
+                while ( !work_restart[thr_id].restart )
+                   sleep ( 1 );
              }
           }
-          else  // GBT or getwork
+       }
+       else if ( !opt_benchmark ) // GBT or getwork
+       {
+         // max64 is used to set end_nonce to match the scantime.
+         // It also factors the nonce range to end the scan when nonces are
+         // exhausted. In either case needing new work can be assumed.
+         // Only problem is every thread will call get_work.
+         // First thread resets scantime blocking all subsequent threads
+         // from fetching new work.
+
+          pthread_rwlock_wrlock( &g_work_lock );
+          const time_t now = time(NULL);
+          if ( ( ( now - g_work_time ) >= opt_scantime )
+             || ( *nonceptr >= end_nonce ) )
           {
-             pthread_rwlock_wrlock( &g_work_lock );
-
-             if ( ( ( time(NULL) - g_work_time )
-                 >= ( have_longpoll ? LP_SCANTIME : opt_scantime ) )
-               || ( *nonceptr >= end_nonce ) )
+             if ( unlikely( !get_work( mythr, &g_work ) ) )
              {
-                if ( unlikely( !get_work( mythr, &g_work ) ) )
-                {
-                   pthread_rwlock_unlock( &g_work_lock );
-		             applog( LOG_ERR, "work retrieval failed, exiting miner thread %d", thr_id );
-		             goto out;
-	             }
-                g_work_time = time(NULL);
-                restart_threads();
-             }
-
-             pthread_rwlock_unlock( &g_work_lock );
+                pthread_rwlock_unlock( &g_work_lock );
+                applog( LOG_ERR, "work retrieval failed, exiting miner thread %d", thr_id );
+		          goto out;
+	          }
+             g_work_time = now;
           }
-
-          pthread_rwlock_rdlock( &g_work_lock );
-
-          algo_gate.get_new_work( &work, &g_work, thr_id, &end_nonce );
-          work_restart[thr_id].restart = 0;
-
           pthread_rwlock_unlock( &g_work_lock );
+       }
 
-       } // do_this_thread
-       algo_gate.resync_threads( thr_id, &work );
+       pthread_rwlock_rdlock( &g_work_lock );
 
-       if ( unlikely( !algo_gate.ready_to_mine( &work, &stratum, thr_id ) ) )
+       algo_gate.get_new_work( &work, &g_work, thr_id, &end_nonce );
+       work_restart[thr_id].restart = 0;
+
+       pthread_rwlock_unlock( &g_work_lock );
+
+       // conditional mining
+       if ( unlikely( !wanna_mine( thr_id ) ) )
+       {
+          restart_threads();
+          sleep(5);
           continue;
-
-// LP_SCANTIME overrides opt_scantime option, is this right?
-
-       // adjust max_nonce to meet target scan time. Stratum and longpoll
-       // can go longer because they can rely on restart_threads to signal
-       // an early abort. get_work on the other hand can't rely on
-       // restart_threads so need a much shorter scantime
-       if ( have_stratum )
-          max64 = 60 * thr_hashrates[thr_id];
-       else if ( have_longpoll )
-          max64 = LP_SCANTIME * thr_hashrates[thr_id];
-       else  // getwork inline
-          max64 = opt_scantime * thr_hashrates[thr_id];   
+       }
+       
+       // opt_scantime expressed in hashes
+       max64 = opt_scantime * thr_hashrates[thr_id];
 
        // time limit
-       if ( unlikely( opt_time_limit && firstwork_time ) )
+       if ( unlikely( opt_time_limit ) )
        {
-          int passed = (int)( time(NULL) - firstwork_time );
-          int remain = (int)( opt_time_limit - passed );
-          if ( remain < 0 )
+          unsigned int now = (unsigned int)time(NULL);
+          if ( now >= time_limit_stop )
           {
              if ( thr_id != 0 )
              {
@@ -2355,14 +2286,16 @@ static void *miner_thread( void *userdata )
                 char rate[32];
                 format_hashrate( global_hashrate, rate );
                 applog( LOG_NOTICE, "Benchmark: %s", rate );
-                fprintf(stderr, "%llu\n", (unsigned long long)global_hashrate);
              }
              else
-                applog( LOG_NOTICE,
-	          "Mining timeout of %ds reached, exiting...", opt_time_limit);
-	       proper_exit(0);
+                applog( LOG_NOTICE, "Mining timeout of %ds reached, exiting...",
+                        opt_time_limit);
+
+             proper_exit(0);
           }
-          if ( remain < max64 ) max64 = remain;
+          // else
+          if ( time_limit_stop - now < opt_scantime )
+              max64 = ( time_limit_stop - now ) * thr_hashrates[thr_id] ;
        }
 
        // Select nonce range based on max64, the estimated number of hashes
@@ -2378,8 +2311,6 @@ static void *miner_thread( void *userdata )
           max_nonce = work_nonce + (uint32_t)max64;
 
        // init time
-       if ( firstwork_time == 0 )
-          firstwork_time = time(NULL);
        hashes_done = 0;
        gettimeofday( (struct timeval *) &tv_start, NULL );
 
@@ -2405,8 +2336,8 @@ static void *miner_thread( void *userdata )
        // If unsubmiited nonce(s) found, submit now. 
        if ( unlikely( nonce_found && !opt_benchmark ) )
        {  
-//          applog( LOG_WARNING, "BUG: See RELEASE_NOTES for reporting bugs. Algo = %s.",
-//                               algo_names[ opt_algo ] );
+          applog( LOG_WARNING, "BUG: See RELEASE_NOTES for reporting bugs. Algo = %s.",
+                               algo_names[ opt_algo ] );
           if ( !submit_work( mythr, &work ) )
           {
              applog( LOG_WARNING, "Failed to submit share." );
@@ -2440,8 +2371,8 @@ static void *miner_thread( void *userdata )
           {
              scale_hash_for_display( &hashrate,  hr_units );
              sprintf( hr, "%.2f", hashrate );
-             applog( LOG_INFO, "CPU #%d: %s %sh/s",
-                               thr_id, hr, hr_units );
+             applog( LOG_INFO, "Thread %d, CPU %d: %s %sh/s",
+                        thr_id, thread_affinity_map[ thr_id ], hr, hr_units );
           }
        }
 
@@ -2452,7 +2383,7 @@ static void *miner_thread( void *userdata )
        {
           double hashrate  = 0.;
           pthread_mutex_lock( &stats_lock );
-          for ( i = 0; i < opt_n_threads; i++ )
+          for ( int i = 0; i < opt_n_threads; i++ )
               hashrate  += thr_hashrates[i];
           global_hashrate  = hashrate;
           pthread_mutex_unlock( &stats_lock );
@@ -2469,7 +2400,7 @@ static void *miner_thread( void *userdata )
              {
                 scale_hash_for_display( &hashrate,  hr_units );
                 sprintf( hr, "%.2f", hashrate );
-#if (defined(_WIN64) || defined(__WINDOWS__) || defined(_WIN32))
+#if (defined(_WIN64) || defined(__WINDOWS__) || defined(_WIN32) || defined(__APPLE__))
                 applog( LOG_NOTICE, "Total: %s %sH/s", hr, hr_units );
 #else
                 float lo_freq = 0., hi_freq = 0.;
@@ -2482,14 +2413,6 @@ static void *miner_thread( void *userdata )
              }
           }
        }  // benchmark
-
-       // conditional mining
-       if ( unlikely( !wanna_mine( thr_id ) ) )
-       {
-          sleep(5);
-          continue;
-       }
-
    }  // miner_thread loop
 
 out:
@@ -2766,7 +2689,7 @@ static void *stratum_thread(void *userdata )
    stratum.url = (char*) tq_pop(mythr->q, NULL);
    if (!stratum.url)
       goto out;
-   applog( LOG_BLUE, "Stratum connect %s", short_url );
+   applog( LOG_BLUE, "Stratum connect %s", stratum.url );
 
    while (1)
    {
@@ -2816,10 +2739,14 @@ static void *stratum_thread(void *userdata )
          }
          else
          {
-            stratum_down = false;
+// sometimes stratum connects but doesn't immediately send a job, wait for one.
+//            stratum_down = false;
             applog(LOG_BLUE,"Stratum connection established" );
             if ( stratum.new_job )   // prime first job
+            {
+               stratum_down = false;
                stratum_gen_work( &stratum, &g_work );
+            }
          }
       }
 
@@ -2828,6 +2755,7 @@ static void *stratum_thread(void *userdata )
       {
          if ( likely( s = stratum_recv_line( &stratum ) ) )
          {
+            stratum_down = false;
             if ( likely( !stratum_handle_method( &stratum, s ) ) )
                stratum_handle_response( s );
             free( s );
@@ -2881,7 +2809,7 @@ static void *stratum_thread(void *userdata )
             else
               timeval_subtract( &et, &now, &stratum_reset_time );
 
-            if ( et.tv_sec > stratum_keepalive_timeout + 60 )
+            if ( et.tv_sec > stratum_keepalive_timeout + 90 )
             {
                applog( LOG_NOTICE, "No shares submitted, resetting stratum connection" );
                stratum_need_reset = true;
@@ -2900,57 +2828,101 @@ out:
 
 static void show_credits()
 {
-   printf("\n         **********  "PACKAGE_NAME" "PACKAGE_VERSION"  *********** \n");
+   printf("\n         **********  "PACKAGE_NAME" "PACKAGE_VERSION"  ********** \n");
    printf("     A CPU miner with multi algo support and optimized for CPUs\n");
-   printf("     with AVX512, SHA and VAES extensions by JayDDee.\n");
+   printf("     with AVX512, SHA, AES and NEON extensions by JayDDee.\n");
    printf("     BTC donation address: 12tdvfF7KmAsihBXQXynT6E6th2c2pByTT\n\n");
 }
 
 #define check_cpu_capability() cpu_capability( false )
 #define display_cpu_capability() cpu_capability( true )
+
 static bool cpu_capability( bool display_only )
 {
      char cpu_brand[0x40];
-     bool cpu_has_sse2   = has_sse2();
-     bool cpu_has_aes    = has_aes_ni();
-     bool cpu_has_sse42  = has_sse42();
-     bool cpu_has_avx    = has_avx();
-     bool cpu_has_avx2   = has_avx2();
-     bool cpu_has_sha    = has_sha();
-     bool cpu_has_avx512 = has_avx512();
-     bool cpu_has_vaes   = has_vaes();
-     bool sw_has_aes    = false;
-     bool sw_has_sse2   = false;
-     bool sw_has_sse42  = false;
-     bool sw_has_avx    = false;
-     bool sw_has_avx2   = false;
-     bool sw_has_avx512 = false;
-     bool sw_has_sha    = false;
-     bool sw_has_vaes   = false;
-     set_t algo_features = algo_gate.optimizations;
+     bool cpu_has_sse2     = has_sse2();     // X86_64 only
+     bool cpu_has_ssse3    = has_ssse3();    // X86_64 only
+     bool cpu_has_sse41    = has_sse41();    // X86_64 only
+     bool cpu_has_sse42    = has_sse42();
+     bool cpu_has_avx      = has_avx();
+     bool cpu_has_neon     = has_neon();     // AArch64 
+     bool cpu_has_sve      = has_sve();      // aarch64 only, insignificant
+     bool cpu_has_sve2     = has_sve2();     // AArch64 only
+     bool cpu_has_sme      = has_sme();
+     bool cpu_has_sme2     = has_sme2();  
+     bool cpu_has_avx2     = has_avx2(); 
+     bool cpu_has_avx512   = has_avx512();
+     bool cpu_has_avx10    = has_avx10();
+     bool cpu_has_aes      = has_aes();      // x86_64 or AArch64
+     bool cpu_has_vaes     = has_vaes();     // X86_64 only
+     bool cpu_has_sha256   = has_sha256();   // x86_64 or AArch64
+     bool cpu_has_sha512   = has_sha512();
+     bool sw_has_x86_64    = false;
+     bool sw_has_aarch64   = false;
+     int  sw_arm_arch      = 0;            // AArch64 version
+     bool sw_has_neon      = false;        // AArch64
+     bool sw_has_sve       = false;        // AArch64
+     bool sw_has_sve2      = false;        // AArch64
+     bool sw_has_sme       = false;  
+     bool sw_has_sme2      = false; 
+     bool sw_has_sse2      = false;        // x86_64
+     bool sw_has_ssse3     = false;        // x86_64
+     bool sw_has_sse41     = false;        // x86_64
+     bool sw_has_sse42     = false;
+     bool sw_has_avx       = false;
+     bool sw_has_avx2      = false;
+     bool sw_has_avx512    = false;
+     bool sw_has_avx10_256 = false;
+     bool sw_has_avx10_512 = false;
+     bool sw_has_aes       = false;
+     bool sw_has_vaes      = false;
+     bool sw_has_sha256    = false;        // x86_64 or AArch64
+     bool sw_has_sha512    = false;        // x86_64 or AArch64
+/*
+     set_t algo_features   = algo_gate.optimizations;
      bool algo_has_sse2    = set_incl( SSE2_OPT,    algo_features );
-     bool algo_has_aes     = set_incl( AES_OPT,     algo_features );
      bool algo_has_sse42   = set_incl( SSE42_OPT,   algo_features );
      bool algo_has_avx     = set_incl( AVX_OPT,     algo_features );
      bool algo_has_avx2    = set_incl( AVX2_OPT,    algo_features );
      bool algo_has_avx512  = set_incl( AVX512_OPT,  algo_features );
-     bool algo_has_sha     = set_incl( SHA_OPT,     algo_features );
+     bool algo_has_aes     = set_incl( AES_OPT,     algo_features );
      bool algo_has_vaes    = set_incl( VAES_OPT,    algo_features );
-     bool use_aes;
+     bool algo_has_sha256  = set_incl( SHA256_OPT,  algo_features );
+     bool algo_has_sha512  = set_incl( SHA512_OPT,  algo_features );
+     bool algo_has_neon    = set_incl( NEON_OPT,    algo_features );
      bool use_sse2;
      bool use_sse42;
      bool use_avx;
      bool use_avx2;
      bool use_avx512;
-     bool use_sha;
+     bool use_aes;
      bool use_vaes;
+     bool use_sha256;
+     bool use_sha512;
+     bool use_neon;
      bool use_none;
-
-     #ifdef __AES__
-       sw_has_aes = true;
+*/
+     #if defined(__x86_64__)
+         sw_has_x86_64 = true;
+     #elif defined(__aarch64__)
+         sw_has_aarch64 = true;
+         #ifdef __ARM_NEON
+           sw_has_neon = true;
+         #endif
+         #ifdef __ARM_ARCH
+           sw_arm_arch = __ARM_ARCH;
+         #endif
      #endif
-     #ifdef __SSE2__
+
+     // x86_64 only
+     #if defined(__SSE2__)
          sw_has_sse2 = true;
+     #endif
+     #if defined(__SSSE3__)
+         sw_has_ssse3 = true;
+     #endif
+     #if defined(__SSE41__)
+         sw_has_sse41 = true;
      #endif
      #ifdef __SSE4_2__
          sw_has_sse42 = true;
@@ -2964,51 +2936,131 @@ static bool cpu_capability( bool display_only )
      #if (defined(__AVX512F__) && defined(__AVX512DQ__) && defined(__AVX512BW__) && defined(__AVX512VL__))
          sw_has_avx512 = true;
      #endif
-     #ifdef __SHA__
-         sw_has_sha = true;
+     #if defined(__AVX10_1_256__)
+         sw_has_avx10_256 = true;
+     #endif
+     #if defined(__AVX10_1_512__)
+         sw_has_avx10_512 = true;
+     #endif
+
+     // x86_64 or AArch64 
+     #if defined(__AES__) || defined(__ARM_FEATURE_AES)
+         sw_has_aes = true;
      #endif
      #ifdef __VAES__
          sw_has_vaes = true;
      #endif
+     #if defined(__SHA__) || defined(__ARM_FEATURE_SHA2)
+         sw_has_sha256 = true;
+     #endif
+     #if defined(__SHA512__) || defined(__ARM_FEATURE_SHA512)
+         sw_has_sha512 = true;
+     #endif
 
+     // AArch64 only
+     #if defined(__ARM_NEON)
+         sw_has_neon = true;
+     #endif
+     #if defined(__ARM_FEATURE_SVE)
+         sw_has_sve = true;
+     #endif
+     #if defined(__ARM_FEATURE_SVE2)
+         sw_has_sve2 = true;
+     #endif
+     #if defined(__ARM_FEATURE_SME)
+         sw_has_sme = true;
+     #endif
+     #if defined(__ARM_FEATURE_SME2)
+         sw_has_sme2 = true;
+     #endif
 
-//     #if !((__AES__) || (__SSE2__))
-//         printf("Neither __AES__ nor __SSE2__ defined.\n");
-//     #endif
-
+     // CPU
      cpu_brand_string( cpu_brand );
      printf( "CPU: %s\n", cpu_brand );
 
-     printf("SW built on " __DATE__
-     #ifdef _MSC_VER
-         " with VC++ 2013\n");
+     // Build
+     printf( "SW built on " __DATE__
+     #if defined(__clang__)
+        " with CLANG-%d.%d.%d", __clang_major__, __clang_minor__,
+                                __clang_patchlevel__ );
      #elif defined(__GNUC__)
-         " with GCC");
-        printf(" %d.%d.%d\n", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
+        " with GCC-%d.%d.%d", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__ );
+     #endif
+
+     // OS
+     #if defined(__linux)
+        printf(" Linux\n");
+     #elif defined(WIN32)
+        printf(" Windows");
+        #if defined(__MINGW64__)
+          printf(" MinGW-w64\n");
+        #else
+          printf("\n");
+        #endif
+     #elif defined(__APPLE__)
+        printf(" MacOS\n");
+     #elif defined(__bsd__) || defined(__unix__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) 
+        printf(" BSD/Unix\n");
      #else
         printf("\n");
      #endif
 
      printf("CPU features: ");
-     if      ( cpu_has_avx512 )    printf( " AVX512" );
-     else if ( cpu_has_avx2   )    printf( " AVX2  " );
-     else if ( cpu_has_avx    )    printf( " AVX   " );
-     else if ( cpu_has_sse42  )    printf( " SSE4.2" );
-     else if ( cpu_has_sse2   )    printf( " SSE2  " );
-     if      ( cpu_has_vaes   )    printf( " VAES"   );
-     else if ( cpu_has_aes    )    printf( "  AES"   );
-     if      ( cpu_has_sha    )    printf( " SHA"    );
+     if ( cpu_arch_x86_64()  )
+     {
+       if      ( cpu_has_avx10  )    printf( " AVX10.%d-%d", avx10_version(),
+                                                       avx10_vector_length() );
+       if      ( cpu_has_avx512 )    printf( " AVX512" );
+       else if ( cpu_has_avx2   )    printf( " AVX2  " );
+       else if ( cpu_has_avx    )    printf( " AVX   " );
+       else if ( cpu_has_sse42  )    printf( " SSE4.2" );
+       else if ( cpu_has_sse41  )    printf( " SSE4.1" );
+       else if ( cpu_has_ssse3  )    printf( " SSSE3 " );
+       else if ( cpu_has_sse2   )    printf( " SSE2  " );
+     }
+     else if   ( cpu_arch_aarch64() )
+     {
+       if      ( cpu_has_neon   )    printf( "       NEON" );
+       if      ( cpu_has_sve2   )    printf( " SVE2-%d", sve_vector_length() );
+       else if ( cpu_has_sve    )    printf( " SVE"    );
+       if      ( cpu_has_sme2   )    printf( " SME2"   );
+       else if ( cpu_has_sme    )    printf( " SME"    );
+     }     
+     if        ( cpu_has_vaes   )    printf( " VAES"   );
+     else if   ( cpu_has_aes    )    printf( "  AES"   );
+     if        ( cpu_has_sha512 )    printf( " SHA512" );
+     else if   ( cpu_has_sha256 )    printf( " SHA256" );
 
      printf("\nSW features:  ");
-     if      ( sw_has_avx512 )    printf( " AVX512" );
-     else if ( sw_has_avx2   )    printf( " AVX2  " );
-     else if ( sw_has_avx    )    printf( " AVX   " );
-     else if ( sw_has_sse42  )    printf( " SSE4.2" );
-     else if ( sw_has_sse2   )    printf( " SSE2  " );
-     if      ( sw_has_vaes   )    printf( " VAES"   );
-     else if ( sw_has_aes    )    printf( "  AES"   );
-     if      ( sw_has_sha    )    printf( " SHA"    );
+     if ( sw_has_x86_64 )
+     {                     
+        if      ( sw_has_avx10_512 ) printf( " AVX10-512" );
+        else if ( sw_has_avx10_256 ) printf( " AVX10-256" );
+        else if ( sw_has_avx512    ) printf( " AVX512" );
+        else if ( sw_has_avx2      ) printf( " AVX2  " );
+        else if ( sw_has_avx       ) printf( " AVX   " );
+        else if ( sw_has_sse42     ) printf( " SSE4.2" );
+        else if ( sw_has_sse41     ) printf( " SSE4.1" );
+        else if ( sw_has_ssse3     ) printf( " SSSE3 " );
+        else if ( sw_has_sse2      ) printf( " SSE2  " );
+     }
+     else if    ( sw_has_aarch64 ) 
+     {
+        if      ( sw_arm_arch    )   printf( " armv%d", sw_arm_arch );
+        if      ( sw_has_neon    )   printf( " NEON"   );
+        if      ( sw_has_sve2    )   printf( " SVE2"   );
+        else if ( sw_has_sve     )   printf( " SVE"    );
+        if      ( sw_has_sme2    )   printf( " SME2"   );
+        else if ( sw_has_sme     )   printf( " SME"    );
+     }
+     if         ( sw_has_vaes    )   printf( " VAES"   );
+     else if    ( sw_has_aes     )   printf( "  AES"   );
+     if         ( sw_has_sha512  )   printf( " SHA512" );
+     else if    ( sw_has_sha256  )   printf( " SHA256" );
 
+     printf("\n");
+     
+/*     
      if ( !display_only )
      {
         printf("\nAlgo features:");
@@ -3019,59 +3071,37 @@ static bool cpu_capability( bool display_only )
            else if ( algo_has_avx2   )  printf( " AVX2  " );
            else if ( algo_has_sse42  )  printf( " SSE4.2" );
            else if ( algo_has_sse2   )  printf( " SSE2  " );
+           if      ( algo_has_neon   )  printf( " NEON"   );
            if      ( algo_has_vaes   )  printf( " VAES"   );
            else if ( algo_has_aes    )  printf( "  AES"   );
-           if      ( algo_has_sha    )  printf( " SHA"    );
+           if      ( algo_has_sha512 )  printf( " SHA512" );
+           else if ( algo_has_sha256 )  printf( " SHA256" );
         }
      }
      printf("\n");
 
+     
      if ( display_only ) return true;
 
-     // Check for CPU and build incompatibilities
-     if ( !cpu_has_sse2 )
-     {
-        printf( "A CPU with SSE2 is required to use cpuminer-opt\n" );
-        return false;
-     }
-     if ( sw_has_avx2 && !( cpu_has_avx2 && cpu_has_aes ) )
-     {
-        printf( "The SW build requires a CPU with AES and AVX2!\n" );
-        return false;
-     }
-     if ( sw_has_sse42 && !cpu_has_sse42 )
-     {
-        printf( "The SW build requires a CPU with SSE4.2!\n" );
-        return false;
-     }
-     if ( sw_has_aes && !cpu_has_aes )
-     {
-        printf( "The SW build requires a CPU with AES!\n" );
-        return false;
-     }
-     if ( sw_has_sha && !cpu_has_sha )
-     {
-        printf( "The SW build requires a CPU with SHA!\n" );
-        return false;
-     }
-
      // Determine mining options
-     use_sse2   = cpu_has_sse2   && algo_has_sse2;
+     use_sse2   = cpu_has_sse2   && sw_has_sse2   && algo_has_sse2;
      use_sse42  = cpu_has_sse42  && sw_has_sse42  && algo_has_sse42;
      use_avx    = cpu_has_avx    && sw_has_avx    && algo_has_avx;
-     use_aes    = cpu_has_aes    && sw_has_aes    && algo_has_aes;
      use_avx2   = cpu_has_avx2   && sw_has_avx2   && algo_has_avx2;
      use_avx512 = cpu_has_avx512 && sw_has_avx512 && algo_has_avx512;
-     use_sha    = cpu_has_sha    && sw_has_sha    && algo_has_sha;
+     use_aes    = cpu_has_aes    && sw_has_aes    && algo_has_aes;
      use_vaes   = cpu_has_vaes   && sw_has_vaes   && algo_has_vaes;
+     use_sha256 = cpu_has_sha256 && sw_has_sha256 && algo_has_sha256;
+     use_sha512 = cpu_has_sha512 && sw_has_sha512 && algo_has_sha512;
+     use_neon   = sw_has_aarch64 && sw_has_neon   && algo_has_neon;
      use_none = !( use_sse2 || use_sse42 || use_avx || use_aes || use_avx512
-                || use_avx2 || use_sha || use_vaes );
+             || use_avx2 || use_sha256 || use_vaes || use_sha512 || use_neon );
 
      // Display best options
-     printf( "\nStarting miner with" );
-     if         ( use_none ) printf( " no optimizations" );
-     else
+     if ( !use_none )
      {
+        applog_nl( "Enabled optimizations:" );
+        if      ( use_neon   ) printf( " NEON"   );
         if      ( use_avx512 ) printf( " AVX512" );
         else if ( use_avx2   ) printf( " AVX2"   );
         else if ( use_avx    ) printf( " AVX"    );
@@ -3079,13 +3109,16 @@ static bool cpu_capability( bool display_only )
         else if ( use_sse2   ) printf( " SSE2"   );
         if      ( use_vaes   ) printf( " VAES"   );
         else if ( use_aes    ) printf( " AES"    );
-        if      ( use_sha    ) printf( " SHA"    );
+        if      ( use_sha512 ) printf( " SHA512" );
+        else if ( use_sha256 ) printf( " SHA256" );
+        printf( "\n" );
      }
-     printf( "...\n\n" );
+*/
 
      return true;
 }
-        
+
+/*
 void show_version_and_exit(void)
 {
         printf("\n built on " __DATE__
@@ -3095,7 +3128,6 @@ void show_version_and_exit(void)
          " with GCC");
         printf(" %d.%d.%d\n", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
 #endif
-
         printf(" features:"
 #if defined(USE_ASM) && defined(__i386__)
                 " i386"
@@ -3143,12 +3175,11 @@ void show_version_and_exit(void)
         printf("\n");
         exit(0);
 }
-
+*/
 void show_usage_and_exit(int status)
 {
 	if (status)
                 fprintf(stderr, "Try `--help' for more information.\n");
-//		fprintf(stderr, "Try `" PACKAGE_NAME " --help' for more information.\n");
 	else
 		printf(usage);
 	exit(status);
@@ -3164,7 +3195,6 @@ void parse_arg(int key, char *arg )
 {
 	char *p;
 	int v, i;
-//	uint64_t ul;
 	double d;
 
 	switch( key )
@@ -3308,7 +3338,8 @@ void parse_arg(int key, char *arg )
 		free(rpc_user);
 		rpc_user = strdup(arg);
 		break;
-	case 'o':  // url
+
+   case 'o':  // url
    {
 		char *ap, *hp;
 		ap = strstr( arg, "://" );
@@ -3347,6 +3378,7 @@ void parse_arg(int key, char *arg )
 			if ( strncasecmp( arg, "http://", 7 )
            && strncasecmp( arg, "https://", 8 )
            && strncasecmp( arg, "stratum+tcp://", 14 )
+           && strncasecmp( arg, "stratum+ssl://", 14 )
            && strncasecmp( arg, "stratum+tcps://", 15 ) )
          {
             fprintf(stderr, "unknown protocol -- '%s'\n", arg);
@@ -3372,7 +3404,8 @@ void parse_arg(int key, char *arg )
 		have_stratum = !opt_benchmark && !strncasecmp( rpc_url, "stratum", 7 );
 		break;
 	}
-	case 'O':  // userpass
+
+   case 'O':  // userpass
 		p = strchr(arg, ':');
 		if (!p)
       {
@@ -3444,6 +3477,9 @@ void parse_arg(int key, char *arg )
 		break;
    case 1014:   // hash-meter
       opt_hash_meter = true;
+      break;
+   case 1031:   // bell
+      opt_bell = true;
       break;
    case 1016:			/* --coinbase-addr */
       if ( arg ) coinbase_address = strdup( arg );
@@ -3529,10 +3565,10 @@ void parse_arg(int key, char *arg )
    case 1029:  // stratum-keepalive
       opt_stratum_keepalive = true;
       break;
-   case 'V':
+   case 'V':   // version
       display_cpu_capability();
       exit(0);
-	case 'h':
+	case 'h':   // help
 		show_usage_and_exit(0);
 
    default:
@@ -3663,7 +3699,7 @@ int main(int argc, char *argv[])
 
 #if defined(WIN32)
 
-// Are Windows CPU Groups supported?
+// Get the number of cpus, display after parsing command line
 #if defined(WINDOWS_CPU_GROUPS_ENABLED)
  	num_cpus = 0;
 	num_cpugroups = GetActiveProcessorGroupCount();
@@ -3671,9 +3707,6 @@ int main(int argc, char *argv[])
 	{
  	   int cpus = GetActiveProcessorCount( i );
 	   num_cpus += cpus;
-
-	   if (opt_debug)
-         applog( LOG_INFO, "Found %d CPUs in CPU group %d", cpus, i );
 	}
 
 #else
@@ -3690,7 +3723,7 @@ int main(int argc, char *argv[])
 	sysctl(req, 2, &num_cpus, &len, NULL, 0);
 #else
 	num_cpus = 1;
-#endif
+#endif 
 
    if ( num_cpus < 1 )
       num_cpus = 1;
@@ -3703,6 +3736,16 @@ int main(int argc, char *argv[])
       fprintf( stderr, "%s: No algo parameter specified\n", argv[0] );
       show_usage_and_exit(1);
    }
+
+   if ( !opt_scantime )
+   {
+      if      ( have_stratum )  opt_scantime = 30;
+      else if ( have_longpoll ) opt_scantime = LP_SCANTIME;
+      else                      opt_scantime = 5;
+   }
+
+   if ( opt_time_limit )
+      time_limit_stop = (unsigned int)time(NULL) + opt_time_limit;
 
    // need to register to get algo optimizations for cpu capabilities
    // but that causes registration logs before cpu capabilities is output.
@@ -3769,6 +3812,7 @@ int main(int argc, char *argv[])
    flags = CURL_GLOBAL_ALL;
    if ( !opt_benchmark )
      if ( strncasecmp( rpc_url, "https:", 6 )
+       && strncasecmp( rpc_url, "stratum+ssl://", 14 )
        && strncasecmp( rpc_url, "stratum+tcps://", 15 ) )
          flags &= ~CURL_GLOBAL_SSL;
 
@@ -3778,6 +3822,9 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+   if ( is_root() )
+      applog( LOG_NOTICE, "Running cpuminer as Superuser is discouraged.");
+   
 #ifndef WIN32
 	if (opt_background)
    {
@@ -3830,20 +3877,44 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-   if ( opt_affinity && num_cpus > max_cpus )
-   {
-      applog( LOG_WARNING, "More than %d CPUs, CPU affinity is disabled",
-                            max_cpus );
-      opt_affinity = 0ULL;
-   }
+#if defined(WIN32)
+
+#if defined(_WIN32_WINNT)
+   if (opt_debug)
+      applog( LOG_INFO, "_WIN232_WINNT = 0x%04x", _WIN32_WINNT ); 
+#else
+   if (opt_debug)
+      applog( LOG_INFO, "_WIN232_WINNT undefined." );
+#endif
+#if defined(WINDOWS_CPU_GROUPS_ENABLED)
+   if ( opt_debug || ( !opt_quiet && num_cpugroups > 1 ) )
+      applog( LOG_INFO, "Found %d CPUs in %d groups",
+                              num_cpus, num_cpugroups );
+#endif
+
+#endif
+
+   conditional_state = malloc( opt_n_threads * ((sizeof(bool)) ) );
+   memset( conditional_state, 0, opt_n_threads * ((sizeof(bool)) ) );
    
+   const int map_size = opt_n_threads < num_cpus ? num_cpus : opt_n_threads;   
+   thread_affinity_map = malloc( map_size * (sizeof (int)) );
+   if ( !thread_affinity_map )
+   {
+      applog( LOG_ERR, "CPU Affinity disabled, memory allocation failed" );
+      opt_affinity = 0ULL;
+   }   
    if ( opt_affinity )
    {
-      for ( int thr = 0, cpu = 0; thr < opt_n_threads; thr++, cpu++ )
+      int active_cpus = 0; // total CPUs available using rolling affinity mask
+      for ( int thr = 0, cpu = 0; thr < map_size; thr++, cpu++ )
       {
-         while ( !( ( opt_affinity >> ( cpu&63 ) ) & 1ULL ) ) cpu++;   
+         while ( !( ( opt_affinity >> ( cpu & 63 ) ) & 1ULL ) ) cpu++;   
          thread_affinity_map[ thr ] = cpu % num_cpus;
+         if ( cpu < num_cpus ) active_cpus++;
       }
+      if ( opt_n_threads > active_cpus )
+         applog( LOG_WARNING, "More miner threads (%d) than active CPUs in affinity mask (%d)", opt_n_threads, active_cpus );
       if ( !opt_quiet )
       {
          char affinity_mask[64];
@@ -3975,7 +4046,7 @@ int main(int argc, char *argv[])
 		}
    }
 
-   // Initialize stats times and counters
+   // Initialize stats timers and counters
    memset( share_stats, 0, s_stats_size *  sizeof (struct share_stats_t) );
    gettimeofday( &last_submit_time, NULL );
    memcpy( &five_min_start, &last_submit_time, sizeof (struct timeval) );
@@ -3988,7 +4059,7 @@ int main(int argc, char *argv[])
    applog( LOG_INFO, "%d of %d miner threads started using '%s' algorithm",
                      opt_n_threads, num_cpus, algo_names[opt_algo] );
 
-	/* main loop - simply wait for workio thread to exit */
+      /* main loop - simply wait for workio thread to exit */
 	pthread_join( thr_info[work_thr_id].pth, NULL );
 	applog( LOG_WARNING, "workio thread dead, exiting." );
 	return 0;

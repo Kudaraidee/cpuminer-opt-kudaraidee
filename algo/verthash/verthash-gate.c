@@ -91,8 +91,8 @@ void verthash_sha3_512_final_8( void *hash, const uint64_t nonce )
 int scanhash_verthash( struct work *work, uint32_t max_nonce,
                       uint64_t *hashes_done, struct thr_info *mythr )
 {
-   uint32_t edata[20] __attribute__((aligned(64)));
    uint32_t hash[8] __attribute__((aligned(64)));
+   uint32_t edata[20] __attribute__((aligned(32)));
    uint32_t *pdata = work->data;
    const uint32_t *ptarget = work->target;
    const uint32_t first_nonce = pdata[19];
@@ -101,7 +101,7 @@ int scanhash_verthash( struct work *work, uint32_t max_nonce,
    const int thr_id = mythr->id;
    const bool bench = opt_benchmark;
 
-   mm128_bswap32_80( edata, pdata );
+   v128_bswap32_80( edata, pdata );
    verthash_sha3_512_prehash_72( edata );
 
    do
@@ -127,7 +127,7 @@ bool register_verthash_algo( algo_gate_t* gate )
 {
   opt_target_factor = 256.0;
   gate->scanhash  = (void*)&scanhash_verthash;
-  gate->optimizations = SSE42_OPT | AVX2_OPT;
+  gate->optimizations = SSE42_OPT | AVX2_OPT | NEON_OPT;
    
   const char *verthash_data_file = opt_data_file ? opt_data_file
                                                  : default_verthash_data_file;

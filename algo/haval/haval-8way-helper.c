@@ -83,7 +83,7 @@ SPH_XCAT(SPH_XCAT(haval, PASSES), _8way_close)( haval_8way_context *sc,
 
    current = (unsigned)sc->count_low & 127UL;
 
-   sc->buf[ current>>2 ] = m256_one_32;
+   sc->buf[ current>>2 ] = v256_32( 1 );
    current += 4;   
    RSTATE_8W;
    if ( current > 116UL )
@@ -101,9 +101,9 @@ SPH_XCAT(SPH_XCAT(haval, PASSES), _8way_close)( haval_8way_context *sc,
    memset_zero_256( sc->buf + ( current>>2 ), (116UL-current) >> 2 );
    t1 = 0x01 | (PASSES << 3);
    t2 = sc->olen << 3;
-   sc->buf[ 116>>2 ] = _mm256_set1_epi32( ( t1 << 16 ) | ( t2 << 24 ) );
-   sc->buf[ 120>>2 ] = _mm256_set1_epi32( sc->count_low << 3 );
-   sc->buf[ 124>>2 ] = _mm256_set1_epi32( (sc->count_high << 3)
+   sc->buf[ 116>>2 ] = v256_32( ( t1 << 16 ) | ( t2 << 24 ) );
+   sc->buf[ 120>>2 ] = v256_32( sc->count_low << 3 );
+   sc->buf[ 124>>2 ] = v256_32( (sc->count_high << 3)
                                      | (sc->count_low >> 29) );
    do
    {

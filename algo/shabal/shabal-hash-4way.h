@@ -1,61 +1,46 @@
-/* $Id: sph_shabal.h 175 2010-05-07 16:03:20Z tp $ */
-/**
- * Shabal interface. Shabal is a family of functions which differ by
- * their output size; this implementation defines Shabal for output
- * sizes 192, 224, 256, 384 and 512 bits.
- *
- * ==========================(LICENSE BEGIN)============================
- *
- * Copyright (c) 2007-2010  Projet RNRT SAPHIR
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
- * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
- * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
- * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
- * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * ===========================(LICENSE END)=============================
- *
- * @file     sph_shabal.h
- * @author   Thomas Pornin <thomas.pornin@cryptolog.com>
- */
-
 #ifndef SHABAL_HASH_4WAY_H__
 #define SHABAL_HASH_4WAY_H__ 1
 
-#ifdef __SSE4_1__
-
 #include <stddef.h>
-#include "algo/sha/sph_types.h"
 #include "simd-utils.h"
-
-#ifdef __cplusplus
-extern "C"{
-#endif
 
 #define SPH_SIZE_shabal256   256
 
 #define SPH_SIZE_shabal512   512
+
+#if defined(SIMD512)
+
+typedef struct {
+   __m512i buf[16];
+   __m512i A[12], B[16], C[16];
+   uint32_t Whigh, Wlow;
+   size_t ptr;
+   bool state_loaded;
+} shabal_16way_context __attribute__ ((aligned (64)));
+
+typedef shabal_16way_context shabal256_16way_context;
+typedef shabal_16way_context shabal512_16way_context;
+
+void shabal256_16way_init( void *cc );
+void shabal256_16way_update( void *cc, const void *data, size_t len );
+void shabal256_16way_close( void *cc, void *dst );
+void shabal256_16way_addbits_and_close( void *cc, unsigned ub, unsigned n,
+                                       void *dst );
+
+void shabal512_16way_init( void *cc );
+void shabal512_16way_update( void *cc, const void *data, size_t len );
+void shabal512_16way_close( void *cc, void *dst );
+void shabal512_16way_addbits_and_close( void *cc, unsigned ub, unsigned n,
+                                       void *dst );
+
+#endif
 
 #if defined(__AVX2__)
 
 typedef struct {
    __m256i buf[16];
    __m256i A[12], B[16], C[16];
-   sph_u32 Whigh, Wlow;
+   uint32_t Whigh, Wlow;
    size_t ptr;
    bool state_loaded;
 } shabal_8way_context __attribute__ ((aligned (64)));
@@ -75,13 +60,14 @@ void shabal512_8way_close( void *cc, void *dst );
 void shabal512_8way_addbits_and_close( void *cc, unsigned ub, unsigned n,
                                        void *dst );
 
-
 #endif
 
+#if defined(__SSE2__) || defined(__ARM_NEON)
+
 typedef struct {
-	__m128i buf[16] __attribute__ ((aligned (64)));
-	__m128i A[12], B[16], C[16];
-	sph_u32 Whigh, Wlow;
+	v128_t buf[16] __attribute__ ((aligned (64)));
+	v128_t A[12], B[16], C[16];
+	uint32_t Whigh, Wlow;
    size_t ptr;
    bool state_loaded;
 } shabal_4way_context;
@@ -97,16 +83,46 @@ void shabal256_4way_addbits_and_close(	void *cc, unsigned ub, unsigned n,
 
 void shabal512_4way_init( void *cc );
 void shabal512_4way_update( void *cc, const void *data, size_t len );
-//#define shabal512_4way shabal512_4way_update
 void shabal512_4way_close( void *cc, void *dst );
 void shabal512_4way_addbits_and_close( void *cc, unsigned ub, unsigned n,
                                        void *dst );
 
-#ifdef __cplusplus
-}
 #endif
 
-#endif
+// SSE or NEON
+
+/* No __mullo_pi32
+
+typedef struct
+{
+   v64_t buf[16] __attribute__ ((aligned (64)));
+   v64_t A[12], B[16], C[16];
+   uint32_t Whigh, Wlow;
+   size_t ptr;
+   bool state_loaded;
+} shabal_2x32_context;
+
+typedef shabal_2x32_context shabal256_2x32_context;
+typedef shabal_2x32_context shabal512_2x32_context;
+
+void shabal256_2x32_init( void *cc );
+void shabal256_2x32_update( void *cc, const void *data, size_t len );
+void shabal256_2x32_close( void *cc, void *dst );
+void shabal256_2x32_addbits_and_close( void *cc, unsigned ub, unsigned n,
+                                       void *dst );
+
+void shabal512_2x32_init( shabal512_2x32_context *cc );
+void shabal512_2x32_update( shabal512_2x32_context *cc, const void *data,
+                            size_t len );
+void shabal512_2x32_close( shabal512_2x32_context *cc, void *dst );
+void shabal512_2x32_addbits_and_close( shabal512_2x32_context *cc,
+                                       unsigned ub, unsigned n, void *dst );
+void shabal512_2x32_ctx( shabal512_2x32_context *cc, void *dst,
+                         const void *data, size_t len );
+void shabal512_2x32( shabal512_2x32_context *dst, const void *data,
+                     size_t len );
+
+*/
 
 #endif
 

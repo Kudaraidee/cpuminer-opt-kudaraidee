@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include "algo/blake/blake-hash-4way.h"
+#include "algo/blake/blake512-hash.h"
 #include "algo/bmw/bmw-hash-4way.h"
 #include "algo/groestl/aes_ni/hash-groestl.h"
 #include "algo/skein/skein-hash-4way.h"
@@ -20,7 +20,7 @@
 #include "algo/shabal/shabal-hash-4way.h"
 #include "algo/whirlpool/sph_whirlpool.h"
 #include "algo/haval/haval-hash-4way.h"
-#include "algo/sha/sha-hash-4way.h"
+#include "algo/sha/sha512-hash.h"
 #if defined(__VAES__)
   #include "algo/groestl/groestl512-hash-4way.h"
   #include "algo/shavite/shavite-hash-4way.h"
@@ -63,14 +63,14 @@ int sonoa_8way_hash( void *state, const void *input, int thr_id )
      uint64_t vhash[8*8] __attribute__ ((aligned (128)));
      uint64_t vhashA[8*8] __attribute__ ((aligned (64)));
      uint64_t vhashB[8*8] __attribute__ ((aligned (64)));
-     uint64_t hash0[8] __attribute__ ((aligned (64)));
-     uint64_t hash1[8] __attribute__ ((aligned (64)));
-     uint64_t hash2[8] __attribute__ ((aligned (64)));
-     uint64_t hash3[8] __attribute__ ((aligned (64)));
-     uint64_t hash4[8] __attribute__ ((aligned (64)));
-     uint64_t hash5[8] __attribute__ ((aligned (64)));
-     uint64_t hash6[8] __attribute__ ((aligned (64)));
-     uint64_t hash7[8] __attribute__ ((aligned (64)));
+     uint64_t hash0[8] __attribute__ ((aligned (32)));
+     uint64_t hash1[8] __attribute__ ((aligned (32)));
+     uint64_t hash2[8] __attribute__ ((aligned (32)));
+     uint64_t hash3[8] __attribute__ ((aligned (32)));
+     uint64_t hash4[8] __attribute__ ((aligned (32)));
+     uint64_t hash5[8] __attribute__ ((aligned (32)));
+     uint64_t hash6[8] __attribute__ ((aligned (32)));
+     uint64_t hash7[8] __attribute__ ((aligned (32)));
      sonoa_8way_context_overlay ctx;
 
 // 1
@@ -1150,13 +1150,13 @@ typedef union _sonoa_4way_context_overlay sonoa_4way_context_overlay;
 
 int sonoa_4way_hash( void *state, const void *input, int thr_id )
 {
-     uint64_t hash0[8] __attribute__ ((aligned (64)));
-     uint64_t hash1[8] __attribute__ ((aligned (64)));
-     uint64_t hash2[8] __attribute__ ((aligned (64)));
-     uint64_t hash3[8] __attribute__ ((aligned (64)));
      uint64_t vhash[8*4] __attribute__ ((aligned (64)));
      uint64_t vhashA[8*4] __attribute__ ((aligned (64)));
      uint64_t vhashB[8*4] __attribute__ ((aligned (64)));
+     uint64_t hash0[8] __attribute__ ((aligned (32)));
+     uint64_t hash1[8] __attribute__ ((aligned (32)));
+     uint64_t hash2[8] __attribute__ ((aligned (32)));
+     uint64_t hash3[8] __attribute__ ((aligned (32)));
      sonoa_4way_context_overlay ctx;
 
 // 1

@@ -1,4 +1,4 @@
-AC_INIT([cpuminer-opt], [3.19.6])
+AC_INIT([cpuminer-opt], [25.3])
 
 AC_PREREQ([2.59c])
 AC_CANONICAL_SYSTEM
@@ -41,31 +41,29 @@ AC_CHECK_DECLS([be32dec, le32dec, be32enc, le32enc, le16dec, le16enc], [], [],
 AC_FUNC_ALLOCA
 AC_CHECK_FUNCS([getopt_long])
 
-MINGW_TARGET=`$CC -dumpmachine 2>&1`
-case $MINGW_TARGET in
-  arm*-*-*)
-    have_arm=true
-    ;;
-  i*86-*-mingw*)
-    have_x86=true
-    have_win32=true
-    CFLAGS="-Icompat/pthreads $CFLAGS"
-    PTHREAD_LDFLAGS="-Lcompat/pthreads/x86"
-    WS2_LIBS="-lws2_32"
-    ;;
-  x86_64-*-mingw*|amd64-*-mingw*)
-    have_x86_64=true
-    have_win32=true
-    CFLAGS="-Icompat/pthreads $CFLAGS"
-    PTHREAD_LDFLAGS="-Lcompat/pthreads/x64"
-    # SHOULD BE AT END! after -lcrypto #
-    WS2_LIBS="-L/mingw/x86_64-w64-mingw32/lib -lws2_32"
-    ;;
-  i*86-*-*)
-    have_x86=true
-    ;;
+case $target in
   x86_64-*-*|amd64-*-*)
     have_x86_64=true
+    ;;
+  aarch64*-*-*|arm64*-*-*)
+    have_arm64=true
+    ;;
+  powerpc*-*-*)
+    have_ppc=true
+    ;;
+esac
+
+PTHREAD_FLAGS="-pthread"
+WS2_LIBS=""
+
+case $target in
+  *-*-mingw*)
+    have_win32=true
+    PTHREAD_FLAGS=""
+    WS2_LIBS="-lws2_32"
+    ;;
+  *-apple-*)
+    have_apple=true
     ;;
 esac
 
@@ -75,46 +73,14 @@ if test x$enable_assembly != xno; then
   AC_DEFINE([USE_ASM], [1], [Define to 1 if assembly routines are wanted.])
 fi
 
-if test x$enable_assembly != xno -a x$have_x86_64 = xtrue
-then
-  AC_MSG_CHECKING(whether we can compile AVX code)
-  AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[asm ("vmovdqa %ymm0, %ymm1");])],
-    AC_DEFINE(USE_AVX, 1, [Define to 1 if AVX assembly is available.])
-    AC_MSG_RESULT(yes)
-    AC_MSG_CHECKING(whether we can compile XOP code)
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[asm ("vprotd \$7, %xmm0, %xmm1");])],
-      AC_DEFINE(USE_XOP, 1, [Define to 1 if XOP assembly is available.])
-      AC_MSG_RESULT(yes)
-    ,
-      AC_MSG_RESULT(no)
-      AC_MSG_WARN([The assembler does not support the XOP instruction set.])
-    )
-    AC_MSG_CHECKING(whether we can compile AVX2 code)
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[asm ("vpaddd %ymm0, %ymm1, %ymm2");])],
-      AC_DEFINE(USE_AVX2, 1, [Define to 1 if AVX2 assembly is available.])
-      AC_MSG_RESULT(yes)
-    ,
-      AC_MSG_RESULT(no)
-      AC_MSG_WARN([The assembler does not support the AVX2 instruction set.])
-    )
-  ,
-    AC_MSG_RESULT(no)
-    AC_MSG_WARN([The assembler does not support the AVX instruction set.])
-  )
-fi
-
+# jansson test fails on Linux/Mingw, handled in Makefile.am.
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 
-# GC2 for GNU static
-if test "x$have_win32" = "xtrue" ; then
-   # MinGW
-   AC_CHECK_LIB([pthread], [pthread_create], PTHREAD_LIBS="-lpthreadGC2",[])
-else
-   AC_CHECK_LIB([pthread], [pthread_create], PTHREAD_LIBS="-lpthread",[])
-fi
-
-LDFLAGS="$PTHREAD_LDFLAGS $LDFLAGS"
-# PTHREAD_LIBS="$PTHREAD_LIBS"
+AC_CHECK_LIB([pthread], [pthread_create], PTHREAD_LIBS="-lpthread",
+  AC_CHECK_LIB([pthreadGC2], [pthread_create], PTHREAD_LIBS="-lpthreadGC2",
+    AC_CHECK_LIB([pthreadGC1], [pthread_create], PTHREAD_LIBS="-lpthreadGC1",
+      AC_CHECK_LIB([pthreadGC], [pthread_create], PTHREAD_LIBS="-lpthreadGC"
+))))
 
 AC_MSG_CHECKING(whether __uint128_t is supported)
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([static __uint128_t i = 100;])],
@@ -128,16 +94,10 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([static __uint128_t i = 100;])],
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([USE_ASM], [test x$enable_assembly != xno])
-AM_CONDITIONAL([ARCH_x86], [test x$have_x86 = xtrue])
 AM_CONDITIONAL([ARCH_x86_64], [test x$have_x86_64 = xtrue])
-AM_CONDITIONAL([ARCH_ARM], [test x$have_arm = xtrue])
+AM_CONDITIONAL([ARCH_ARM64], [test x$have_arm64 = xtrue])
 AM_CONDITIONAL([MINGW], [test "x$OS" = "xWindows_NT"])
-
-if test x$request_jansson = xtrue ; then
-	JANSSON_LIBS="compat/jansson/libjansson.a"
-else
-	JANSSON_LIBS=-ljansson
-fi
+AM_CONDITIONAL([HAVE_APPLE], [test x$have_apple = xtrue])
 
 # libcurl install path (for mingw : --with-curl=/usr/local)
 AC_ARG_WITH([curl],
@@ -150,24 +110,9 @@ if test -n "$with_curl" ; then
    LIBCURL="-lcurl -lz"
 fi
 
-# SSL install path (for mingw : --with-crypto=/usr/local/ssl)
-AC_ARG_WITH([crypto],
-   [  --with-crypto=PATH       prefix where openssl crypto is installed [default=/usr]])
-
-if test -n "$with_crypto" ; then
-   LIBCURL_CFLAGS="$LIBCURL_CFLAGS -I$with_crypto/include"
-   LIBCURL_CPPFLAGS="$LIBCURL_CPPFLAGS -I$with_crypto/include"
-   LIBCURL_LDFLAGS="-L$with_crypto/lib $LIBCURL_LDFLAGS"
-   LIBCURL="$LIBCURL -lssl -lcrypto"
-fi
-
 CFLAGS="$CFLAGS $LIBCURL_CFLAGS"
 CPPFLAGS="$CPPFLAGS $LIBCURL_CPPFLAGS"
 LDFLAGS="$LDFLAGS $LIBCURL_LDFLAGS"
-
-#AC_CHECK_LIB([z],[gzopen],[],[])
-#AC_CHECK_LIB([crypto],[OPENSSL_init], crypto=yes, [AC_MSG_ERROR([OpenSSL crypto library required])])
-#AC_CHECK_LIB([ssl],[SSL_new], ssl=yes, ssl=no)
 
 # AC_CHECK_LIB([curl], [curl_multi_timeout],
 #    have_libcurl=yes,

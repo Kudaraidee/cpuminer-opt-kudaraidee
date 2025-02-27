@@ -137,6 +137,17 @@ extern int yespower_tls(const uint8_t *src, size_t srclen,
 extern int yespower_b2b_tls(const uint8_t *src, size_t srclen,
     const yespower_params_t *params, yespower_binary_t *dst, int thr_id);
 
+extern int yespower_tls_ref(const uint8_t *src, size_t srclen,
+    const yespower_params_t *params, yespower_binary_t *dst, int thr_id);
+
+int yespower_hash( const char *input, char *output, int thrid );
+
+int yespower_b2b_hash( const char *input, char *output, int thrid );
+
+int yespower_hash_ref( const char *input, char *output, int thrid );
+
+int yespower_b2b_hash_ref( const char *input, char *output, int thrid );
+
 
 #if defined(__AVX2__)
 
@@ -154,6 +165,21 @@ extern int yespower_8way_tls( const __m256i *src, size_t srclen,
     const yespower_params_t *params, yespower_8way_binary_t *dst, int thr_id );
 
 #endif // AVX2
+
+extern int yespower_ref(yespower_local_t *local,
+    const uint8_t *src, size_t srclen,
+    const yespower_params_t *params, yespower_binary_t *dst, int thrid);
+
+extern int yespower_b2b_ref(yespower_local_t *local,
+    const uint8_t *src, size_t srclen,
+    const yespower_params_t *params, yespower_binary_t *dst, int thrid );
+
+extern int yespower_tls_ref(const uint8_t *src, size_t srclen,
+    const yespower_params_t *params, yespower_binary_t *dst, int thr_id);
+
+extern int yespower_b2b_tls_ref(const uint8_t *src, size_t srclen,
+    const yespower_params_t *params, yespower_binary_t *dst, int thr_id);
+
 
 #ifdef __cplusplus
 }

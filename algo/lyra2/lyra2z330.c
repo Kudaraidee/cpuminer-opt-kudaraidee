@@ -3,7 +3,7 @@
 #include "lyra2.h"
 #include "simd-utils.h"
 
-__thread uint64_t* lyra2z330_wholeMatrix;
+static __thread uint64_t* lyra2z330_wholeMatrix;
 
 void lyra2z330_hash(void *state, const void *input, uint32_t height)
 {
@@ -29,11 +29,11 @@ int scanhash_lyra2z330( struct work *work, uint32_t max_nonce,
    if (opt_benchmark)
 	ptarget[7] = 0x0000ff;
 
-   casti_m128i( edata, 0 ) = mm128_bswap_32( casti_m128i( pdata, 0 ) );
-   casti_m128i( edata, 1 ) = mm128_bswap_32( casti_m128i( pdata, 1 ) );
-   casti_m128i( edata, 2 ) = mm128_bswap_32( casti_m128i( pdata, 2 ) );
-   casti_m128i( edata, 3 ) = mm128_bswap_32( casti_m128i( pdata, 3 ) );
-   casti_m128i( edata, 4 ) = mm128_bswap_32( casti_m128i( pdata, 4 ) );
+   casti_v128( edata, 0 ) = v128_bswap32( casti_v128( pdata, 0 ) );
+   casti_v128( edata, 1 ) = v128_bswap32( casti_v128( pdata, 1 ) );
+   casti_v128( edata, 2 ) = v128_bswap32( casti_v128( pdata, 2 ) );
+   casti_v128( edata, 3 ) = v128_bswap32( casti_v128( pdata, 3 ) );
+   casti_v128( edata, 4 ) = v128_bswap32( casti_v128( pdata, 4 ) );
    
    do
    {
@@ -61,14 +61,14 @@ bool lyra2z330_thread_init()
    const int64_t ROW_LEN_BYTES = ROW_LEN_INT64 * 8;
 
    int i = (int64_t)ROW_LEN_BYTES * 330; // nRows;
-   lyra2z330_wholeMatrix = _mm_malloc( i, 64 );
+   lyra2z330_wholeMatrix = mm_malloc( i, 64 );
 
    return lyra2z330_wholeMatrix;
 }
 
 bool register_lyra2z330_algo( algo_gate_t* gate )
 {
-  gate->optimizations = SSE2_OPT | AVX2_OPT;
+  gate->optimizations = SSE2_OPT | AVX2_OPT | NEON_OPT;
   gate->miner_thread_init = (void*)&lyra2z330_thread_init;
   gate->scanhash   = (void*)&scanhash_lyra2z330;
   gate->hash       = (void*)&lyra2z330_hash;

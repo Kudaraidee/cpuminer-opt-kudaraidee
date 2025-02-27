@@ -36,26 +36,18 @@ for compile instructions.
 Requirements
 ------------
 
-1. A x86_64 architecture CPU with a minimum of SSE2 support. This includes
-Intel Core2 and newer and AMD equivalents. Further optimizations are available
-on some algoritms for CPUs with AES, AVX, AVX2, SHA, AVX512 and VAES.
+1. A 64 bit CPU supporting x86_64 (Intel or AMD) or aarch64 (ARM).
+x86_64 requires SSE2, aarch64 requires armv8 & NEON.
 
-Older CPUs are supported by cpuminer-multi by TPruvot but at reduced
-performance.
+Mobile CPUs like laptop computers are not recommended because they aren't
+designed for extreme heat of operating at full load for extended periods of
+time.
 
-ARM and Aarch64 CPUs are not supported.
-
-2. 64 bit Linux or Windows OS. Ubuntu and Fedora based distributions,
-including Mint and Centos, are known to work and have all dependencies
-in their repositories. Others may work but may require more effort. Older
-versions such as Centos 6 don't work due to missing features. 
-64 bit Windows OS is supported with mingw_w64 and msys or pre-built binaries.
-
-MacOS, OSx and Android are not supported.
+2. 64 bit operating system including Linux, Windows, MacOS, or BSD.
+Android, IOS and alt OSs like Haiku & ReactOS are not supported.
 
 3. Stratum pool supporting stratum+tcp:// or stratum+ssl:// protocols or
-RPC getwork using http:// or https://.
-GBT is YMMV.
+RPC getblockte,plate using http:// or https://.
 
 Supported Algorithms
 --------------------
@@ -63,56 +55,54 @@ Supported Algorithms
                           allium        Garlicoin
                           anime         Animecoin
                           argon2        Argon2 coin (AR2)
-                          argon2d250    argon2d-crds, Credits (CRDS)
-                          argon2d500    argon2d-dyn,  Dynamic (DYN)
-                          argon2d4096   argon2d-uis, Unitus, (UIS)
-                          axiom         Shabal-256 MemoHash
-                          blake         Blake-256 (SFR)
-                          blake2b       Blake2b 256
-                          blake2s       Blake-2 S
+                          argon2d250    
+                          argon2d500
+                          argon2d4096
+                          blake         Blake-256
+                          blake2b       Blake2-512
+                          blake2s       Blake2-256
                           blakecoin     blake256r8
                           bmw           BMW 256
                           bmw512        BMW 512
-                          c11           Chaincoin
+                          c11           
                           decred
                           deep          Deepcoin (DCN)
                           dmd-gr        Diamond-Groestl
                           groestl       Groestl coin
                           hex           x16r-hex
-                          hmq1725       Espers
-                          hodl          Hodlcoin
+                          hmq1725       
                           jha           Jackpotcoin
                           keccak        Maxcoin
                           keccakc       Creative coin
                           lbry          LBC, LBRY Credits
-                          luffa         Luffa
-                          lyra2h        Hppcoin
+                          lyra2h        
                           lyra2re       lyra2
                           lyra2rev2     lyra2v2
                           lyra2rev3     lyrav2v3
                           lyra2z        
-                          lyra2z330     Lyra2 330 rows, Zoin (ZOI)
-                          m7m           Magi (XMG)
-                          minotaur      Ringcoin (RNG)
+                          lyra2z330     
+                          m7m           
+                          minotaur 
+                          minotaurx
                           myr-gr        Myriad-Groestl
                           neoscrypt     NeoScrypt(128, 2, 1)
                           nist5         Nist5
                           pentablake    Pentablake
                           phi1612       phi
-                          phi2          Luxcoin (LUX)
-                          phi2-lux      identical to phi2
-                          pluck         Pluck:128 (Supcoin)
+                          phi2          
                           polytimos     Ninja
                           power2b       MicroBitcoin (MBC)
                           quark         Quark
                           qubit         Qubit
                           scrypt        scrypt(1024, 1, 1) (default)
                           scrypt:N      scrypt(N, 1, 1)
+                          scryptn2      scrypt(1048576, 1, 1)
                           sha256d       Double SHA-256
-                          sha256q       Quad SHA-256, Pyrite (PYE)
-                          sha256t       Triple SHA-256, Onecoin (OC)
+                          sha256dt
+                          sha256q       Quad SHA-256
+                          sha256t       Triple SHA-256
                           sha3d         Double keccak256 (BSHA3)
-                          shavite3      Shavite3
+                          sha512256d
                           skein         Skein+Sha (Skeincoin)
                           skein2        Double Skein (Woodcoin)
                           skunk         Signatum (SIGT)
@@ -128,18 +118,19 @@ Supported Algorithms
                           x11           Dash
                           x11evo        Revolvercoin
                           x11gost       sib (SibCoin)
-                          x12           Galaxie Cash (GCH)
-                          x13           X13
+                          x12           
+                          x13           
                           x13bcd        bcd
                           x13sm3        hsr (Hshare)
-                          x14           X14
-                          x15           X15
+                          x14           
+                          x15           
                           x16r          
                           x16rv2        
-                          x16rt         Gincoin (GIN)
-                          x16rt-veil    Veil (VEIL)
-                          x16s          Pigeoncoin (PGN)
+                          x16rt         
+                          x16rt-veil    veil
+                          x16s          
                           x17
+                          x20r
                           x21s
                           x22i
                           x25x

@@ -1,20 +1,43 @@
-#ifndef __MINER_H__
-#define __MINER_H__
+#ifndef MINER_H__
+#define MINER_H__
 
 #include <cpuminer-config.h>
 
-#define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
-#define MAX_CPUS 16
+// CPU architecture
+#if defined(__x86_64__)
+   #define USER_AGENT_ARCH "x64"     // Intel, AMD x86_64
+#elif defined(__aarch64__)
+   #define USER_AGENT_ARCH "arm"     // AArch64
+//#elif
+//  #define USER_AGENT_ARCH "r5"     // RISC-V             
+#else
+   #define USER_AGENT_ARCH
+#endif
 
+// Operating system
+// __APPLE__ includes MacOS & IOS, no MacOS only macros found.
+#if defined(__linux)
+   #define USER_AGENT_OS   "L"      // GNU Linux
+#elif defined(WIN32)
+   #define USER_AGENT_OS   "W"      // MS Windows
+#elif defined(__APPLE__)
+   #define USER_AGENT_OS   "M"      // Apple MacOS
+#elif defined(__bsd__) || defined(__unix__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) 
+   #define USER_AGENT_OS   "U"      // BSD unix
+#else
+   #define USER_AGENT_OS
+#endif
+
+#define USER_AGENT PACKAGE_NAME "-" PACKAGE_VERSION "-" USER_AGENT_ARCH USER_AGENT_OS
+
+/*
 #ifdef _MSC_VER
 
-#undef USE_ASM  /* to fix */
-
+#undef USE_ASM 
 #ifdef NOASM
 #undef USE_ASM
 #endif
 
-/* missing arch defines for msvc */
 #if defined(_M_X64)
 #define __i386__ 1
 #define __x86_64__ 1
@@ -22,12 +45,13 @@
 #define __i386__ 1
 #endif
 
-#endif /* _MSC_VER */
+#endif
+*/
 
 #include <stdbool.h>
 #include <inttypes.h>
 #include <sys/time.h>
-
+#include <unistd.h>
 #include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
@@ -40,6 +64,31 @@
 #  include <stdlib.h>
 # endif
 #endif
+
+// no mm_maloc for Neon
+#if !defined(__ARM_NEON)
+
+#include <mm_malloc.h>
+
+#define mm_malloc( nbytes, alignment )    _mm_malloc( nbytes, alignment )
+#define mm_free                           _mm_free
+
+#else
+
+#define mm_malloc( nbytes, alignment )    malloc( nbytes )
+#define mm_free                           free
+
+#endif
+
+//TODO for windows
+static inline bool is_root()
+{
+#if defined(WIN32)
+   return false;
+#else
+   return !getuid();
+#endif
+}
 
 /*
 #ifndef min
@@ -68,6 +117,9 @@ void *alloca (size_t);
 # endif
 //#endif
 
+// keyboard beep
+static const char ASCII_BELL =  '\a';
+
 #ifdef HAVE_SYSLOG_H
 #include <syslog.h>
 #define LOG_BLUE  0x10 /* unique value */
@@ -91,6 +143,19 @@ enum {
    LOG_PINK  = 0x14 };
 #endif
 
+#define WORK_ALIGNMENT 64
+
+// When working with dynamically allocated memory to guarantee data alignment
+// for large vectors. Physical block size must be extended by alignment number
+// of bytes when allocated. free() should use the physical pointer returned by
+// malloc(), not the aligned pointer. All others shoujld use the logical,
+// aligned, pointer returned by this function. 
+static inline void *align_ptr( const void *ptr, const uint64_t alignment )
+{
+  const uint64_t mask = alignment - 1;
+  return (void*)( ( ((const uint64_t)ptr) + mask ) & (~mask) );
+}
+
 extern bool is_power_of_2( int n );
 
 static inline bool is_windows(void)
@@ -108,19 +173,26 @@ static inline bool is_windows(void)
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+// deprecated, see simd-int.h
 #if ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
 #define WANT_BUILTIN_BSWAP
+/*
 #else
 #define bswap_32(x) ((((x) << 24) & 0xff000000u) | (((x) << 8) & 0x00ff0000u) \
                    | (((x) >> 8) & 0x0000ff00u) | (((x) >> 24) & 0x000000ffu))
+*/
 #endif
 
-static inline uint32_t swab32(uint32_t v)
+static inline uint32_t swab32(uint32_t x)
 {
 #ifdef WANT_BUILTIN_BSWAP
-	return __builtin_bswap32(v);
+   return __builtin_bswap32(x);
 #else
-	return bswap_32(v);
+   return ( ( (x) << 24 ) & 0xff000000u ) | ( ( (x) <<  8 ) & 0x00ff0000u )
+        | ( ( (x) >>  8 ) & 0x0000ff00u ) | ( ( (x) >> 24 ) & 0x000000ffu );
+
+
+//   return bswap_32(v);
 #endif
 }
 
@@ -162,8 +234,6 @@ static inline void be32enc(void *pp, uint32_t x)
 }
 #endif
 
-// Deprecated in favour of mm64_bswap_32
-//
 // This is a poorman's SIMD instruction, use 64 bit instruction to encode 2
 // uint32_t. This function flips endian on two adjacent 32 bit quantities
 // aligned to 64 bits. If source is LE output is BE, and vice versa.
@@ -177,11 +247,8 @@ static inline void swab32_x2( uint64_t* dst, uint64_t src )
 
 static inline void swab32_array( uint32_t* dst_p, uint32_t* src_p, int n )
 {
-   // Assumes source is LE
-   for ( int i=0; i < n/2; i++ )
+   for ( int i = 0; i < n/2; i++ )
       swab32_x2( &((uint64_t*)dst_p)[i], ((uint64_t*)src_p)[i] );
-//   if ( n % 2 )
-//      be32enc( &dst_p[ n-1 ], src_p[ n-1 ] );
 }
 
 #if !HAVE_DECL_LE32ENC
@@ -221,26 +288,6 @@ static inline void le16enc(void *pp, uint16_t x)
 #endif
 
 json_t* json_load_url(char* cfg_url, json_error_t *err);
-
-void sha256_init(uint32_t *state);
-void sha256_transform(uint32_t *state, const uint32_t *block, int swap);
-//void sha256d(unsigned char *hash, const unsigned char *data, int len);
-
-#ifdef USE_ASM
-#if defined(__ARM_NEON__) || defined(__i386__) || defined(__x86_64__)
-#define HAVE_SHA256_4WAY 1
-int sha256_use_4way();
-void sha256_init_4way(uint32_t *state);
-void sha256_transform_4way(uint32_t *state, const uint32_t *block, int swap);
-#endif
-//#if defined(__x86_64__) && defined(USE_AVX2)
-#if defined(__x86_64__) && defined(__AVX2__)
-#define HAVE_SHA256_8WAY 1
-int sha256_use_8way();
-void sha256_init_8way(uint32_t *state);
-void sha256_transform_8way(uint32_t *state, const uint32_t *block, int swap);
-#endif
-#endif
 
 struct work;
 
@@ -310,6 +357,7 @@ struct thr_api {
 
 void   applog(int prio, const char *fmt, ...);
 void   applog2(int prio, const char *fmt, ...);
+void   applog_nl( const char *fmt, ... );
 void   restart_threads(void);
 extern json_t *json_rpc_call( CURL *curl, const char *url, const char *userpass,
                 	const char *rpc_req, int *curl_err, int flags );
@@ -317,7 +365,7 @@ extern void cbin2hex(char *out, const char *in, size_t len);
 void   bin2hex( char *s, const unsigned char *p, size_t len );
 char  *abin2hex( const unsigned char *p, size_t len );
 char  *bebin2hex( const unsigned char *p, size_t len );
-bool   hex2bin( unsigned char *p, const char *hexstr, size_t len );
+bool   hex2bin( unsigned char *p, const char *hexstr, const size_t len );
 bool   jobj_binary( const json_t *obj, const char *key, void *buf,
                     size_t buflen );
 int    varint_encode( unsigned char *p, uint64_t n );
@@ -333,10 +381,7 @@ extern void memrev(unsigned char *p, size_t len);
 // number of hashes.
 //
 //     https://en.bitcoin.it/wiki/Difficulty
-//
 //     hash = diff * 2**32
-//
-// diff_to_hash = 2**32 = 0x100000000 = 4294967296 = exp32;
 
 #define EXP16 65536.
 #define EXP32 4294967296.
@@ -350,8 +395,9 @@ extern const long double exp160; // 2**160
 bool   fulltest( const uint32_t *hash, const uint32_t *target );
 bool   valid_hash( const void*, const void* );
 
-double hash_to_diff( const void* );
+extern double hash_to_diff( const void* );
 extern void diff_to_hash( uint32_t*, const double );
+extern double nbits_to_diff( uint32_t );
 
 double hash_target_ratio( uint32_t* hash, uint32_t* target );
 void   work_set_target_ratio( struct work* work, const void *hash );
@@ -399,13 +445,14 @@ struct work
    double stratum_diff;
 	int height;
 	char *txs;
-	char *workid;
+   int tx_count;
+   char *workid;
 	char *job_id;
 	size_t xnonce2_len;
 	unsigned char *xnonce2;
    bool sapling;
    bool stale;
-} __attribute__ ((aligned (64)));
+} __attribute__ ((aligned (WORK_ALIGNMENT)));
 
 struct stratum_job
 {
@@ -416,7 +463,8 @@ struct stratum_job
 	unsigned char *coinbase;
 	unsigned char *xnonce2;
 	int merkle_count;
-	unsigned char **merkle;
+   int merkle_buf_size;
+   unsigned char **merkle;
 	unsigned char version[4];
 	unsigned char nbits[4];
 	unsigned char ntime[4];
@@ -528,7 +576,6 @@ enum algos {
         ALGO_NULL,
         ALGO_ALLIUM,
         ALGO_ANIME,
-        ALGO_ARGON2,
         ALGO_ARGON2D250,
         ALGO_ARGON2D500,
         ALGO_ARGON2D4096,
@@ -540,13 +587,11 @@ enum algos {
         ALGO_BMW,        
         ALGO_BMW512,
         ALGO_C11,         
-        ALGO_DECRED,
         ALGO_DEEP,
         ALGO_DMD_GR,
         ALGO_GROESTL,     
         ALGO_HEX,
         ALGO_HMQ1725,
-        ALGO_HODL,
         ALGO_JHA,
         ALGO_KECCAK,
         ALGO_KECCAKC,
@@ -559,6 +604,7 @@ enum algos {
         ALGO_LYRA2Z330,
         ALGO_M7M,
         ALGO_MINOTAUR,
+        ALGO_MINOTAURX,
         ALGO_MYR_GR,      
         ALGO_NEOSCRYPT,
         ALGO_NIST5,       
@@ -571,10 +617,11 @@ enum algos {
         ALGO_QUBIT,       
         ALGO_SCRYPT,
         ALGO_SHA256D,
+        ALGO_SHA256DT,
         ALGO_SHA256Q,
         ALGO_SHA256T,
         ALGO_SHA3D,
-        ALGO_SHAVITE3,    
+        ALGO_SHA512256D,
         ALGO_SKEIN,       
         ALGO_SKEIN2,      
         ALGO_SKUNK,
@@ -602,6 +649,7 @@ enum algos {
         ALGO_X16RT_VEIL,
         ALGO_X16S,
         ALGO_X17,
+        ALGO_X20R,
         ALGO_X21S,
         ALGO_X22I,
         ALGO_X25X,
@@ -617,11 +665,12 @@ enum algos {
         ALGO_ZR5,
         ALGO_COUNT
 };
+
+// This list must be in exactly the same order as above.
 static const char* const algo_names[] = {
         NULL,
         "allium",
         "anime",
-        "argon2",
         "argon2d250",
         "argon2d500",
         "argon2d4096",
@@ -633,13 +682,11 @@ static const char* const algo_names[] = {
         "bmw",
         "bmw512",
         "c11",
-        "decred",
         "deep",
         "dmd-gr",
         "groestl",
         "hex",
         "hmq1725",
-        "hodl",
         "jha",
         "keccak",
         "keccakc",
@@ -652,6 +699,7 @@ static const char* const algo_names[] = {
         "lyra2z330",
         "m7m",
         "minotaur",
+        "minotaurx",
         "myr-gr",
         "neoscrypt",
         "nist5",
@@ -664,10 +712,11 @@ static const char* const algo_names[] = {
         "qubit",
         "scrypt",
         "sha256d",
+        "sha256dt",
         "sha256q",
         "sha256t",
         "sha3d",
-        "shavite3",
+        "sha512256d",
         "skein",
         "skein2",
         "skunk",
@@ -695,6 +744,7 @@ static const char* const algo_names[] = {
         "x16rt-veil",
         "x16s",
         "x17",
+        "x20r",
         "x21s",
         "x22i",
         "x25x",
@@ -774,17 +824,16 @@ extern const int pk_buffer_size_max;
 extern int pk_buffer_size;
 extern char *opt_data_file;
 extern bool opt_verify;
-
+extern bool opt_bell;    //  keyboard beep
 static char const usage[] = "\
 Usage: cpuminer [OPTIONS]\n\
 Options:\n\
   -a, --algo=ALGO       specify the algorithm to use\n\
                           allium        Garlicoin (GRLC)\n\
                           anime         Animecoin (ANI)\n\
-                          argon2        Argon2 Coin (AR2)\n\
                           argon2d250\n\
-                          argon2d500    argon2d-dyn, Dynamic (DYN)\n\
-                          argon2d4096   argon2d-uis, Unitus (UIS)\n\
+                          argon2d500\n\
+                          argon2d4096\n\
                           axiom         Shabal-256 MemoHash\n\
                           blake         blake256r14 (SFR)\n\
                           blake2b       Blake2b 256\n\
@@ -793,13 +842,11 @@ Options:\n\
                           bmw           BMW 256\n\
                           bmw512        BMW 512\n\
                           c11           Chaincoin\n\
-                          decred        Blake256r14dcr\n\
                           deep          Deepcoin (DCN)\n\
                           dmd-gr        Diamond\n\
                           groestl       Groestl coin\n\
                           hex           x16r-hex\n\
                           hmq1725       Espers\n\
-                          hodl          Hodlcoin\n\
                           jha           jackppot (Jackpotcoin)\n\
                           keccak        Maxcoin\n\
                           keccakc       Creative Coin\n\
@@ -812,7 +859,8 @@ Options:\n\
                           lyra2z330     Lyra2 330 rows\n\
                           m7m           Magi (XMG)\n\
                           myr-gr        Myriad-Groestl\n\
-                          minotaur      Ringcoin (RNG)\n\
+                          minotaur\n\
+                          minotaurx\n\
                           neoscrypt     NeoScrypt(128, 2, 1)\n\
                           nist5         Nist5\n\
                           pentablake    5 x blake512\n\
@@ -826,10 +874,11 @@ Options:\n\
                           scrypt:N      scrypt(N, 1, 1)\n\
                           scryptn2      scrypt(1048576, 1,1)\n\
                           sha256d       Double SHA-256\n\
+                          sha256dt      Modified sha256d (Novo)\n\
                           sha256q       Quad SHA-256, Pyrite (PYE)\n\
                           sha256t       Triple SHA-256, Onecoin (OC)\n\
                           sha3d         Double Keccak256 (BSHA3)\n\
-                          shavite3      Shavite3\n\
+                          sha512256d    Double SHA-512 (Radiant)\n\
                           skein         Skein+Sha (Skeincoin)\n\
                           skein2        Double Skein (Woodcoin)\n\
                           skunk         Signatum (SIGT)\n\
@@ -857,6 +906,7 @@ Options:\n\
                           x16rt-veil    Veil (VEIL)\n\
                           x16s\n\
                           x17\n\
+                          x20r\n\
                           x21s\n\
                           x22i\n\
                           x25x\n\
@@ -992,6 +1042,7 @@ static struct option const options[] = {
         { "verify", 0, NULL, 1028 },
         { "stratum-keepalive", 0, NULL, 1029 },
         { "version", 0, NULL, 'V' },
+        { "bell", 0, NULL, 1031 },
         { 0, 0, 0, 0 }
 };
 

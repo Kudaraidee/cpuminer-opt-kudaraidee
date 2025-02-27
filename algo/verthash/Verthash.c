@@ -9,7 +9,7 @@
 
 #include "algo-gate-api.h"
 #include "Verthash.h"
-#include "mm_malloc.h"
+//#include "mm_malloc.h"
 #include "malloc-huge.h"
 
 //-----------------------------------------------------------------------------
@@ -91,7 +91,7 @@ int verthash_info_init(verthash_info_t* info, const char* file_name)
        if ( !opt_quiet ) applog( LOG_INFO, "Verthash data is using huge pages");
     }
     else
-       info->data = (uint8_t *)_mm_malloc( fileSize, 64 );
+       info->data = (uint8_t *)mm_malloc( fileSize, 64 );
 
     if ( !info->data )
     {
@@ -137,53 +137,8 @@ void verthash_info_free(verthash_info_t* info)
 #define VH_N_INDEXES 4096
 #define VH_BYTE_ALIGNMENT 16
 
-static inline uint32_t fnv1a(const uint32_t a, const uint32_t b)
-{
-    return (a ^ b) * 0x1000193;
-}
+#define fnv1a( a, b )           ( ( (a) ^ (b) ) * 0x1000193 )
 
-#if 0
-static void rotate_indexes( uint32_t *p )
-{
-#if defined(__AVX2__)
-
-   for ( size_t x = 0; x < VH_N_SUBSET / sizeof(__m256i); x += 8 )
-   {
-      __m256i *px = (__m256i*)p + x;
-
-      px[0] = mm256_rol_32( px[0], 1 );
-      px[1] = mm256_rol_32( px[1], 1 );
-      px[2] = mm256_rol_32( px[2], 1 );
-      px[3] = mm256_rol_32( px[3], 1 );
-      px[4] = mm256_rol_32( px[4], 1 );
-      px[5] = mm256_rol_32( px[5], 1 );
-      px[6] = mm256_rol_32( px[6], 1 );
-      px[7] = mm256_rol_32( px[7], 1 );
-   }
-
-#else
-
-   for ( size_t x = 0; x < VH_N_SUBSET / sizeof(__m128i); x += 8 )
-   {
-      __m128i *px = (__m128i*)p0_index + x;
-
-      px[0] = mm128_rol_32( px[0], 1 );
-      px[1] = mm128_rol_32( px[1], 1 );
-      px[2] = mm128_rol_32( px[2], 1 );
-      px[3] = mm128_rol_32( px[3], 1 );
-      px[4] = mm128_rol_32( px[4], 1 );
-      px[5] = mm128_rol_32( px[5], 1 );
-      px[6] = mm128_rol_32( px[6], 1 );
-      px[7] = mm128_rol_32( px[7], 1 );
-   }
-
-#endif
-/*   
-   for ( size_t x = 0; x < VH_N_SUBSET / sizeof(uint32_t); ++x )
-      p[x] = ( p[x] << 1 ) | ( p[x] >> 31 );
-*/
-}
-#endif
 // Vectorized and targetted version of fnv1a
 #if defined (__AVX2__)        
 
@@ -191,13 +146,13 @@ static void rotate_indexes( uint32_t *p )
    *(__m256i*)hash = _mm256_mullo_epi32( _mm256_xor_si256( \
                                  *(__m256i*)hash, *(__m256i*)blob_off ), k );
 
-#elif defined(__SSE41__)
+#elif defined(__SSE4_1__) || defined(__ARM_NEON)
 
 #define MULXOR \
-   casti_m128i( hash, 0 ) = _mm_mullo_epi32( _mm_xor_si128( \
-                  casti_m128i( hash, 0 ), casti_m128i( blob_off, 0 ) ), k ); \
-   casti_m128i( hash, 1 ) = _mm_mullo_epi32( _mm_xor_si128( \
-                  casti_m128i( hash, 1 ), casti_m128i( blob_off, 1 ) ), k );
+   casti_v128( hash, 0 ) = v128_mul32( v128_xor( \
+                  casti_v128( hash, 0 ), casti_v128( blob_off, 0 ) ), k ); \
+   casti_v128( hash, 1 ) = v128_mul32( v128_xor( \
+                  casti_v128( hash, 1 ), casti_v128( blob_off, 1 ) ), k );
 
 #else
 
@@ -229,7 +184,7 @@ for ( size_t i = 0; i < VH_N_SUBSET / sizeof(uint32_t); i++ ) \
    MULXOR; \
 }
 
-// subsequent passes rotate by r on demand, no need for mass rotate
+// subsequent passes rotate by r
 #define ROUND_r( r ) \
 for ( size_t i = 0; i < VH_N_SUBSET / sizeof(uint32_t); i++ ) \
 { \
@@ -243,16 +198,16 @@ for ( size_t i = 0; i < VH_N_SUBSET / sizeof(uint32_t); i++ ) \
 void verthash_hash( const void *blob_bytes, const size_t blob_size,
                     const void *input, void *output )
 {
-    uint32_t hash[ VH_HASH_OUT_SIZE / 4 ] __attribute__ ((aligned (64)));
     uint32_t subset[ VH_N_SUBSET / 4 ] __attribute__ ((aligned (64)));
+    uint32_t hash[ VH_HASH_OUT_SIZE / 4 ] __attribute__ ((aligned (32)));
     const uint32_t *blob = (const uint32_t*)blob_bytes;
     uint32_t accumulator = 0x811c9dc5;
     const uint32_t mdiv = ( ( blob_size - VH_HASH_OUT_SIZE )
                              / VH_BYTE_ALIGNMENT ) + 1;
 #if defined (__AVX2__)        
     const __m256i k = _mm256_set1_epi32( 0x1000193 );
-#elif defined(__SSE41__)
-    const __m128i k = _mm_set1_epi32( 0x1000193 );
+#elif defined(__SSE4_1__)  || defined(__ARM_NEON)
+    const v128u32_t k = v128_32( 0x1000193 );
 #endif
     
     sha3( input, VH_HEADER_SIZE, hash, VH_HASH_OUT_SIZE );

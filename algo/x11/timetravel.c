@@ -11,13 +11,13 @@
 #include "algo/jh/sph_jh.h"
 #include "algo/keccak/sph_keccak.h"
 #include "algo/skein/sph_skein.h"
-#include "algo/luffa/luffa_for_sse2.h"
 #include "algo/cubehash/cubehash_sse2.h"
 #ifdef __AES__
   #include "algo/groestl/aes_ni/hash-groestl.h"
 #else
   #include "algo/groestl/sph_groestl.h"
 #endif
+#include "algo/luffa/luffa_for_sse2.h"
 
 static __thread uint32_t s_ntime = UINT32_MAX;
 static __thread int permutation[TT8_FUNC_COUNT] = { 0 };
@@ -172,25 +172,25 @@ void timetravel_hash(void *output, const void *input)
         if ( i == 0 )
         {
            memcpy( &ctx.luffa, &tt_mid.luffa, sizeof tt_mid.luffa );
-           update_and_final_luffa( &ctx.luffa, (BitSequence*)hashB,
-                                   (const BitSequence *)input + 64, 16 );
+           update_and_final_luffa( &ctx.luffa, hashB,
+                                   input + 64, 16 );
         }
         else
         {
-           update_and_final_luffa( &ctx.luffa, (BitSequence*)hashB,
-                                   (const BitSequence *)hashA, dataLen );
+           update_and_final_luffa( &ctx.luffa, hashB,
+                                   hashA, dataLen );
         }
         break;
      case 7:
         if ( i == 0 )
         {
            memcpy( &ctx.cube, &tt_mid.cube, sizeof tt_mid.cube );
-           cubehashUpdateDigest( &ctx.cube, (byte*)hashB,
-                                 (const byte*)input + midlen, tail );
+           cubehashUpdateDigest( &ctx.cube, hashB,
+                                 input + midlen, tail );
         }
         else
         {
-           cubehashUpdateDigest( &ctx.cube, (byte*)hashB, (const byte*)hashA,
+           cubehashUpdateDigest( &ctx.cube, hashB, hashA,
                                  dataLen );
         }
         break;
@@ -264,11 +264,11 @@ int scanhash_timetravel( struct work *work, uint32_t max_nonce,
            break;
         case 6:
            memcpy( &tt_mid.luffa, &tt_ctx.luffa, sizeof(tt_mid.luffa ) );
-           update_luffa( &tt_mid.luffa, (const BitSequence*)endiandata, 64 );
+           update_luffa( &tt_mid.luffa, endiandata, 64 );
            break;
         case 7:
            memcpy( &tt_mid.cube, &tt_ctx.cube, sizeof(tt_mid.cube ) );
-           cubehashUpdate( &tt_mid.cube, (const byte*)endiandata, 64 );
+           cubehashUpdate( &tt_mid.cube, endiandata, 64 );
            break;
         default:
            break;

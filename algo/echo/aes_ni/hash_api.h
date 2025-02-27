@@ -22,18 +22,18 @@
 #endif
 
 
-#include "algo/sha/sha3_common.h"
+#include "compat/sha3_common.h"
 
-#include <emmintrin.h>
+#include "simd-utils.h"
 
 
 typedef struct
 {
-	__m128i			state[4][4];
+	v128_t			state[4][4];
         BitSequence             buffer[192];
-	__m128i			k;
-	__m128i			hashsize;
-	__m128i			const1536;
+	v128_t			k;
+	v128_t			hashsize;
+	v128_t			const1536;
 
 	unsigned int	uRounds;
 	unsigned int	uHashSize;
@@ -47,16 +47,16 @@ HashReturn init_echo(hashState_echo *state, int hashbitlen);
 
 HashReturn reinit_echo(hashState_echo *state);
 
-HashReturn update_echo(hashState_echo *state, const BitSequence *data, DataLength databitlen);
+HashReturn update_echo(hashState_echo *state, const void *data, uint32_t databitlen);
 
-HashReturn final_echo(hashState_echo *state, BitSequence *hashval);
+HashReturn final_echo(hashState_echo *state, void *hashval);
 
-HashReturn hash_echo(int hashbitlen, const BitSequence *data, DataLength databitlen, BitSequence *hashval);
+HashReturn hash_echo(int hashbitlen, const void *data, uint32_t databitlen, void *hashval);
 
-HashReturn update_final_echo( hashState_echo *state, BitSequence *hashval,
-                              const BitSequence *data, DataLength databitlen );
-HashReturn echo_full( hashState_echo *state, BitSequence *hashval,
-            int nHashSize, const BitSequence *data, DataLength databitlen );
+HashReturn update_final_echo( hashState_echo *state, void *hashval,
+                              const void *data, uint32_t databitlen );
+HashReturn echo_full( hashState_echo *state, void *hashval,
+            int nHashSize, const void *data, uint32_t databitlen );
 
 #endif // HASH_API_H
 

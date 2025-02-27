@@ -153,8 +153,6 @@ Supported Algorithms
 Many variations of scrypt based algos can be mine by specifying their
 parameters:
 
-power2b: --algo yespower-b2b --param-n 2048 --param-r 32 --param-key "Now I am become Death, the destroyer of worlds"
-
 yespoweriots: --algo yespower --param-n 2048 --param-key "Iots is committed to the development of IOT"
 
 yespowerlitb: --algo yespower --param-n 2048 --param-r 32 --param-key "LITBpower: The number of LITB working or available for proof-of-work mini"

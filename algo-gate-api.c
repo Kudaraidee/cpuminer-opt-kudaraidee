@@ -15,8 +15,6 @@
 #include <stdbool.h>
 #include <memory.h>
 #include <unistd.h>
-#include <openssl/sha.h>
-//#include "miner.h"
 #include "algo-gate-api.h"
 
 // Define null and standard functions.
@@ -69,7 +67,6 @@ void do_nothing   () {}
 bool return_true  () { return true;  }
 bool return_false () { return false; }
 void *return_null () { return NULL;  }
-void call_error   () { printf("ERR: Uninitialized function pointer\n"); }
 
 void algo_not_tested()
 {
@@ -97,7 +94,8 @@ int null_scanhash()
    return 0;
 }
 
-// Default generic scanhash can be used in many cases.
+// Default generic scanhash can be used in many cases. Not to be used when
+// prehashing can be done or when byte swapping the data can be avoided.
 int scanhash_generic( struct work *work, uint32_t max_nonce,
                       uint64_t *hashes_done, struct thr_info *mythr )
 {
@@ -111,7 +109,7 @@ int scanhash_generic( struct work *work, uint32_t max_nonce,
    const int thr_id = mythr->id;
    const bool bench = opt_benchmark;
 
-   mm128_bswap32_80( edata, pdata );
+   v128_bswap32_80( edata, pdata );
    do
    {
       edata[19] = n;
@@ -154,6 +152,9 @@ int scanhash_4way_64in_32out( struct work *work, uint32_t max_nonce,
    const bool bench = opt_benchmark;
 
    mm256_bswap32_intrlv80_4x64( vdata, pdata );
+   // overwrite byte swapped nonce with original byte order for proper
+   // incrementing. The nonce only needs to byte swapped if it is to be
+   // sumbitted.
    *noncev = mm256_intrlv_blend_32(
                    _mm256_set_epi32( n+3, 0, n+2, 0, n+1, 0, n, 0 ), *noncev );
    do
@@ -170,7 +171,7 @@ int scanhash_4way_64in_32out( struct work *work, uint32_t max_nonce,
          }
       }
       *noncev = _mm256_add_epi32( *noncev,
-                                  m256_const1_64( 0x0000000400000000 ) );
+                                  _mm256_set1_epi64x( 0x0000000400000000 ) );
       n += 4;
    } while ( likely( ( n <= last_nonce ) && !work_restart[thr_id].restart ) );
    pdata[19] = n;
@@ -183,7 +184,7 @@ int scanhash_4way_64in_32out( struct work *work, uint32_t max_nonce,
 
 #endif
 
-#if defined(__AVX512F__) && defined(__AVX512VL__) && defined(__AVX512DQ__) && defined(__AVX512BW__)
+#if defined(SIMD512)
 
 //int scanhash_8way_64_64( struct work *work, uint32_t max_nonce,
 //                      uint64_t *hashes_done, struct thr_info *mythr )
@@ -226,7 +227,7 @@ int scanhash_8way_64in_32out( struct work *work, uint32_t max_nonce,
          }
       }
       *noncev = _mm512_add_epi32( *noncev,
-                                  m512_const1_64( 0x0000000800000000 ) );
+                                  _mm512_set1_epi64( 0x0000000800000000 ) );
       n += 8;
    } while ( likely( ( n < last_nonce ) && !work_restart[thr_id].restart ) );
    pdata[19] = n;
@@ -247,7 +248,7 @@ int null_hash()
    return 0;
 };
 
-void init_algo_gate( algo_gate_t* gate )
+static void init_algo_gate( algo_gate_t* gate )
 {
    gate->miner_thread_init       = (void*)&return_true;
    gate->scanhash                = (void*)&scanhash_generic;
@@ -262,10 +263,8 @@ void init_algo_gate( algo_gate_t* gate )
    gate->build_block_header      = (void*)&std_build_block_header;
    gate->build_extraheader       = (void*)&std_build_extraheader;
    gate->set_work_data_endian    = (void*)&do_nothing;
-   gate->calc_network_diff       = (void*)&std_calc_network_diff;
-   gate->ready_to_mine           = (void*)&std_ready_to_mine;
-   gate->resync_threads          = (void*)&do_nothing;
-   gate->do_this_thread          = (void*)&return_true;
+//   gate->resync_threads          = (void*)&do_nothing;
+//   gate->do_this_thread          = (void*)&return_true;
    gate->longpoll_rpc_call       = (void*)&std_longpoll_rpc_call;
    gate->get_work_data_size      = (void*)&std_get_work_data_size;
    gate->optimizations           = EMPTY_SET;
@@ -279,9 +278,11 @@ void init_algo_gate( algo_gate_t* gate )
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
 
-// called by each thread that uses the gate
+// Called once by main
 bool register_algo_gate( int algo, algo_gate_t *gate )
 {
+  bool rc = false;
+
   if ( NULL == gate )
   {
     applog(LOG_ERR,"FAIL: algo_gate registration failed, NULL gate\n");
@@ -290,109 +291,104 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
 
   init_algo_gate( gate );
 
-  switch (algo)
+  switch ( algo )
   {
-    case ALGO_ALLIUM:        register_allium_algo        ( gate ); break;
-    case ALGO_ANIME:         register_anime_algo         ( gate ); break;
-    case ALGO_ARGON2:        register_argon2_algo        ( gate ); break;
-    case ALGO_ARGON2D250:    register_argon2d_crds_algo  ( gate ); break;
-    case ALGO_ARGON2D500:    register_argon2d_dyn_algo   ( gate ); break;
-    case ALGO_ARGON2D4096:   register_argon2d4096_algo   ( gate ); break;
-    case ALGO_ARGON2D16000:  register_argon2d_bcrs_algo  ( gate ); break;
-    case ALGO_AXIOM:         register_axiom_algo         ( gate ); break;
-    case ALGO_BLAKE:         register_blake_algo         ( gate ); break;
-    case ALGO_BLAKE2B:       register_blake2b_algo       ( gate ); break;
-    case ALGO_BLAKE2S:       register_blake2s_algo       ( gate ); break;
-    case ALGO_BLAKECOIN:     register_blakecoin_algo     ( gate ); break;
-    case ALGO_BMW512:        register_bmw512_algo        ( gate ); break;
-    case ALGO_C11:           register_c11_algo           ( gate ); break;
-    case ALGO_DECRED:        register_decred_algo        ( gate ); break;
-    case ALGO_DEEP:          register_deep_algo          ( gate ); break;
-    case ALGO_DMD_GR:        register_dmd_gr_algo        ( gate ); break;
-    case ALGO_GROESTL:       register_groestl_algo       ( gate ); break;
-    case ALGO_HEX:           register_hex_algo           ( gate ); break;
-    case ALGO_HMQ1725:       register_hmq1725_algo       ( gate ); break;
-    case ALGO_HODL:          register_hodl_algo          ( gate ); break;
-    case ALGO_JHA:           register_jha_algo           ( gate ); break;
-    case ALGO_KECCAK:        register_keccak_algo        ( gate ); break;
-    case ALGO_KECCAKC:       register_keccakc_algo       ( gate ); break;
-    case ALGO_LBRY:          register_lbry_algo          ( gate ); break;
-    case ALGO_LYRA2H:        register_lyra2h_algo        ( gate ); break;
-    case ALGO_LYRA2RE:       register_lyra2re_algo       ( gate ); break;
-    case ALGO_LYRA2REV2:     register_lyra2rev2_algo     ( gate ); break;
-    case ALGO_LYRA2REV3:     register_lyra2rev3_algo     ( gate ); break;
-    case ALGO_LYRA2Z:        register_lyra2z_algo        ( gate ); break;
-    case ALGO_LYRA2Z330:     register_lyra2z330_algo     ( gate ); break;
-    case ALGO_M7M:           register_m7m_algo           ( gate ); break;
-    case ALGO_MINOTAUR:      register_minotaur_algo      ( gate ); break;
-    case ALGO_MYR_GR:        register_myriad_algo        ( gate ); break;
-    case ALGO_NEOSCRYPT:     register_neoscrypt_algo     ( gate ); break;
-    case ALGO_NIST5:         register_nist5_algo         ( gate ); break;
-    case ALGO_PENTABLAKE:    register_pentablake_algo    ( gate ); break;
-    case ALGO_PHI1612:       register_phi1612_algo       ( gate ); break;
-    case ALGO_PHI2:          register_phi2_algo          ( gate ); break;
-    case ALGO_POLYTIMOS:     register_polytimos_algo     ( gate ); break;
-    case ALGO_POWER2B:       register_power2b_algo       ( gate ); break;
-    case ALGO_QUARK:         register_quark_algo         ( gate ); break;
-    case ALGO_QUBIT:         register_qubit_algo         ( gate ); break;
-    case ALGO_SCRYPT:        register_scrypt_algo        ( gate ); break;
-    case ALGO_SHA256D:       register_sha256d_algo       ( gate ); break;
-    case ALGO_SHA256Q:       register_sha256q_algo       ( gate ); break;
-    case ALGO_SHA256T:       register_sha256t_algo       ( gate ); break;
-    case ALGO_SHA3D:         register_sha3d_algo         ( gate ); break;
-    case ALGO_SHAVITE3:      register_shavite_algo       ( gate ); break;
-    case ALGO_SKEIN:         register_skein_algo         ( gate ); break;
-    case ALGO_SKEIN2:        register_skein2_algo        ( gate ); break;
-    case ALGO_SKUNK:         register_skunk_algo         ( gate ); break;
-    case ALGO_SONOA:         register_sonoa_algo         ( gate ); break;
-    case ALGO_TIMETRAVEL:    register_timetravel_algo    ( gate ); break;
-    case ALGO_TIMETRAVEL10:  register_timetravel10_algo  ( gate ); break;
-    case ALGO_TRIBUS:        register_tribus_algo        ( gate ); break;
-    case ALGO_VANILLA:       register_vanilla_algo       ( gate ); break;
-    case ALGO_VELTOR:        register_veltor_algo        ( gate ); break;
-    case ALGO_WHIRLPOOL:     register_whirlpool_algo     ( gate ); break;
-    case ALGO_WHIRLPOOLX:    register_whirlpoolx_algo    ( gate ); break;
-    case ALGO_X11:           register_x11_algo           ( gate ); break;
-    case ALGO_X11EVO:        register_x11evo_algo        ( gate ); break;
-    case ALGO_X11GOST:       register_x11gost_algo       ( gate ); break;
-    case ALGO_X12:           register_x12_algo           ( gate ); break;
-    case ALGO_X13:           register_x13_algo           ( gate ); break;
-    case ALGO_X13BCD:        register_x13bcd_algo        ( gate ); break;
-    case ALGO_X13SM3:        register_x13sm3_algo        ( gate ); break;
-    case ALGO_X14:           register_x14_algo           ( gate ); break;
-    case ALGO_X15:           register_x15_algo           ( gate ); break;
-    case ALGO_X16R:          register_x16r_algo          ( gate ); break;
-    case ALGO_X16RV2:        register_x16rv2_algo        ( gate ); break;
-    case ALGO_X16RT:         register_x16rt_algo         ( gate ); break;
-    case ALGO_X16RT_VEIL:    register_x16rt_veil_algo    ( gate ); break;
-    case ALGO_X16S:          register_x16s_algo          ( gate ); break;
-    case ALGO_X17:           register_x17_algo           ( gate ); break;
-    case ALGO_X21S:          register_x21s_algo          ( gate ); break;
-    case ALGO_X22I:          register_x22i_algo          ( gate ); break;
-    case ALGO_X25X:          register_x25x_algo          ( gate ); break;
-    case ALGO_XEVAN:         register_xevan_algo         ( gate ); break;
-    case ALGO_YESCRYPT:      register_yescrypt_05_algo   ( gate ); break;
-//    case ALGO_YESCRYPT:      register_yescrypt_algo      ( gate ); break;
-    case ALGO_YESCRYPTR8:    register_yescryptr8_05_algo ( gate ); break;
-//    case ALGO_YESCRYPTR8:    register_yescryptr8_algo    ( gate ); break;
-    case ALGO_YESCRYPTR8G:   register_yescryptr8g_algo   ( gate ); break;
-    case ALGO_YESCRYPTR16:   register_yescryptr16_05_algo( gate ); break;
-//    case ALGO_YESCRYPTR16:   register_yescryptr16_algo   ( gate ); break;
-    case ALGO_YESCRYPTR32:   register_yescryptr32_05_algo( gate ); break;
-//    case ALGO_YESCRYPTR32:   register_yescryptr32_algo   ( gate ); break;
-    case ALGO_YESPOWER:      register_yespower_algo      ( gate ); break;
-    case ALGO_YESPOWERR16:   register_yespowerr16_algo   ( gate ); break;
-    case ALGO_YESPOWER_B2B:  register_yespower_b2b_algo  ( gate ); break;
-    case ALGO_ZR5:           register_zr5_algo           ( gate ); break;
+    case ALGO_ALLIUM:       rc = register_allium_algo        ( gate ); break;
+    case ALGO_ANIME:        rc = register_anime_algo         ( gate ); break;
+    case ALGO_ARGON2D250:   rc = register_argon2d250_algo    ( gate ); break;
+    case ALGO_ARGON2D500:   rc = register_argon2d500_algo    ( gate ); break;
+    case ALGO_ARGON2D4096:  rc = register_argon2d4096_algo   ( gate ); break;
+    case ALGO_AXIOM:        rc = register_axiom_algo         ( gate ); break;
+    case ALGO_BLAKE:        rc = register_blake_algo         ( gate ); break;
+    case ALGO_BLAKE2B:      rc = register_blake2b_algo       ( gate ); break;
+    case ALGO_BLAKE2S:      rc = register_blake2s_algo       ( gate ); break;
+    case ALGO_BLAKECOIN:    rc = register_blakecoin_algo     ( gate ); break;
+    case ALGO_BMW512:       rc = register_bmw512_algo        ( gate ); break;
+    case ALGO_C11:          rc = register_c11_algo           ( gate ); break;
+    case ALGO_DEEP:         rc = register_deep_algo          ( gate ); break;
+    case ALGO_DMD_GR:       rc = register_dmd_gr_algo        ( gate ); break;
+    case ALGO_GROESTL:      rc = register_groestl_algo       ( gate ); break;
+    case ALGO_HEX:          rc = register_hex_algo           ( gate ); break;
+    case ALGO_HMQ1725:      rc = register_hmq1725_algo       ( gate ); break;
+    case ALGO_JHA:          rc = register_jha_algo           ( gate ); break;
+    case ALGO_KECCAK:       rc = register_keccak_algo        ( gate ); break;
+    case ALGO_KECCAKC:      rc = register_keccakc_algo       ( gate ); break;
+    case ALGO_LBRY:         rc = register_lbry_algo          ( gate ); break;
+    case ALGO_LYRA2H:       rc = register_lyra2h_algo        ( gate ); break;
+    case ALGO_LYRA2RE:      rc = register_lyra2re_algo       ( gate ); break;
+    case ALGO_LYRA2REV2:    rc = register_lyra2rev2_algo     ( gate ); break;
+    case ALGO_LYRA2REV3:    rc = register_lyra2rev3_algo     ( gate ); break;
+    case ALGO_LYRA2Z:       rc = register_lyra2z_algo        ( gate ); break;
+    case ALGO_LYRA2Z330:    rc = register_lyra2z330_algo     ( gate ); break;
+    case ALGO_M7M:          rc = register_m7m_algo           ( gate ); break;
+    case ALGO_MINOTAUR:     rc = register_minotaur_algo      ( gate ); break;
+    case ALGO_MINOTAURX:    rc = register_minotaur_algo      ( gate ); break;
+    case ALGO_MYR_GR:       rc = register_myriad_algo        ( gate ); break;
+    case ALGO_NEOSCRYPT:    rc = register_neoscrypt_algo     ( gate ); break;
+    case ALGO_NIST5:        rc = register_nist5_algo         ( gate ); break;
+    case ALGO_PENTABLAKE:   rc = register_pentablake_algo    ( gate ); break;
+    case ALGO_PHI1612:      rc = register_phi1612_algo       ( gate ); break;
+    case ALGO_PHI2:         rc = register_phi2_algo          ( gate ); break;
+    case ALGO_POLYTIMOS:    rc = register_polytimos_algo     ( gate ); break;
+    case ALGO_POWER2B:      rc = register_power2b_algo       ( gate ); break;
+    case ALGO_QUARK:        rc = register_quark_algo         ( gate ); break;
+    case ALGO_QUBIT:        rc = register_qubit_algo         ( gate ); break;
+    case ALGO_SCRYPT:       rc = register_scrypt_algo        ( gate ); break;
+    case ALGO_SHA256D:      rc = register_sha256d_algo       ( gate ); break;
+    case ALGO_SHA256DT:     rc = register_sha256dt_algo      ( gate ); break;
+    case ALGO_SHA256Q:      rc = register_sha256q_algo       ( gate ); break;
+    case ALGO_SHA256T:      rc = register_sha256t_algo       ( gate ); break;
+    case ALGO_SHA3D:        rc = register_sha3d_algo         ( gate ); break;
+    case ALGO_SHA512256D:   rc = register_sha512256d_algo    ( gate ); break;
+    case ALGO_SKEIN:        rc = register_skein_algo         ( gate ); break;
+    case ALGO_SKEIN2:       rc = register_skein2_algo        ( gate ); break;
+    case ALGO_SKUNK:        rc = register_skunk_algo         ( gate ); break;
+    case ALGO_SONOA:        rc = register_sonoa_algo         ( gate ); break;
+    case ALGO_TIMETRAVEL:   rc = register_timetravel_algo    ( gate ); break;
+    case ALGO_TIMETRAVEL10: rc = register_timetravel10_algo  ( gate ); break;
+    case ALGO_TRIBUS:       rc = register_tribus_algo        ( gate ); break;
+    case ALGO_VANILLA:      rc = register_vanilla_algo       ( gate ); break;
+    case ALGO_VELTOR:       rc = register_veltor_algo        ( gate ); break;
+    case ALGO_VERTHASH:     rc = register_verthash_algo      ( gate ); break;
+    case ALGO_WHIRLPOOL:    rc = register_whirlpool_algo     ( gate ); break;
+    case ALGO_WHIRLPOOLX:   rc = register_whirlpoolx_algo    ( gate ); break;
+    case ALGO_X11:          rc = register_x11_algo           ( gate ); break;
+    case ALGO_X11EVO:       rc = register_x11evo_algo        ( gate ); break;
+    case ALGO_X11GOST:      rc = register_x11gost_algo       ( gate ); break;
+    case ALGO_X12:          rc = register_x12_algo           ( gate ); break;
+    case ALGO_X13:          rc = register_x13_algo           ( gate ); break;
+    case ALGO_X13BCD:       rc = register_x13bcd_algo        ( gate ); break;
+    case ALGO_X13SM3:       rc = register_x13sm3_algo        ( gate ); break;
+    case ALGO_X14:          rc = register_x14_algo           ( gate ); break;
+    case ALGO_X15:          rc = register_x15_algo           ( gate ); break;
+    case ALGO_X16R:         rc = register_x16r_algo          ( gate ); break;
+    case ALGO_X16RV2:       rc = register_x16rv2_algo        ( gate ); break;
+    case ALGO_X16RT:        rc = register_x16rt_algo         ( gate ); break;
+    case ALGO_X16RT_VEIL:   rc = register_x16rt_veil_algo    ( gate ); break;
+    case ALGO_X16S:         rc = register_x16s_algo          ( gate ); break;
+    case ALGO_X17:          rc = register_x17_algo           ( gate ); break;
+    case ALGO_X20R:         rc = register_x20r_algo          ( gate ); break;
+    case ALGO_X21S:         rc = register_x21s_algo          ( gate ); break;
+    case ALGO_X22I:         rc = register_x22i_algo          ( gate ); break;
+    case ALGO_X25X:         rc = register_x25x_algo          ( gate ); break;
+    case ALGO_XEVAN:        rc = register_xevan_algo         ( gate ); break;
+    case ALGO_YESCRYPT:     rc = register_yescrypt_algo      ( gate ); break;
+    case ALGO_YESCRYPTR8:   rc = register_yescryptr8_algo    ( gate ); break;
+    case ALGO_YESCRYPTR8G:  rc = register_yescryptr8g_algo   ( gate ); break;
+    case ALGO_YESCRYPTR16:  rc = register_yescryptr16_algo   ( gate ); break;
+    case ALGO_YESCRYPTR32:  rc = register_yescryptr32_algo   ( gate ); break;
+    case ALGO_YESPOWER:     rc = register_yespower_algo      ( gate ); break;
+    case ALGO_YESPOWERR16:  rc = register_yespowerr16_algo   ( gate ); break;
+    case ALGO_YESPOWER_B2B: rc = register_yespower_b2b_algo  ( gate ); break;
+    case ALGO_ZR5:          rc = register_zr5_algo           ( gate ); break;
    default:
-      applog(LOG_ERR,"FAIL: algo_gate registration failed, unknown algo %s.\n", algo_names[opt_algo] );
+      applog(LOG_ERR,"BUG: unregistered algorithm %s.\n", algo_names[opt_algo] );
       return false;
   } // switch
 
- // ensure required functions were defined.
-  if (  gate->scanhash == (void*)&null_scanhash )
+  if ( !rc )
   {
-    applog(LOG_ERR, "FAIL: Required algo_gate functions undefined\n");
+    applog(LOG_ERR, "FAIL: %s algorithm failed to initialize\n", algo_names[opt_algo] );
     return false;
   }
   return true;
@@ -420,23 +416,17 @@ void exec_hash_function( int algo, void *output, const void *pdata )
 const char* const algo_alias_map[][2] =
 {
 //   alias                proper
-  { "argon2d-crds",      "argon2d250"     },
-  { "argon2d-dyn",       "argon2d500"     },
-  { "argon2d-uis",       "argon2d4096"    },
-  { "argon2d-bcrs",      "argon2d16000"    },
   { "bcd",               "x13bcd"         },
   { "bitcore",           "timetravel10"   },
   { "bitzeny",           "yescryptr8"     },
   { "blake256r8",        "blakecoin"      },
   { "blake256r8vnl",     "vanilla"        },
   { "blake256r14",       "blake"          },
-  { "blake256r14dcr",    "decred"         },
   { "diamond",           "dmd-gr"         },
   { "espers",            "hmq1725"        },
   { "flax",              "c11"            },
   { "hsr",               "x13sm3"         },
   { "jackpot",           "jha"            },
-  { "jane",              "scryptjane"     }, 
   { "lyra2",             "lyra2re"        },
   { "lyra2v2",           "lyra2rev2"      },
   { "lyra2v3",           "lyra2rev3"      },

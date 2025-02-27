@@ -27,14 +27,5 @@ bool register_argon2d4096_algo( algo_gate_t* gate );
 int scanhash_argon2d4096( struct work *work, uint32_t max_nonce,
                     uint64_t *hashes_done, struct thr_info *mythr );
 
-// Bitcreds: version = 0x10, m_cost = 16000.
-bool register_argon2d_bcrs_algo( algo_gate_t* gate );
-
-void argon2d_bcrs_hash( void *state, const void *input );
-
-int scanhash_argon2d_bcrs( struct work *work, uint32_t max_nonce,
-                    uint64_t *hashes_done, struct thr_info *mythr );
-
-
 #endif
 

@@ -216,6 +216,8 @@ cpuminer_SOURCES = \
   algo/x11/x11gost-4way.c \
   algo/x11/x11k-gate.c \
   algo/x11/x11k.c \
+  algo/x11/x11kvs-gate.c \
+  algo/x11/x11kvs.c \
   algo/x11/c11-gate.c \
   algo/x11/c11.c \
   algo/x11/c11-4way.c \

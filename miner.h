@@ -639,6 +639,7 @@ enum algos {
         ALGO_X11,
         ALGO_X11EVO,         
         ALGO_X11GOST,
+        ALGO_X11K,
         ALGO_X12,
         ALGO_X13,         
         ALGO_X13BCD,
@@ -739,6 +740,7 @@ static const char* const algo_names[] = {
         "x11",
         "x11evo",
         "x11gost",
+        "x11k",
         "x12",
         "x13",
         "x13bcd",
@@ -907,6 +909,7 @@ Options:\n\
                           x11           Dash\n\
                           x11evo        Revolvercoin (XRE)\n\
                           x11gost       sib (SibCoin)\n\
+                          x11k          Sapphire, Kyanite, Heliodor\n\
                           x12           Galaxie Cash (GCH)\n\
                           x13           X13\n\
                           x13bcd        bcd \n\

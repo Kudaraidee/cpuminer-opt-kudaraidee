@@ -147,6 +147,7 @@ Supported Algorithms
                           yescryptr32   WAVI
                           yespower      Cryply
                           yespowerarwn  Arowanacoin(ARWN)
+                          yespowermgpc	Magpiecoin (MGPC)
                           yespowerr16   Yenten (YTN)
                           yespowersugar Suagrchain (SUGAR)
                           yespowerurx   UraniumX (URX)

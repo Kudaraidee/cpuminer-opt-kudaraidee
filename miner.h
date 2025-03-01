@@ -666,6 +666,7 @@ enum algos {
         ALGO_YESCRYPTR32,
         ALGO_YESPOWER,
         ALGO_YESPOWERARWN,
+        ALGO_YESPOWERMGPC,
         ALGO_YESPOWERR16,
         ALGO_YESPOWERSUGAR,
         ALGO_YESPOWERURX,
@@ -769,6 +770,7 @@ static const char* const algo_names[] = {
         "yescryptr32",
         "yespower",
         "yespowerarwn",
+        "yespowermgpc",
         "yespowerr16",
         "yespowersugar",
         "yespowerurx",
@@ -940,6 +942,7 @@ Options:\n\
                           yescryptr32   WAVI\n\
                           yespower      Cryply\n\
                           yespowerarwn  ARWN\n\
+                          yespowermgpc	Magpies\n\
                           yespowerr16   Yenten (YTN)\n\
                           yespowersugar Sugarchain (SUGAR)\n\
                           yespowerurx   UraniumX (URX)\n\

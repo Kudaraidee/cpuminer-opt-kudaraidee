@@ -578,6 +578,7 @@ enum algos {
         ALGO_ANIME,
         ALGO_ARGON2D250,
         ALGO_ARGON2D500,
+        ALGO_ARGON2D1000,
         ALGO_ARGON2D4096,
         ALGO_ARGON2D16000,
         ALGO_AXIOM,       
@@ -680,6 +681,7 @@ static const char* const algo_names[] = {
         "anime",
         "argon2d250",
         "argon2d500",
+        "argon2d1000",
         "argon2d4096",
         "argon2d16000",
         "axiom",
@@ -846,10 +848,11 @@ Options:\n\
                           allium        Garlicoin (GRLC)\n\
                           anime         Animecoin (ANI)\n\
                           argon2        Argon2 Coin (AR2)\n\
-                          argon2d250    argon2d-crds, Credits (CRDS)\n\
-                          argon2d500    argon2d-dyn, Dynamic (DYN)\n\
-                          argon2d4096   argon2d-uis, Unitus (UIS)\n\
-                          argon2d16000  argon2d-bcrs, Alterdot (ADOT)\n\
+                          argon2d250\n\
+                          argon2d500\n\
+                          argon2d1000\n\
+                          argon2d4096\n\
+                          argon2d16000\n\
                           axiom         Shabal-256 MemoHash\n\
                           blake         blake256r14 (SFR)\n\
                           blake2b       Blake2b 256\n\

@@ -57,6 +57,7 @@ Supported Algorithms
                           argon2        Argon2 coin (AR2)
                           argon2d250
                           argon2d500
+                          argon2d1000
                           argon2d4096
                           argon2d16000
                           blake         Blake-256 (SFR)
@@ -119,6 +120,8 @@ Supported Algorithms
                           whirlpoolx
                           x11           Dash
                           x11evo        Revolvercoin
+                          x11k
+                          x11kvs
                           x11gost       sib (SibCoin)
                           x12           
                           x13           

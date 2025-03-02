@@ -71,6 +71,7 @@ Supported Algorithms
                           decred
                           deep          Deepcoin (DCN)
                           dmd-gr        Diamond-Groestl
+                          flex          Flex
                           groestl       Groestl coin
                           hex           x16r-hex
                           hmq1725       

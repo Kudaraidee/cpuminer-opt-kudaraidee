@@ -129,8 +129,8 @@ void x11kv(void *state, const void *input)
 			break;
 		case 7:
 			cubehashInit(&ctx.cube, 512, 16, 32);
-			cubehashUpdate(&ctx.cube, (const byte *)hash, 64);
-			cubehashDigest(&ctx.cube, (byte *)hash);
+			cubehashUpdate(&ctx.cube, hash, 64);
+			cubehashDigest(&ctx.cube, hash);
 			break;
 		case 8:
 			sph_shavite512_init(&ctx.shavite);

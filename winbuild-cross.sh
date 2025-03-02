@@ -80,13 +80,21 @@ make -j 8
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-avx2.exe
 
+# AVX: Intel Sandybridge, Ivybridge
+make clean || echo clean
+rm -f config.status
+CFLAGS="-march=corei7-avx $DEFAULT_CFLAGS_OLD" ./configure $CONFIGURE_ARGS 
+make -j 8
+strip -s cpuminer.exe
+mv cpuminer.exe release/cpuminer-avx.exe
+
 # AVX AES: Intel Sandybridge, Ivybridge
 make clean || echo clean
 rm -f config.status
 CFLAGS="-march=corei7-avx -maes $DEFAULT_CFLAGS_OLD" ./configure $CONFIGURE_ARGS 
 make -j 8
 strip -s cpuminer.exe
-mv cpuminer.exe release/cpuminer-avx.exe
+mv cpuminer.exe release/cpuminer-avx-aes.exe
 
 # SSE4.2 AES: Intel Westmere
 make clean || echo clean

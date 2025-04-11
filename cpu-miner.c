@@ -40,7 +40,6 @@
 //#include <mm_malloc.h>
 #include "sysinfos.c"
 #include "algo/sha/sha256d.h"
-
 #ifdef WIN32
 #include <winsock2.h>
 #include <windows.h>
@@ -55,6 +54,9 @@
 #if HAVE_SYS_PARAM_H
 #include <sys/param.h>
 #endif
+
+
+
 
 // GCC 9 warning sysctl.h is deprecated
 #if ( __GNUC__ < 9 )
@@ -79,6 +81,24 @@
 #ifdef _MSC_VER
 #include <Mmsystem.h>
 #pragma comment(lib, "winmm.lib")
+#endif
+#if defined(_WIN32) || defined(_WIN64)
+    // Windows (MinGWなど) 向け：LEなので変換が必要な場合は bswap を使う
+    static inline uint32_t htole32(uint32_t x) {
+        return ((x >> 24) & 0x000000FF) |
+               ((x >> 8)  & 0x0000FF00) |
+               ((x << 8)  & 0x00FF0000) |
+               ((x << 24) & 0xFF000000);
+    }
+    static inline uint32_t htobe32(uint32_t x) {
+      return ((x >> 24) & 0x000000FF) |
+             ((x >> 8)  & 0x0000FF00) |
+             ((x << 8)  & 0x00FF0000) |
+             ((x << 24) & 0xFF000000);
+  }
+#else
+    // Linux/Unix：標準の htole32 を使う
+    #include <endian.h>
 #endif
 
 #define LP_SCANTIME		60
@@ -118,6 +138,7 @@ int opt_param_n = 0;
 int opt_param_r = 0;
 int opt_n_threads = 0;
 bool opt_sapling = false;
+bool opt_mweb = false;     // add mweb option definition
 static uint64_t opt_affinity = 0xFFFFFFFFFFFFFFFFULL;  // default, use all cores
 int opt_priority = 0;  // deprecated
 int num_cpus = 1;
@@ -601,7 +622,7 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
          goto out;
       }
    }
-
+   
    if ( unlikely( !jobj_binary(val, "previousblockhash", prevhash,
         sizeof(prevhash)) ) )
    {
@@ -617,11 +638,13 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
    }
    curtime = (uint32_t) json_integer_value(tmp);
 
-   if ( unlikely( !jobj_binary( val, "bits", &bits, sizeof(bits) ) ) )
+   uint32_t bits_be;
+   if ( unlikely( !jobj_binary( val, "bits", &bits_be, sizeof(bits_be) ) ) )
    {
-      applog(LOG_ERR, "JSON invalid bits");
-      goto out;
+       applog(LOG_ERR, "JSON invalid bits");
+       goto out;
    }
+   bits = be32dec(&bits_be);
 
    if ( work->sapling )
    {
@@ -870,9 +893,9 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
    work->tx_count = tx_count;
 
    /* assemble block header */
-   algo_gate.build_block_header( work, swab32( version ),
+   algo_gate.build_block_header( work, version,
                                  (uint32_t*) prevhash, (uint32_t*) merkle_tree,
-                                 swab32( curtime ), le32dec( &bits ),
+                                 curtime, bits,
                                  final_sapling_hash );
 
    if ( unlikely( !jobj_binary( val, "target", target, sizeof(target) ) ) )
@@ -881,10 +904,10 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
       goto out;
    }
 
-   // reverse the bytes in target
-   casti_v128( work->target, 0 ) = v128_bswap128( casti_v128( target, 1 ) );
-   casti_v128( work->target, 1 ) = v128_bswap128( casti_v128( target, 0 ) );
-   net_diff = work->targetdiff = hash_to_diff( work->target );
+   for (int i = 0; i < 32; i++) {
+      ((uint8_t*)work->target)[i] = ((uint8_t*)target)[31 - i];
+   }
+   net_diff = work->targetdiff = hash_to_diff(work->target);
 
    tmp = json_object_get( val, "workid" );
    if ( tmp )
@@ -1064,7 +1087,7 @@ void report_summary_log( bool force )
    uint64_t accepts = accept_sum;  accept_sum = 0;
    uint64_t rejects = reject_sum;  reject_sum = 0;
    uint64_t stales  = stale_sum;   stale_sum  = 0;
-   uint64_t solved  = solved_sum;  solved_sum = 0;
+   uint64_t solved  = solved_sum;  solved_sum  = 0;
    memcpy( &start_time, &five_min_start, sizeof start_time );
    memcpy( &five_min_start, &now, sizeof now );
 
@@ -1407,41 +1430,41 @@ bool std_be_submit_getwork_result( CURL *curl, struct work *work )
    return true;
 }
 
-char* std_malloc_txs_request( struct work *work )
+char* std_malloc_txs_request(struct work *work)
 {
-  char *req;
-  json_t *val;
-  char data_str[2 * sizeof(work->data) + 1];
-  int i;
-  // datasize is an ugly hack, it should go through the gate
-  int datasize = work->sapling ? 112 : 80;
+    char *req;
+    json_t *val;
+    char data_str[2 * sizeof(work->data) + 1];
+    int i;
+    int datasize = work->sapling ? 112 : 80;
+    // この処理に変更する：
+    bin2hex(data_str, (unsigned char *)work->data, datasize);
 
-  for ( i = 0; i < ARRAY_SIZE(work->data); i++ )
-     be32enc( work->data + i, work->data[i] );
-  bin2hex( data_str, (unsigned char *)work->data, datasize );
-  if ( work->workid )
-  {
-    char *params;
-    val = json_object();
-    json_object_set_new( val, "workid", json_string( work->workid ) );
-    params = json_dumps( val, 0 );
-    json_decref( val );
-    req = (char*) malloc( 128 + 2 * datasize + strlen( work->txs )
-                            + strlen( params ) );
-    sprintf( req,
-     "{\"method\": \"submitblock\", \"params\": [\"%s%s\", %s], \"id\":4}\r\n",
-      data_str, work->txs, params );
-    free( params );
-  }
-  else
-  {
-    req = (char*) malloc( 128 + 2 * datasize + strlen( work->txs ) );
-    sprintf( req,
-         "{\"method\": \"submitblock\", \"params\": [\"%s%s\"], \"id\":4}\r\n",
-         data_str, work->txs);
-  }
-  return req;
-} 
+
+    if (work->workid)
+    {
+        char *params;
+        val = json_object();
+        json_object_set_new(val, "workid", json_string(work->workid));
+        params = json_dumps(val, 0);
+        json_decref(val);
+        req = (char *)malloc(128 + 2 * datasize + strlen(work->txs) + strlen(params));
+        sprintf(req,
+                "{\"method\": \"submitblock\", \"params\": [\"%s%s\", %s], \"id\":4}\r\n",
+                data_str, work->txs, params);
+        free(params);
+    }
+    else
+    {
+        req = (char *)malloc(128 + 2 * datasize + strlen(work->txs));
+        sprintf(req,
+                "{\"method\": \"submitblock\", \"params\": [\"%s%s\"], \"id\":4}\r\n",
+                data_str, work->txs);
+    }
+
+    return req;
+}
+
 
 static bool submit_upstream_work( CURL *curl, struct work *work )
 {
@@ -1505,6 +1528,7 @@ const char *getwork_req =
 #define GBT_CAPABILITIES "[\"coinbasetxn\", \"coinbasevalue\", \"longpoll\", \"workid\"]"
 
 #define GBT_RULES "[\"segwit\"]"
+#define GBT_MWEB_RULES "[\"segwit\", \"mweb\"]"
 
 static const char *gbt_req =
    "{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
@@ -1512,6 +1536,14 @@ static const char *gbt_req =
 const char *gbt_lp_req =
    "{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
    GBT_CAPABILITIES ", \"rules\": " GBT_RULES ", \"longpollid\": \"%s\"}], \"id\":0}\r\n";
+
+static const char *gbt_mweb_req =
+"{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
+GBT_CAPABILITIES ", \"rules\": " GBT_MWEB_RULES "}], \"id\":0}\r\n";
+const char *gbt_lp_mweb_req =
+"{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
+GBT_CAPABILITIES ", \"rules\": " GBT_MWEB_RULES ", \"longpollid\": \"%s\"}], \"id\":0}\r\n";
+
 
 static bool get_upstream_work( CURL *curl, struct work *work )
 {
@@ -1522,10 +1554,14 @@ static bool get_upstream_work( CURL *curl, struct work *work )
 
 start:
    gettimeofday( &tv_start, NULL );
-
-   val = json_rpc_call( curl, rpc_url, rpc_userpass,
-		           have_gbt ? gbt_req : getwork_req, &err,
+   if ( opt_mweb )
+      val = json_rpc_call( curl, rpc_url, rpc_userpass,
+                 have_gbt ? gbt_mweb_req : getwork_req, &err,
                            have_gbt ? JSON_RPC_QUIET_404 : 0);
+   else
+      val = json_rpc_call( curl, rpc_url, rpc_userpass,
+      have_gbt ? gbt_req : getwork_req, &err,
+                have_gbt ? JSON_RPC_QUIET_404 : 0);
  
    gettimeofday( &tv_end, NULL );
 
@@ -1654,7 +1690,7 @@ static void workio_cmd_free(struct workio_cmd *wc)
 		work_free(wc->u.work);
 		free(wc->u.work);
 		break;
-	default: /* do nothing */
+	default:		/* do nothing */
 		break;
 	}
 
@@ -2434,8 +2470,15 @@ json_t *std_longpoll_rpc_call( CURL *curl, int *err, char* lp_url )
    char *req = NULL;
    if (have_gbt)
    {
-       req = (char*) malloc( strlen(gbt_lp_req) + strlen(lp_id) + 1 );
-       sprintf( req, gbt_lp_req, lp_id );
+       if (opt_mweb) {
+          req = (char*) malloc( strlen(gbt_lp_mweb_req) + strlen(lp_id) + 1 );
+          sprintf( req, gbt_lp_mweb_req, lp_id );
+       }
+       else
+       {
+          req = (char*) malloc( strlen(gbt_lp_req) + strlen(lp_id) + 1 );
+          sprintf( req, gbt_lp_req, lp_id );
+       }
    }
    val = json_rpc_call( curl, rpc_url, rpc_userpass, getwork_req, err,
                         JSON_RPC_LONGPOLL );
@@ -2625,15 +2668,19 @@ void std_build_block_header( struct work* g_work, uint32_t version,
    memset( g_work->data, 0, sizeof(g_work->data) );
    g_work->data[0] = version;
    g_work->sapling = opt_sapling;
-
-   if ( have_stratum ) for ( i = 0; i < 8; i++ )
-         g_work->data[ 1+i ] = le32dec( prevhash + i );
-   else for (i = 0; i < 8; i++)
-         g_work->data[ 8-i ] = le32dec( prevhash + i );
-   for ( i = 0; i < 8; i++ )
-      g_work->data[ 9+i ] = be32dec( merkle_tree + i );
+   if (have_stratum) {
+      g_work->data[0] = swab32(version);
+      for (int i = 0; i < 8; i++)
+         g_work->data[1 + i] = swab32(prevhash[i]);
+   }
+   else for (int i = 0; i < 8; i++)
+      g_work->data[1 + i] = swab32(prevhash[7 - i]);
+   //for ( i = 0; i < 8; i++ )
+   //   g_work->data[ 9+i ] = be32dec( merkle_tree + i );
+   memcpy(&g_work->data[9], merkle_tree, 32);
    g_work->data[ algo_gate.ntime_index ] = ntime;
    g_work->data[ algo_gate.nbits_index ] = nbits;
+   g_work->data[ algo_gate.nonce_index ] = 0;
 
    if ( g_work->sapling )
    {
@@ -2663,9 +2710,9 @@ void std_build_extraheader( struct work* g_work, struct stratum_ctx* sctx )
    uchar merkle_tree[64] = { 0 };
 
    algo_gate.gen_merkle_root( merkle_tree, sctx );
-   algo_gate.build_block_header( g_work, le32dec( sctx->job.version ),
+   algo_gate.build_block_header( g_work, le32dec(sctx->job.version),
           (uint32_t*) sctx->job.prevhash, (uint32_t*) merkle_tree,
-          le32dec( sctx->job.ntime ), le32dec(sctx->job.nbits),
+          swab32(le32dec(sctx->job.ntime)), swab32(le32dec(sctx->job.nbits)),
           sctx->job.final_sapling_hash );
 }
 
@@ -3054,7 +3101,7 @@ static bool cpu_capability( bool display_only )
         else if ( sw_has_sme     )   printf( " SME"    );
      }
      if         ( sw_has_vaes    )   printf( " VAES"   );
-     else if    ( sw_has_aes     )   printf( "  AES"   );
+     else if    ( sw_has_aes     )   printf( " AES"    );
      if         ( sw_has_sha512  )   printf( " SHA512" );
      else if    ( sw_has_sha256  )   printf( " SHA256" );
 
@@ -3068,12 +3115,12 @@ static bool cpu_capability( bool display_only )
         else
         {
            if      ( algo_has_avx512 )  printf( " AVX512" );
-           else if ( algo_has_avx2   )  printf( " AVX2  " );
+           else if ( algo_has_avx2   )  printf( " AVX2"   );
            else if ( algo_has_sse42  )  printf( " SSE4.2" );
-           else if ( algo_has_sse2   )  printf( " SSE2  " );
+           else if ( algo_has_sse2   )  printf( " SSE2"   );
            if      ( algo_has_neon   )  printf( " NEON"   );
            if      ( algo_has_vaes   )  printf( " VAES"   );
-           else if ( algo_has_aes    )  printf( "  AES"   );
+           else if ( algo_has_aes    )  printf( " AES"    );
            if      ( algo_has_sha512 )  printf( " SHA512" );
            else if ( algo_has_sha256 )  printf( " SHA256" );
         }
@@ -3570,7 +3617,9 @@ void parse_arg(int key, char *arg )
       exit(0);
 	case 'h':   // help
 		show_usage_and_exit(0);
-
+   case 1032:  // --mweb
+      opt_mweb = true;
+      break;
    default:
 		show_usage_and_exit(1);
 	}

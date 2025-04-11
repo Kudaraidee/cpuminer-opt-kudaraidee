@@ -154,6 +154,7 @@ Supported Algorithms
                           yespowerurx   UraniumX (URX)
                           yespower-b2b  generic yespower + blake2b
                           zr5           Ziftr
+                          rinhash       RinHash
 
 Many variations of scrypt based algos can be mine by specifying their
 parameters:

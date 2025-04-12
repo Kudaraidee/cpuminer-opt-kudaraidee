@@ -337,6 +337,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_POWER2B:      rc = register_power2b_algo       ( gate ); break;
     case ALGO_QUARK:        rc = register_quark_algo         ( gate ); break;
     case ALGO_QUBIT:        rc = register_qubit_algo         ( gate ); break;
+    case ALGO_RINHASH:      rc = register_rin_algo           ( gate ); break;
     case ALGO_SCRYPT:       rc = register_scrypt_algo        ( gate ); break;
     case ALGO_SHA256D:      rc = register_sha256d_algo       ( gate ); break;
     case ALGO_SHA256DT:     rc = register_sha256dt_algo      ( gate ); break;
@@ -445,6 +446,7 @@ const char* const algo_alias_map[][2] =
   { "myriad",            "myr-gr"         },
   { "neo",               "neoscrypt"      },
   { "phi",               "phi1612"        },
+  { "rinhash",           "rinhash"        },
   { "scryptn2",          "scrypt:1048576" },
   { "sib",               "x11gost"        },
   { "timetravel8",       "timetravel"     },

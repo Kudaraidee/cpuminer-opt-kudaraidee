@@ -311,8 +311,19 @@ cpuminer_SOURCES = \
   algo/yespower/yescrypt-r8g.c \
   algo/yespower/yespower-opt.c \
   algo/yespower/yespower-ref.c \
-  algo/yespower/yespower-blake2b-ref.c
-
+  algo/yespower/yespower-blake2b-ref.c \
+  algo/rinhash/rinhash.c \
+  algo/rinhash/blake3/blake3.c \
+  algo/rinhash/blake3/blake3_dispatch.c \
+  algo/rinhash/blake3/blake3_portable.c \
+  algo/rinhash/blake3/blake3_sse2_x86-64_unix.S \
+  algo/rinhash/blake3/blake3_sse41_x86-64_unix.S \
+  algo/rinhash/blake3/blake3_avx2_x86-64_unix.S \
+  algo/rinhash/blake3/blake3_avx512_x86-64_unix.S \
+  algo/rinhash/sha3/SimpleFIPS202.c \
+  algo/rinhash/sha3/KeccakSponge.c \
+  algo/rinhash/sha3/KeccakP-1600-reference.c 
+  
 if HAVE_WINDOWS
    cpuminer_SOURCES += compat/winansi.c
 endif
@@ -326,8 +337,8 @@ endif
 
 cpuminer_LDFLAGS = @LDFLAGS@
 cpuminer_LDADD	= $(EXTRA_LIBS) @LIBCURL@ -ljansson @PTHREAD_LIBS@ @WS2_LIBS@ -lgmp
-cpuminer_CPPFLAGS = @LIBCURL_CPPFLAGS@ $(ALL_INCLUDES)
-cpuminer_CFLAGS = -Wno-pointer-sign -Wno-pointer-to-int-cast $(disable_flags)
+cpuminer_CPPFLAGS = @LIBCURL_CPPFLAGS@ $(ALL_INCLUDES) -DXKCP_has_KeccakP1600
+cpuminer_CFLAGS = -Wno-pointer-sign -Wno-pointer-to-int-cast -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 $(disable_flags)
 
 if ARCH_ARM64
    cpuminer_CFLAGS += -flax-vector-conversions

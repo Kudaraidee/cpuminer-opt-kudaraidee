@@ -131,12 +131,12 @@ static const char ASCII_BELL =  '\a';
 enum {
    LOG_CRIT,
    LOG_ERR,
-	LOG_WARNING,
-	LOG_NOTICE,
-	LOG_INFO,
-	LOG_DEBUG,
+   LOG_WARNING,
+   LOG_NOTICE,
+   LOG_INFO,
+   LOG_DEBUG,
    /* custom notices */
-	LOG_BLUE  = 0x10,
+   LOG_BLUE  = 0x10,
    LOG_MAJR  = 0x11,
    LOG_MINR  = 0x12,
    LOG_GREEN = 0x13,
@@ -619,6 +619,7 @@ enum algos {
         ALGO_POWER2B,
         ALGO_QUARK,
         ALGO_QUBIT,       
+        ALGO_RINHASH,     // Add RinHash algorithm
         ALGO_SCRYPT,
         ALGO_SHA256D,
         ALGO_SHA256DT,
@@ -724,6 +725,7 @@ static const char* const algo_names[] = {
         "power2b",
         "quark",
         "qubit",
+        "rinhash",
         "scrypt",
         "sha256d",
         "sha256dt",
@@ -895,6 +897,7 @@ Options:\n\
                           power2b       MicroBitcoin (MBC)\n\
                           quark         Quark\n\
                           qubit         Qubit\n\
+                          rinhash       RinHash\n\
                           scrypt        scrypt(1024, 1, 1) (default)\n\
                           scrypt:N      scrypt(N, 1, 1)\n\
                           scryptn2      scrypt(1048576, 1,1)\n\

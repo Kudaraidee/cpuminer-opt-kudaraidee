@@ -391,7 +391,6 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_YESPOWERURX:   rc = register_yespowerurx_algo  ( gate ); break;
     case ALGO_YESPOWER_B2B: rc = register_yespower_b2b_algo  ( gate ); break;
     case ALGO_ZR5:          rc = register_zr5_algo           ( gate ); break;
-    case ALGO_RINHASH:      rc = register_rin_algo           ( gate ); break;
    default:
       applog(LOG_ERR,"BUG: unregistered algorithm %s.\n", algo_names[opt_algo] );
       return false;
@@ -456,7 +455,7 @@ const char* const algo_alias_map[][2] =
   { "yespowersugar",     "yespowersugar"  },
   { "yespowerurx",     	 "yespowerurx"    },
   { "ziftr",             "zr5"            },
-  { "rinhash",           "rinhash"        } 
+  { NULL,                NULL             }   
 };
 
 // if arg is a valid alias for a known algo it is updated with the proper

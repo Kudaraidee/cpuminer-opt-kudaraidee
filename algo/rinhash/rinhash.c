@@ -99,7 +99,6 @@ int scanhash_rinhash(struct work *work, uint32_t max_nonce,
         rinhash(hash, pdata);
         uint32_t hash32[8];
 
-        // 安全に変換（リトルエンディアン）
         for (int i = 0; i < 8; i++) {
             hash32[i] = ((uint32_t)hash[i*4 + 0]) |
                         ((uint32_t)hash[i*4 + 1] << 8) |
@@ -117,6 +116,67 @@ int scanhash_rinhash(struct work *work, uint32_t max_nonce,
     return 0;
 }
 
+void rin_build_block_header( struct work* g_work, uint32_t version,
+       uint32_t *prevhash, uint32_t *merkle_tree, uint32_t ntime,
+       uint32_t nbits, unsigned char *final_sapling_hash )
+{
+   int i;
+
+   memset( g_work->data, 0, sizeof(g_work->data) );
+   g_work->data[0] = version;
+   g_work->sapling = opt_sapling;
+
+   if (have_stratum) {
+      g_work->data[0] = swab32(version);
+      for (int i = 0; i < 8; i++)
+         g_work->data[1 + i] = swab32(prevhash[i]);
+   }
+   else for (int i = 0; i < 8; i++)
+      g_work->data[1 + i] = swab32(prevhash[7 - i]);
+   memcpy(&g_work->data[9], merkle_tree, 32);
+
+   g_work->data[ algo_gate.ntime_index ] = ntime;
+   g_work->data[ algo_gate.nbits_index ] = nbits;
+   g_work->data[ algo_gate.nonce_index ] = 0;
+
+   if ( g_work->sapling )
+   {
+      if ( have_stratum )
+         for ( i = 0; i < 8; i++ )
+            g_work->data[20 + i] = le32dec( (uint32_t*)final_sapling_hash + i );
+      else
+      {
+         for ( i = 0; i < 8; i++ )
+            g_work->data[27 - i] = le32dec( (uint32_t*)final_sapling_hash + i );
+         g_work->data[19] = 0;
+      }      
+      g_work->data[28] = 0x80000000;
+      g_work->data[29] = 0x00000000;
+      g_work->data[30] = 0x00000000;
+      g_work->data[31] = 0x00000380;
+   }
+   else
+   {
+      g_work->data[20] = 0x80000000;
+      g_work->data[31] = 0x00000280;
+   }
+}
+
+void rin_build_extraheader( struct work* g_work, struct stratum_ctx* sctx )
+{
+   uchar merkle_tree[64] = { 0 };
+
+   algo_gate.gen_merkle_root( merkle_tree, sctx );
+
+   algo_gate.build_block_header( g_work, le32dec( sctx->job.version ),
+          (uint32_t*) sctx->job.prevhash, (uint32_t*) merkle_tree,
+          le32dec( sctx->job.ntime ), le32dec(sctx->job.nbits),
+          sctx->job.final_sapling_hash );
+   algo_gate.build_block_header( g_work, le32dec(sctx->job.version),
+          (uint32_t*) sctx->job.prevhash, (uint32_t*) merkle_tree,
+          swab32(le32dec(sctx->job.ntime)), swab32(le32dec(sctx->job.nbits)),
+          sctx->job.final_sapling_hash );
+}
 
 // Register algorithm
 bool register_rin_algo( algo_gate_t* gate )
@@ -124,5 +184,8 @@ bool register_rin_algo( algo_gate_t* gate )
     gate->scanhash = (void*)&scanhash_rinhash;
     gate->hash = (void*)&rinhash;
     gate->optimizations = SSE2_OPT | AVX2_OPT | AVX512_OPT;
+    gate->build_stratum_request = (void*)&std_be_build_stratum_request;
+    gate->build_block_header = (void*)&rin_build_block_header;
+    gate->build_extraheader = (void*)&rin_build_extraheader;
     return true;
 }

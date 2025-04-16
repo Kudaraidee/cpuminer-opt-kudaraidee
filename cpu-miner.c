@@ -3054,8 +3054,8 @@ static bool cpu_capability( bool display_only )
        if      ( cpu_has_avx10  )    printf( " AVX10.%d-%d", avx10_version(),
                                                        avx10_vector_length() );
        if      ( cpu_has_avx512 )    printf( " AVX512" );
-       else if ( cpu_has_avx2   )    printf( " AVX2  " );
-       else if ( cpu_has_avx    )    printf( " AVX   " );
+       else if ( cpu_has_avx2   )    printf( " AVX2" );
+       else if ( cpu_has_avx    )    printf( " AVX" );
        else if ( cpu_has_sse42  )    printf( " SSE4.2" );
        else if ( cpu_has_sse41  )    printf( " SSE4.1" );
        else if ( cpu_has_ssse3  )    printf( " SSSE3 " );
@@ -3097,7 +3097,7 @@ static bool cpu_capability( bool display_only )
         else if ( sw_has_sme     )   printf( " SME"    );
      }
      if         ( sw_has_vaes    )   printf( " VAES"   );
-     else if    ( sw_has_aes     )   printf( "  AES"   );
+     else if    ( sw_has_aes     )   printf( " AES"   );
      if         ( sw_has_sha512  )   printf( " SHA512" );
      else if    ( sw_has_sha256  )   printf( " SHA256" );
 

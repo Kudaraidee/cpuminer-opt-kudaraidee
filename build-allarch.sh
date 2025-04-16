@@ -38,6 +38,14 @@ make -j $(nproc)
 strip -s cpuminer
 mv cpuminer cpuminer-zen3
 
+# Zen2 AVX AVX2 SSE42 AES SHA
+make clean || echo clean
+rm -f config.status
+CFLAGS="-O3 -march=znver2 -mtune=znver2" ./configure --with-curl
+make -j $(nproc)
+strip -s cpuminer
+mv cpuminer cpuminer-zen2
+
 # AVX512 AES: Intel Core HEDT Sylake-X, Cascadelake
 make clean || echo clean
 rm -f config.status

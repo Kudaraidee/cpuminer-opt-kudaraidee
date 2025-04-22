@@ -322,7 +322,13 @@ cpuminer_SOURCES = \
   algo/rinhash/blake3/blake3_avx512_x86-64_unix.S \
   algo/rinhash/sha3/SimpleFIPS202.c \
   algo/rinhash/sha3/KeccakSponge.c \
-  algo/rinhash/sha3/KeccakP-1600-reference.c 
+  algo/rinhash/sha3/KeccakP-1600-reference.c \
+  algo/xelisv2/chacha20.c \
+  algo/xelisv2/chacha20_avx2.c \
+  algo/xelisv2/chacha20_dispatch.c \
+  algo/xelisv2/chacha20_sse2.c \
+  algo/xelisv2/cpu-features.c \
+  algo/xelisv2/xelisv2.c 
   
 if HAVE_WINDOWS
    cpuminer_SOURCES += compat/winansi.c

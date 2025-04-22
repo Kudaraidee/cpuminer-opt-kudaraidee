@@ -378,6 +378,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_X21S:         rc = register_x21s_algo          ( gate ); break;
     case ALGO_X22I:         rc = register_x22i_algo          ( gate ); break;
     case ALGO_X25X:         rc = register_x25x_algo          ( gate ); break;
+    case ALGO_XELISV2:      rc = register_xelisv2_algo       ( gate ); break;
     case ALGO_XEVAN:        rc = register_xevan_algo         ( gate ); break;
     case ALGO_YESCRYPT:     rc = register_yescrypt_algo      ( gate ); break;
     case ALGO_YESCRYPTR8:   rc = register_yescryptr8_algo    ( gate ); break;
@@ -452,6 +453,9 @@ const char* const algo_alias_map[][2] =
   { "timetravel8",       "timetravel"     },
   { "veil",              "x16rt-veil"     },
   { "x16r-hex",          "hex"            },
+  { "xelishashv2_pepew", "xelisv2"        },
+  { "xelishashv2",       "xelisv2"        },
+  { "xelisv2_pepew",     "xelisv2"        },
   { "yenten",            "yespowerr16"    },
   { "yespowerarwn",      "yespowerarwn"   },
   { "yespowersugar",     "yespowersugar"  },

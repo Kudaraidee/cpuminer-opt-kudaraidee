@@ -167,11 +167,6 @@ void rin_build_extraheader( struct work* g_work, struct stratum_ctx* sctx )
    uchar merkle_tree[64] = { 0 };
 
    algo_gate.gen_merkle_root( merkle_tree, sctx );
-
-   algo_gate.build_block_header( g_work, le32dec( sctx->job.version ),
-          (uint32_t*) sctx->job.prevhash, (uint32_t*) merkle_tree,
-          le32dec( sctx->job.ntime ), le32dec(sctx->job.nbits),
-          sctx->job.final_sapling_hash );
    algo_gate.build_block_header( g_work, le32dec(sctx->job.version),
           (uint32_t*) sctx->job.prevhash, (uint32_t*) merkle_tree,
           swab32(le32dec(sctx->job.ntime)), swab32(le32dec(sctx->job.nbits)),

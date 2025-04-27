@@ -178,7 +178,7 @@ bool register_rin_algo( algo_gate_t* gate )
 {
     gate->scanhash = (void*)&scanhash_rinhash;
     gate->hash = (void*)&rinhash;
-    gate->optimizations = SSE2_OPT | AVX2_OPT | AVX512_OPT;
+    gate->optimizations = SSE2_OPT | AVX_OPT | AVX2_OPT | AVX512_OPT;
     gate->build_stratum_request = (void*)&std_be_build_stratum_request;
     gate->build_block_header = (void*)&rin_build_block_header;
     gate->build_extraheader = (void*)&rin_build_extraheader;

@@ -668,6 +668,7 @@ enum algos {
         ALGO_YESCRYPTR16,
         ALGO_YESCRYPTR32,
         ALGO_YESPOWER,
+        ALGO_YESPOWERADVC,
         ALGO_YESPOWERARWN,
         ALGO_YESPOWERMGPC,
         ALGO_YESPOWERR16,
@@ -775,6 +776,7 @@ static const char* const algo_names[] = {
         "yescryptr16",
         "yescryptr32",
         "yespower",
+        "yespoweradvc",
         "yespowerarwn",
         "yespowermgpc",
         "yespowerr16",
@@ -951,6 +953,7 @@ Options:\n\
                           yescryptr16   Eli\n\
                           yescryptr32   WAVI\n\
                           yespower      Cryply\n\
+                          yespoweradvc  AdventureCoin (ADVC)\n\
                           yespowerarwn  ARWN\n\
                           yespowermgpc	Magpies\n\
                           yespowerr16   Yenten (YTN)\n\

@@ -425,3 +425,18 @@ bool register_yespowermgpc_algo( algo_gate_t* gate )
   opt_target_factor = 65536.0;
   return true;
  };
+
+bool register_yespoweradvc_algo( algo_gate_t* gate )
+{
+  yespower_params.version = YESPOWER_1_0;
+  yespower_params.N       = 2048;
+  yespower_params.r       = 32;
+  yespower_params.pers    = "Let the quest begin";
+  yespower_params.perslen = 19;
+  gate->optimizations = SSE2_OPT | AVX2_OPT | NEON_OPT;
+  gate->scanhash      = (void*)&scanhash_yespower;
+  gate->hash          = (void*)&yespower_hash;
+  opt_target_factor = 65536.0;
+  return true;
+ };
+

@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 
-#include "algo/rinhash/blake3/blake3.h"
+#include "algo/blake3/blake3.h"
 #include "algo/xelisv2/chacha20.h"
 #include "algo/xelisv2/aes.h"
 

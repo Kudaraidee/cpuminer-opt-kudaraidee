@@ -5,10 +5,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <malloc.h>  // _aligned_malloc, _aligned_free
-#include "blake3/blake3.h"
-#include "blake3/blake3_impl.h"
+#include "algo/blake3/blake3.h"
+#include "algo/blake3/blake3_impl.h"
 #include "sha3/SimpleFIPS202.h"
-#include "../argon2d/argon2d/argon2.h"  // Update path to argon2d header
+#include "algo/argon2d/argon2d/argon2.h"  // Update path to argon2d header
 
 typedef struct {
     blake3_hasher blake;

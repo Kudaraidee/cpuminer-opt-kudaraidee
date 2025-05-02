@@ -88,30 +88,24 @@ INLINE void output_chaining_value(const output_t *self, uint8_t cv[32]) {
 
 INLINE void output_root_bytes(const output_t *self, uint64_t seek, uint8_t *out,
                               size_t out_len) {
-  if (out_len == 0) {
-      return;
-  }
   uint64_t output_block_counter = seek / 64;
   size_t offset_within_block = seek % 64;
   uint8_t wide_buf[64];
-  if(offset_within_block) {
-    blake3_compress_xof(self->input_cv, self->block, self->block_len, output_block_counter, self->flags | ROOT, wide_buf);
-    const size_t available_bytes = 64 - offset_within_block;
-    const size_t bytes = out_len > available_bytes ? available_bytes : out_len;
-    memcpy(out, wide_buf + offset_within_block, bytes);
-    out += bytes;
-    out_len -= bytes;
+  while (out_len > 0) {
+    blake3_compress_xof(self->input_cv, self->block, self->block_len,
+                        output_block_counter, self->flags | ROOT, wide_buf);
+    size_t available_bytes = 64 - offset_within_block;
+    size_t memcpy_len;
+    if (out_len > available_bytes) {
+      memcpy_len = available_bytes;
+    } else {
+      memcpy_len = out_len;
+    }
+    memcpy(out, wide_buf + offset_within_block, memcpy_len);
+    out += memcpy_len;
+    out_len -= memcpy_len;
     output_block_counter += 1;
-  }
-  if(out_len / 64) {
-    blake3_xof_many(self->input_cv, self->block, self->block_len, output_block_counter, self->flags | ROOT, out, out_len / 64);
-  }
-  output_block_counter += out_len / 64;
-  out += out_len & -64;
-  out_len -= out_len & -64;
-  if(out_len) {
-    blake3_compress_xof(self->input_cv, self->block, self->block_len, output_block_counter, self->flags | ROOT, wide_buf);
-    memcpy(out, wide_buf, out_len);
+    offset_within_block = 0;
   }
 }
 
@@ -265,10 +259,11 @@ INLINE size_t compress_parents_parallel(const uint8_t *child_chaining_values,
 // Why not just have the caller split the input on the first update(), instead
 // of implementing this special rule? Because we don't want to limit SIMD or
 // multi-threading parallelism for that update().
-size_t blake3_compress_subtree_wide(const uint8_t *input, size_t input_len,
-                                    const uint32_t key[8],
-                                    uint64_t chunk_counter, uint8_t flags,
-                                    uint8_t *out, bool use_tbb) {
+static size_t blake3_compress_subtree_wide(const uint8_t *input,
+                                           size_t input_len,
+                                           const uint32_t key[8],
+                                           uint64_t chunk_counter,
+                                           uint8_t flags, uint8_t *out) {
   // Note that the single chunk case does *not* bump the SIMD degree up to 2
   // when it is 1. If this implementation adds multi-threading in the future,
   // this gives us the option of multi-threading even the 2-chunk case, which
@@ -302,24 +297,12 @@ size_t blake3_compress_subtree_wide(const uint8_t *input, size_t input_len,
   }
   uint8_t *right_cvs = &cv_array[degree * BLAKE3_OUT_LEN];
 
-  // Recurse!
-  size_t left_n = -1;
-  size_t right_n = -1;
-
-#if defined(BLAKE3_USE_TBB)
-  blake3_compress_subtree_wide_join_tbb(
-      key, flags, use_tbb,
-      // left-hand side
-      input, left_input_len, chunk_counter, cv_array, &left_n,
-      // right-hand side
-      right_input, right_input_len, right_chunk_counter, right_cvs, &right_n);
-#else
-  left_n = blake3_compress_subtree_wide(
-      input, left_input_len, key, chunk_counter, flags, cv_array, use_tbb);
-  right_n = blake3_compress_subtree_wide(right_input, right_input_len, key,
-                                         right_chunk_counter, flags, right_cvs,
-                                         use_tbb);
-#endif // BLAKE3_USE_TBB
+  // Recurse! If this implementation adds multi-threading support in the
+  // future, this is where it will go.
+  size_t left_n = blake3_compress_subtree_wide(input, left_input_len, key,
+                                               chunk_counter, flags, cv_array);
+  size_t right_n = blake3_compress_subtree_wide(
+      right_input, right_input_len, key, right_chunk_counter, flags, right_cvs);
 
   // The special case again. If simd_degree=1, then we'll have left_n=1 and
   // right_n=1. Rather than compressing them into a single output, return
@@ -345,18 +328,16 @@ size_t blake3_compress_subtree_wide(const uint8_t *input, size_t input_len,
 //
 // As with compress_subtree_wide(), this function is not used on inputs of 1
 // chunk or less. That's a different codepath.
-INLINE void
-compress_subtree_to_parent_node(const uint8_t *input, size_t input_len,
-                                const uint32_t key[8], uint64_t chunk_counter,
-                                uint8_t flags, uint8_t out[2 * BLAKE3_OUT_LEN],
-                                bool use_tbb) {
+INLINE void compress_subtree_to_parent_node(
+    const uint8_t *input, size_t input_len, const uint32_t key[8],
+    uint64_t chunk_counter, uint8_t flags, uint8_t out[2 * BLAKE3_OUT_LEN]) {
 #if defined(BLAKE3_TESTING)
   assert(input_len > BLAKE3_CHUNK_LEN);
 #endif
 
   uint8_t cv_array[MAX_SIMD_DEGREE_OR_2 * BLAKE3_OUT_LEN];
   size_t num_cvs = blake3_compress_subtree_wide(input, input_len, key,
-                                                chunk_counter, flags, cv_array, use_tbb);
+                                                chunk_counter, flags, cv_array);
   assert(num_cvs <= MAX_SIMD_DEGREE_OR_2);
   // The following loop never executes when MAX_SIMD_DEGREE_OR_2 is 2, because
   // as we just asserted, num_cvs will always be <=2 in that case. But GCC
@@ -447,7 +428,7 @@ INLINE void hasher_merge_cv_stack(blake3_hasher *self, uint64_t total_len) {
 //    of the whole tree, and it would need to be ROOT finalized. We can't
 //    compress it until we know.
 // 2) This 64 KiB input might complete a larger tree, whose root node is
-//    similarly going to be the root of the whole tree. For example, maybe
+//    similarly going to be the the root of the whole tree. For example, maybe
 //    we have 196 KiB (that is, 128 + 64) hashed so far. We can't compress the
 //    node at the root of the 256 KiB subtree until we know how to finalize it.
 //
@@ -472,8 +453,8 @@ INLINE void hasher_push_cv(blake3_hasher *self, uint8_t new_cv[BLAKE3_OUT_LEN],
   self->cv_stack_len += 1;
 }
 
-INLINE void blake3_hasher_update_base(blake3_hasher *self, const void *input,
-                                      size_t input_len, bool use_tbb) {
+void blake3_hasher_update(blake3_hasher *self, const void *input,
+                          size_t input_len) {
   // Explicitly checking for zero avoids causing UB by passing a null pointer
   // to memcpy. This comes up in practice with things like:
   //   std::vector<uint8_t> v;
@@ -559,7 +540,7 @@ INLINE void blake3_hasher_update_base(blake3_hasher *self, const void *input,
       uint8_t cv_pair[2 * BLAKE3_OUT_LEN];
       compress_subtree_to_parent_node(input_bytes, subtree_len, self->key,
                                       self->chunk.chunk_counter,
-                                      self->chunk.flags, cv_pair, use_tbb);
+                                      self->chunk.flags, cv_pair);
       hasher_push_cv(self, cv_pair, self->chunk.chunk_counter);
       hasher_push_cv(self, &cv_pair[BLAKE3_OUT_LEN],
                      self->chunk.chunk_counter + (subtree_chunks / 2));
@@ -580,20 +561,6 @@ INLINE void blake3_hasher_update_base(blake3_hasher *self, const void *input,
     hasher_merge_cv_stack(self, self->chunk.chunk_counter);
   }
 }
-
-void blake3_hasher_update(blake3_hasher *self, const void *input,
-                          size_t input_len) {
-  bool use_tbb = false;
-  blake3_hasher_update_base(self, input, input_len, use_tbb);
-}
-
-#if defined(BLAKE3_USE_TBB)
-void blake3_hasher_update_tbb(blake3_hasher *self, const void *input,
-                              size_t input_len) {
-  bool use_tbb = true;
-  blake3_hasher_update_base(self, input, input_len, use_tbb);
-}
-#endif // BLAKE3_USE_TBB
 
 void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
                             size_t out_len) {

@@ -2,6 +2,19 @@
 #include <stddef.h>
 #include <stdint.h>
 
+
+#define BLAKE3_NO_AVX512 // Foztor - until we can get this to compile...
+
+#if !defined(__AVX2__)
+#define BLAKE3_NO_AVX2
+#endif
+#if !defined(__SSE41__)
+#define BLAKE3_NO_SSE41
+#endif
+#if !defined(__SSE2__)
+#define BLAKE3_NO_SSE2
+#endif
+
 #include "blake3_impl.h"
 
 #if defined(_MSC_VER)
@@ -223,30 +236,6 @@ void blake3_compress_xof(const uint32_t cv[8],
   blake3_compress_xof_portable(cv, block, block_len, counter, flags, out);
 }
 
-
-void blake3_xof_many(const uint32_t cv[8],
-                     const uint8_t block[BLAKE3_BLOCK_LEN],
-                     uint8_t block_len, uint64_t counter, uint8_t flags,
-                     uint8_t out[64], size_t outblocks) {
-  if (outblocks == 0) {
-    // The current assembly implementation always outputs at least 1 block.
-    return;
-  }
-#if defined(IS_X86)
-  const enum cpu_feature features = get_cpu_features();
-  MAYBE_UNUSED(features);
-#if !defined(_WIN32) && !defined(BLAKE3_NO_AVX512)
-  if (features & AVX512VL) {
-    blake3_xof_many_avx512(cv, block, block_len, counter, flags, out, outblocks);
-    return;
-  }
-#endif
-#endif
-  for(size_t i = 0; i < outblocks; ++i) {
-    blake3_compress_xof(cv, block, block_len, counter + i, flags, out + 64*i);
-  }
-}
-
 void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
                       size_t blocks, const uint32_t key[8], uint64_t counter,
                       bool increment_counter, uint8_t flags,
@@ -254,7 +243,7 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
 #if defined(IS_X86)
   const enum cpu_feature features = get_cpu_features();
   MAYBE_UNUSED(features);
-#if !defined(BLAKE3_NO_AVX512)
+#if !defined(BLAKE3_NO_AVX512) && defined(__AVX512F__) && defined(__AVX512VL__)
   if ((features & (AVX512F|AVX512VL)) == (AVX512F|AVX512VL)) {
     blake3_hash_many_avx512(inputs, num_inputs, blocks, key, counter,
                             increment_counter, flags, flags_start, flags_end,
@@ -289,9 +278,9 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
 #endif
 
 #if BLAKE3_USE_NEON == 1
-  blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
+ blake3_hash_many_neon(inputs, num_inputs, blocks, key, counter,
                         increment_counter, flags, flags_start, flags_end, out);
-  return;
+ return;
 #endif
 
   blake3_hash_many_portable(inputs, num_inputs, blocks, key, counter,

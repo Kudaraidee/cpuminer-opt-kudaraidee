@@ -313,13 +313,14 @@ cpuminer_SOURCES = \
   algo/yespower/yespower-ref.c \
   algo/yespower/yespower-blake2b-ref.c \
   algo/rinhash/rinhash.c \
-  algo/rinhash/blake3/blake3.c \
-  algo/rinhash/blake3/blake3_dispatch.c \
-  algo/rinhash/blake3/blake3_portable.c \
-  algo/rinhash/blake3/blake3_sse2_x86-64_unix.S \
-  algo/rinhash/blake3/blake3_sse41_x86-64_unix.S \
-  algo/rinhash/blake3/blake3_avx2_x86-64_unix.S \
-  algo/rinhash/blake3/blake3_avx512_x86-64_unix.S \
+  algo/blake3/blake3.c \
+  algo/blake3/blake3_avx2.c \
+  algo/blake3/blake3_avx512.c \
+  algo/blake3/blake3_dispatch.c \
+  algo/blake3/blake3_neon.c \
+  algo/blake3/blake3_portable.c \
+  algo/blake3/blake3_sse2.c \
+  algo/blake3/blake3_sse41.c \
   algo/rinhash/sha3/SimpleFIPS202.c \
   algo/rinhash/sha3/KeccakSponge.c \
   algo/rinhash/sha3/KeccakP-1600-reference.c \

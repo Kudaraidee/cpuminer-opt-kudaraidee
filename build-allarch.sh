@@ -4,7 +4,7 @@
 # during develpment. However the information contained may provide compilation
 # tips to users.
 
-rm cpuminer-arrowlake* cpuminer-graniterapids* cpuminer-avx512-sha-vaes cpuminer-avx512 cpuminer-avx2 cpuminer-avx cpuminer-aes-avx cpuminer-aes-sse42 cpuminer-sse42 cpuminer-ssse3 cpuminer-sse2 cpuminer-zen cpuminer-zen3 cpuminer-zen4 cpuminer-zen5 cpuminer-alderlake cpuminer-x64 cpuminer-armv8 cpuminer-armv8-aes cpuminer-armv8-sha2 cpuminer-armv8-aes-sha2  > /dev/null
+rm  cpuminer-avx512-sha-vaes cpuminer-avx512 cpuminer-avx2 cpuminer-avx cpuminer-aes-avx cpuminer-aes-sse42 cpuminer-sse42 cpuminer-ssse3 cpuminer-sse2 cpuminer-zen cpuminer-zen3 cpuminer-zen4 cpuminer-zen5 cpuminer-x64 cpuminer-armv8 cpuminer-armv8-aes cpuminer-armv8-sha2 cpuminer-armv8-aes-sha2  > /dev/null
 
 # AVX512 SHA VAES: Intel Core Icelake, Rocketlake
 make distclean || echo clean
@@ -32,7 +32,6 @@ mv cpuminer cpuminer-zen4
 # Zen3 AVX2 SHA VAES
 make clean || echo clean
 rm -f config.status
-#CFLAGS="-O3 -march=znver2 -mvaes" ./configure --with-curl
 CFLAGS="-O3 -march=znver3 -fno-common " ./configure --with-curl
 make -j $(nproc)
 strip -s cpuminer

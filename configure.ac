@@ -1,4 +1,4 @@
-AC_INIT([cpuminer-kudaraidee], [1.2.2])
+AC_INIT([cpuminer-kudaraidee], [1.2.3])
 
 AC_PREREQ([2.59c])
 AC_CANONICAL_SYSTEM

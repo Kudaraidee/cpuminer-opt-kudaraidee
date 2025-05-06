@@ -4,44 +4,32 @@
 #include <cpuminer-config.h>
 
 // CPU architecture
-#if defined(__x86_64__)
-   #define USER_AGENT_ARCH "x64"     // Intel, AMD x86_64
-#endif
 #if defined(__AVX__)
    #define USER_AGENT_ARCH "avx"     
-#endif
-#if defined(__AVX__) && defined(__AES__)
+#elif defined(__AVX__) && defined(__AES__)
    #define USER_AGENT_ARCH "aes-avx"     
-#endif
-#if defined(__AVX2__)
+#elif defined(__AVX2__)
    #define USER_AGENT_ARCH "avx2"     
-#endif
-#if defined(__AVX2__) && defined(__SHA__)
+#elif defined(__AVX2__) && defined(__SHA__)
    #define USER_AGENT_ARCH "avx2-sha"     
-#endif
-#if defined(__AVX2__) && defined(__SHA__) && defined(__VAES__)
+#elif defined(__AVX2__) && defined(__SHA__) && defined(__VAES__)
    #define USER_AGENT_ARCH "avx2-sha-vaes"     
-#endif
-#if defined(__AVX512__)
+#elif defined(__AVX512__)
    #define USER_AGENT_ARCH "avx512"     
-#endif
-#if defined(__AVX512__) && defined(__SHA__) && defined(__VAES__)
+#elif defined(__AVX512__) && defined(__SHA__) && defined(__VAES__)
    #define USER_AGENT_ARCH "avx512-sha-vaes"     
-#endif
-#if defined(__SSE2__)
+#elif defined(__SSE2__)
    #define USER_AGENT_ARCH "sse2"     
-#endif
-#if defined(__SSE41__)
+#elif defined(__SSE41__)
    #define USER_AGENT_ARCH "sse41"     
-#endif
-#if defined(__SSE42__)
+#elif defined(__SSE42__)
    #define USER_AGENT_ARCH "sse42"     
-#endif
-#if defined(__SSE42__) && defined(__AES__)
+#elif defined(__SSE42__) && defined(__AES__)
    #define USER_AGENT_ARCH "aes-sse42"     
-#endif
-#if defined(__aarch64__)
+#elif defined(__aarch64__)
    #define USER_AGENT_ARCH "arm"     // AArch64
+#else
+   #define USER_AGENT_ARCH 
 #endif
 
 // Operating system

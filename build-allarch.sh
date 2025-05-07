@@ -115,7 +115,7 @@ mv cpuminer cpuminer-sse42
 # SSSE3: Intel Core2
 make clean || echo clean
 rm -f config.status
-CFLAGS="-O3 -march=core2 -Wall" ./configure --with-curl
+CFLAGS="-O3 -mssse3 -Wall" ./configure --with-curl
 make -j $(nproc)
 strip -s cpuminer
 mv cpuminer cpuminer-ssse3

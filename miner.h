@@ -690,6 +690,7 @@ enum algos {
         ALGO_YESPOWER,
         ALGO_YESPOWERADVC,
         ALGO_YESPOWERARWN,
+        ALGO_YESPOWEREQPAY,
         ALGO_YESPOWERMGPC,
         ALGO_YESPOWERR16,
         ALGO_YESPOWERSUGAR,
@@ -798,6 +799,7 @@ static const char* const algo_names[] = {
         "yespower",
         "yespoweradvc",
         "yespowerarwn",
+        "yespowereqpay",
         "yespowermgpc",
         "yespowerr16",
         "yespowersugar",
@@ -975,6 +977,7 @@ Options:\n\
                           yespower      Cryply\n\
                           yespoweradvc  AdventureCoin (ADVC)\n\
                           yespowerarwn  ARWN\n\
+                          yespowereqpay EquityPay (EQPAY)\n\
                           yespowermgpc	Magpies\n\
                           yespowerr16   Yenten (YTN)\n\
                           yespowersugar Sugarchain (SUGAR)\n\

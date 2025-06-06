@@ -310,6 +310,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_CPUPOWER:     rc = register_cpupower_algo      ( gate ); break;
     case ALGO_DEEP:         rc = register_deep_algo          ( gate ); break;
     case ALGO_DMD_GR:       rc = register_dmd_gr_algo        ( gate ); break;
+    case ALGO_EVOHASH:      rc = register_evohash_algo       ( gate ); break;
     case ALGO_FLEX:         rc = register_flex_algo          ( gate ); break;
     case ALGO_GROESTL:      rc = register_groestl_algo       ( gate ); break;
     case ALGO_HEX:          rc = register_hex_algo           ( gate ); break;
@@ -450,6 +451,7 @@ const char* const algo_alias_map[][2] =
   { "neo",               "neoscrypt"      },
   { "phi",               "phi1612"        },
   { "rinhash",           "rinhash"        },
+  { "evohash",           "evohash"        },
   { "scryptn2",          "scrypt:1048576" },
   { "sib",               "x11gost"        },
   { "timetravel8",       "timetravel"     },

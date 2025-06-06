@@ -612,6 +612,7 @@ enum algos {
         ALGO_CPUPOWER,         
         ALGO_DEEP,
         ALGO_DMD_GR,
+        ALGO_EVOHASH,
         ALGO_FLEX,
         ALGO_GROESTL,     
         ALGO_HEX,
@@ -721,6 +722,7 @@ static const char* const algo_names[] = {
         "cpupower",
         "deep",
         "dmd-gr",
+        "evohash",
         "flex",
         "groestl",
         "hex",
@@ -897,6 +899,7 @@ Options:\n\
                           cpupower      CPUchain\n\
                           deep          Deepcoin (DCN)\n\
                           dmd-gr        Diamond\n\
+                          evohash       EvoAI (EVO)\n\
                           flex          Flex\n\
                           groestl       Groestl coin\n\
                           hex           x16r-hex\n\

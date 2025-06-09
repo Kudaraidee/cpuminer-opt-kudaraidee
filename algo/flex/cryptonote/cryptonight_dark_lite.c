@@ -4,8 +4,12 @@
 // Portions Copyright (c) 2018 The Monero developers
 // Portions Copyright (c) 2018 The darkCoin Developers
 
+#include "cpuminer-config.h"
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #include "crypto/oaes_lib.h"
 #include "crypto/c_keccak.h"
 #include "crypto/c_groestl.h"

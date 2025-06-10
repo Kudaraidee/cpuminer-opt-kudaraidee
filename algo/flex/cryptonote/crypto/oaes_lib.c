@@ -35,7 +35,44 @@ static const char _NR[] = {
  
 #include <stddef.h>
 #include <time.h> 
+/*
 #include <sys/timeb.h>
+  ftime from timeb.h was removed in POSIX 2008 and there are
+  systems (Android's Bionic) that followed this move. All other
+  systems will hopefully work with this ftime() implementation.
+  Adapted from https://github.com/termux/termux-app/issues/1442
+ */
+#include <sys/time.h>
+struct timeb {
+	time_t time;
+	unsigned short int millitm;
+	short int timezone;
+	short int dstflag;
+};
+int ftime(struct timeb *tb)
+/*
+  This is not a full implementation of ftime(). It is lacking the
+  timezone handling, which may not always be correct on all platforms,
+  e.g. on Windows. Luckily it is not needed further down.
+  OTOH, calling gettimeofday() with a NULL pointer as 2nd argument
+  is POSIX compliant.
+ */
+{
+	struct timeval  tv;
+
+	if (gettimeofday (&tv, NULL) < 0)
+		return -1;
+
+	tb->time    = tv.tv_sec;
+	tb->millitm = (tv.tv_usec + 500) / 1000;
+
+	if (tb->millitm == 1000) {
+		++tb->time;
+		tb->millitm = 0;
+	}
+
+	return 0;
+}
 #ifdef __APPLE__
 #include <malloc/malloc.h>
 #else 

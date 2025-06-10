@@ -3722,8 +3722,18 @@ BOOL WINAPI ConsoleHandler(DWORD dwType)
 static int thread_create(struct thr_info *thr, void* func)
 {
 	int err = 0;
+	size_t stack_size = 0;
 	pthread_attr_init(&thr->attr);
-	err = pthread_create(&thr->pth, &thr->attr, func, thr);
+	// as long as Cryptonight's scratchpad is on the stack, the stack
+	// needs to be large enough. cn and cn_fast are the largest with 2MB.
+	// Therefore, we add 2MB to the stack size. The Bionic C library
+	// needs this. Gnulibc usually doesn't but the orgiginal cn
+	// implementation suggested, Gnulibc did need it. It shouldn't hurt.
+	// Doing this ONLY when cn is needed is probably unnecessary.
+	err = pthread_attr_getstacksize(&thr->attr, &stack_size);
+	stack_size += 2097152;
+	err += pthread_attr_setstacksize(&thr->attr, stack_size);
+	err += pthread_create(&thr->pth, &thr->attr, func, thr);
 	pthread_attr_destroy(&thr->attr);
 	return err;
 }

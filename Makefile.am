@@ -83,6 +83,7 @@ cpuminer_SOURCES = \
   algo/echo/echo-hash-4way.c \
   algo/echo/aes_ni/hash.c\
   algo/evohash/evohash.c\
+  algo/evohash/evohashv2.c\
   algo/evohash/evohash-gate.c\
   algo/flex/cryptonote/crypto/aesb.c \
   algo/flex/cryptonote/crypto/hash.c \

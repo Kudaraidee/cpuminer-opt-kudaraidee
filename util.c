@@ -594,14 +594,14 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	if (opt_protocol)  curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	if (opt_cert)      curl_easy_setopt(curl, CURLOPT_CAINFO, opt_cert);
-   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
 	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 0);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, all_data_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &all_data);
-   curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
+	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	if (opt_redirect)  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
@@ -628,8 +628,9 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	headers = curl_slist_append(headers, "Content-Type: application/json");
 	headers = curl_slist_append(headers, "User-Agent: " USER_AGENT);
 	headers = curl_slist_append(headers, "X-Mining-Extensions: longpoll reject-reason");
-	//headers = curl_slist_append(headers, "Accept:"); // disable Accept hdr
-	//headers = curl_slist_append(headers, "Expect:"); // disable Expect hdr
+	headers = curl_slist_append(headers, hashrate_hdr);
+	headers = curl_slist_append(headers, "Accept:"); // disable Accept hdr
+	headers = curl_slist_append(headers, "Expect:"); // disable Expect hdr
 
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
@@ -1569,7 +1570,6 @@ out:
 }
 
 #if LIBCURL_VERSION_NUM >= 0x071101 && LIBCURL_VERSION_NUM < 0x072d00
-//#if LIBCURL_VERSION_NUM >= 0x071101
 static curl_socket_t opensocket_grab_cb(void *clientp, curlsocktype purpose,
 	struct curl_sockaddr *addr)
 {
@@ -1605,7 +1605,7 @@ bool stratum_connect(struct stratum_ctx *sctx, const char *url)
 		sctx->url = strdup(url);
 	}
 
-   free(sctx->curl_url);
+	free(sctx->curl_url);
 	sctx->curl_url = (char*) malloc(strlen(url));
 
    // replace the stratum protocol prefix with http, https for ssl

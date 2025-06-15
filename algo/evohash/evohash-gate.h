@@ -10,9 +10,4 @@ void evohash( void *state, const void *input );
 int scanhash_evohash( struct work *work, uint32_t max_nonce,
                   uint64_t *hashes_done, struct thr_info *mythr );
 
-bool register_evohashv2_algo( algo_gate_t* gate );
-
-void evohashv2( void *state, const void *input );
-int scanhash_evohashv2( struct work *work, uint32_t max_nonce,
-                  uint64_t *hashes_done, struct thr_info *mythr );
 #endif

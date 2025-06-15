@@ -9,12 +9,3 @@ bool register_evohash_algo( algo_gate_t* gate )
 	return true;
 };
 
-bool register_evohashv2_algo( algo_gate_t* gate )
-{
-	gate->scanhash  = (void*)&scanhash_evohashv2;
-	gate->hash      = (void*)&evohashv2;
-	gate->optimizations = SSE2_OPT | AES_OPT | AVX2_OPT | AVX512_OPT | VAES_OPT;
-	opt_target_factor = 256.0;
-	return true;
-};
-

@@ -56,110 +56,375 @@ void evohash(void *output, const void *input)
 	unsigned char hashA[64] = { 0 };
 	unsigned char hashB[64] = { 0 };
 
+	// CUBE512-80
 	cubehashInit( &ctx_cubehash, 512, 16, 32 );
 	cubehashUpdateDigest( &ctx_cubehash, (byte*)hash, (const byte*)input,80 );
-	
+
+	// BMW512
 	sph_bmw512_init(&ctx_bmw);
-	sph_bmw512(&ctx_bmw, (const void*) hash, 64);
+	sph_bmw512(&ctx_bmw, hash, 64);
 	sph_bmw512_close(&ctx_bmw, hashB);
 
-	LYRA2RE(&hashA[ 0], 32, &hashB[ 0], 32, &hashB[ 0], 32, 1, 8, 8);
+	// LYRA2RE
+	LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
 	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+	// Hamsi512
+	sph_hamsi512_init(&ctx_hamsi);
+	sph_hamsi512(&ctx_hamsi, hashA, 64);
+	sph_hamsi512_close(&ctx_hamsi, hash);
+
+	// Fugue512
+#if defined(__AES__)
+	fugue512_Init( &ctx_fugue, 512 );
+	fugue512_Update( &ctx_fugue, (const void*)hash, 512 );
+	fugue512_Final( &ctx_fugue, hashB );	
+#else
+	sph_fugue512_init(&ctx_fugue);
+	sph_fugue512(&ctx_fugue, (const void*) hash, 64);
+	sph_fugue512_close(&ctx_fugue, hashB);	
+#endif
+
+	// LYRA2RE
+	LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+	// SIMD512
+	simd512_ctx( &ctx_simd, hash, hashA, 64 );
 	
+	// Echo512
+#if defined(__AES__)
+	init_echo(&ctx_echo, 512);
+	update_final_echo (&ctx_echo, (BitSequence *)hashB, (const BitSequence *)hash, 512);
+#else
+	sph_echo512_init(&ctx_echo);
+	sph_echo512(&ctx_echo, (const void*) hash, 64);
+	sph_echo512_close(&ctx_echo, hashB);
+#endif
+
+	// LYRA2RE
+	LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+	// CubeHash512
+	cubehashInit( &ctx_cubehash, 512, 16, 32 );
+	cubehashUpdateDigest( &ctx_cubehash, (byte*)hash, (const byte*)hashA, 64);
+
+	// Shavite512
+	sph_shavite512_init(&ctx_shavite);
+	sph_shavite512(&ctx_shavite, hash, 64);
+	sph_shavite512_close(&ctx_shavite, hashB);
+
+	// LYRA2RE
+	LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Luffa512
+	luffa_full( &ctx_luffa, hashB, 512, hashA, 64 );
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // CubeHash512
+	cubehashInit( &ctx_cubehash, 512, 16, 32 );
+	cubehashUpdateDigest( &ctx_cubehash, (byte*)hash, (const byte*)hashA, 64);
+
+    // Shavite512
+    sph_shavite512_init(&ctx_shavite);
+    sph_shavite512(&ctx_shavite, hash, 64);
+    sph_shavite512_close(&ctx_shavite, hashB);
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Luffa512
+	luffa_full( &ctx_luffa, hashB, 512, hashA, 64 );
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Hamsi512
+    sph_hamsi512_init(&ctx_hamsi);
+    sph_hamsi512(&ctx_hamsi, hashA, 64);
+    sph_hamsi512_close(&ctx_hamsi, hash);
+
+    // Fugue512
+#if defined(__AES__)
+	fugue512_Init( &ctx_fugue, 512 );
+	fugue512_Update( &ctx_fugue, (const void*)hash, 512 );
+	fugue512_Final( &ctx_fugue, hashB );	
+#else
+	sph_fugue512_init(&ctx_fugue);
+	sph_fugue512(&ctx_fugue, (const void*) hash, 64);
+	sph_fugue512_close(&ctx_fugue, hashB);	
+#endif
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // SIMD512
+	simd512_ctx( &ctx_simd, hash, hashA, 64 );
+
+    // Echo512
+#if defined(__AES__)
+	init_echo(&ctx_echo, 512);
+	update_final_echo (&ctx_echo, (BitSequence *)hashB, (const BitSequence *)hash, 512);
+#else
+	sph_echo512_init(&ctx_echo);
+	sph_echo512(&ctx_echo, (const void*) hash, 64);
+	sph_echo512_close(&ctx_echo, hashB);
+#endif
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // CubeHash512
+	cubehashInit( &ctx_cubehash, 512, 16, 32 );
+	cubehashUpdateDigest( &ctx_cubehash, (byte*)hash, (const byte*)hashA, 64);
+
+    // Shavite512
+    sph_shavite512_init(&ctx_shavite);
+    sph_shavite512(&ctx_shavite, hash, 64);
+    sph_shavite512_close(&ctx_shavite, hashB);
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Luffa512
+	luffa_full( &ctx_luffa, hashB, 512, hashA, 64 );
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // CubeHash512
+	cubehashInit( &ctx_cubehash, 512, 16, 32 );
+	cubehashUpdateDigest( &ctx_cubehash, (byte*)hash, (const byte*)hashA, 64);
+
+    // Shavite512
+    sph_shavite512_init(&ctx_shavite);
+    sph_shavite512(&ctx_shavite, hash, 64);
+    sph_shavite512_close(&ctx_shavite, hashB);
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Luffa512
+	luffa_full( &ctx_luffa, hashB, 512, hashA, 64 );
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Hamsi512
+    sph_hamsi512_init(&ctx_hamsi);
+    sph_hamsi512(&ctx_hamsi, hashA, 64);
+    sph_hamsi512_close(&ctx_hamsi, hash);
+
+    // Fugue512
+#if defined(__AES__)
+	fugue512_Init( &ctx_fugue, 512 );
+	fugue512_Update( &ctx_fugue, (const void*)hash, 512 );
+	fugue512_Final( &ctx_fugue, hashB );	
+#else
+	sph_fugue512_init(&ctx_fugue);
+	sph_fugue512(&ctx_fugue, (const void*) hash, 64);
+	sph_fugue512_close(&ctx_fugue, hashB);	
+#endif
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // SIMD512
+    simd512_ctx( &ctx_simd, hash, hashA, 64 );
+
+    // Echo512
+#if defined(__AES__)
+	init_echo(&ctx_echo, 512);
+	update_final_echo (&ctx_echo, (BitSequence *)hashB, (const BitSequence *)hash, 512);
+#else
+	sph_echo512_init(&ctx_echo);
+	sph_echo512(&ctx_echo, (const void*) hash, 64);
+	sph_echo512_close(&ctx_echo, hashB);
+#endif
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // CubeHash512
+	cubehashInit( &ctx_cubehash, 512, 16, 32 );
+	cubehashUpdateDigest( &ctx_cubehash, (byte*)hash, (const byte*)hashA, 64);
+
+    // Shavite512
+    sph_shavite512_init(&ctx_shavite);
+    sph_shavite512(&ctx_shavite, hash, 64);
+    sph_shavite512_close(&ctx_shavite, hashB);
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Luffa512
+	luffa_full( &ctx_luffa, hashB, 512, hashA, 64 );
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // CubeHash512
+	cubehashInit( &ctx_cubehash, 512, 16, 32 );
+	cubehashUpdateDigest( &ctx_cubehash, (byte*)hash, (const byte*)hashA, 64);
+
+    // Shavite512
+    sph_shavite512_init(&ctx_shavite);
+    sph_shavite512(&ctx_shavite, hash, 64);
+    sph_shavite512_close(&ctx_shavite, hashB);
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Luffa512
+	luffa_full( &ctx_luffa, hashB, 512, hashA, 64 );
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Hamsi512
+    sph_hamsi512_init(&ctx_hamsi);
+    sph_hamsi512(&ctx_hamsi, hashA, 64);
+    sph_hamsi512_close(&ctx_hamsi, hash);
+
+    // Fugue512
+#if defined(__AES__)
+	fugue512_Init( &ctx_fugue, 512 );
+	fugue512_Update( &ctx_fugue, (const void*)hash, 512 );
+	fugue512_Final( &ctx_fugue, hashB );	
+#else
+	sph_fugue512_init(&ctx_fugue);
+	sph_fugue512(&ctx_fugue, (const void*) hash, 64);
+	sph_fugue512_close(&ctx_fugue, hashB);	
+#endif
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // SIMD512
+    simd512_ctx( &ctx_simd, hash, hashA, 64 );
+
+    // Echo512
+#if defined(__AES__)
+	init_echo(&ctx_echo, 512);
+	update_final_echo (&ctx_echo, (BitSequence *)hashB, (const BitSequence *)hash, 512);
+#else
+	sph_echo512_init(&ctx_echo);
+	sph_echo512(&ctx_echo, (const void*) hash, 64);
+	sph_echo512_close(&ctx_echo, hashB);
+#endif
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // CubeHash512
+	cubehashInit( &ctx_cubehash, 512, 16, 32 );
+	cubehashUpdateDigest( &ctx_cubehash, (byte*)hash, (const byte*)hashA, 64);
+
+    // Shavite512
+    sph_shavite512_init(&ctx_shavite);
+    sph_shavite512(&ctx_shavite, hash, 64);
+    sph_shavite512_close(&ctx_shavite, hashB);
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Luffa512
+	luffa_full( &ctx_luffa, hashB, 512, hashA, 64 );
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // CubeHash512
+	cubehashInit( &ctx_cubehash, 512, 16, 32 );
+	cubehashUpdateDigest( &ctx_cubehash, (byte*)hash, (const byte*)hashA, 64);
+
+    // Shavite512
+    sph_shavite512_init(&ctx_shavite);
+    sph_shavite512(&ctx_shavite, hash, 64);
+    sph_shavite512_close(&ctx_shavite, hashB);
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Luffa512
+	luffa_full( &ctx_luffa, hashB, 512, hashA, 64 );
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Whirlpool
+    sph_whirlpool_init(&ctx_whirlpool);
+    sph_whirlpool(&ctx_whirlpool, hashA, 64);
+    sph_whirlpool_close(&ctx_whirlpool, hash);
+
+    // Shabal512
+    sph_shabal512_init(&ctx_shabal);
+    sph_shabal512(&ctx_shabal, hash, 64);
+    sph_shabal512_close(&ctx_shabal, hashB);
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // JH512
+    sph_jh512_init(&ctx_jh);
+    sph_jh512(&ctx_jh, hashA, 64);
+    sph_jh512_close(&ctx_jh, hash);
+
+    // Keccak512
+    sph_keccak512_init(&ctx_keccak);
+    sph_keccak512(&ctx_keccak, hash, 64);
+    sph_keccak512_close(&ctx_keccak, hashB);
+
+    // LYRA2RE
+    LYRA2RE(&hashA[0], 32, &hashB[0], 32, &hashB[0], 32, 1, 8, 8);
+    LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);
+
+    // Skein512
+    sph_skein512_init(&ctx_skein);
+    sph_skein512(&ctx_skein, hashA, 64);
+    sph_skein512_close(&ctx_skein, hash);
+
+    // Groestl512
 #if defined(__AES__)
 	init_groestl( &ctx_groestl, 64 );
-	update_and_final_groestl( &ctx_groestl, hash, (const void*)hashA, 512 );
+	update_and_final_groestl( &ctx_groestl, hash, (const void*)hash, 512 );
 #else
 	sph_groestl512_init(&ctx_groestl);
-	sph_groestl512 (&ctx_groestl, hashA, 64);
+	sph_groestl512 (&ctx_groestl, hash, 64);
 	sph_groestl512_close(&ctx_groestl, hash);
 #endif
 
-	sph_hamsi512_init(&ctx_hamsi);
-	sph_hamsi512(&ctx_hamsi, (const void*) hash, 64);
-	sph_hamsi512_close(&ctx_hamsi, hashB);
+    for (int i=0; i<32; i++)
+        hash[i] ^= hash[i+32];
 
-	LYRA2RE(&hashA[ 0], 32, &hashB[ 0], 32, &hashB[ 0], 32, 1, 8, 8);
-	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);	
+    memcpy(output, hash, 32);
 
-#if defined(__AES__)
-	fugue512_Init( &ctx_fugue, 512 );
-	fugue512_Update( &ctx_fugue, (const void*)hashA, 512 );
-	fugue512_Final( &ctx_fugue, hash );	
-#else
-	sph_fugue512_init(&ctx_fugue);
-	sph_fugue512(&ctx_fugue, (const void*) hashA, 64);
-	sph_fugue512_close(&ctx_fugue, hash);	
-#endif
-
-	simd512_ctx( &ctx_simd, hashB, hash, 64 );
-
-	LYRA2RE(&hashA[ 0], 32, &hashB[ 0], 32, &hashB[ 0], 32, 1, 8, 8);
-	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);	
-
-#if defined(__AES__)
-	init_echo(&ctx_echo, 512);
-	update_final_echo (&ctx_echo, (BitSequence *)hash, (const BitSequence *)hashA, 512);
-#else
-	sph_echo512_init(&ctx_echo);
-	sph_echo512(&ctx_echo, (const void*) hashA, 64);
-	sph_echo512_close(&ctx_echo, hash);
-#endif
-
-	cubehashInit( &ctx_cubehash, 512, 16, 32 );
-	cubehashUpdateDigest( &ctx_cubehash, (byte*)hashB, (const byte*)hash,64 );
-
-	LYRA2RE(&hashA[ 0], 32, &hashB[ 0], 32, &hashB[ 0], 32, 1, 8, 8);
-	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);	
-	
-	sph_shavite512_init(&ctx_shavite);
-	sph_shavite512(&ctx_shavite, (const void*) hashA, 64);
-	sph_shavite512_close(&ctx_shavite, hash);
-
-	luffa_full( &ctx_luffa, hashB, 512, hash, 64 );
-	
-	LYRA2RE(&hashA[ 0], 32, &hashB[ 0], 32, &hashB[ 0], 32, 1, 8, 8);
-	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);	
-	
-	sph_shavite512_init(&ctx_shavite);
-	sph_shavite512(&ctx_shavite, (const void*) hashA, 64);
-	sph_shavite512_close(&ctx_shavite, hash);
-
-	luffa_full( &ctx_luffa, hashB, 512, hash, 64 );
-
-	LYRA2RE(&hashA[ 0], 32, &hashB[ 0], 32, &hashB[ 0], 32, 1, 8, 8);
-	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);	
-	
-	sph_whirlpool_init(&ctx_whirlpool);
-	sph_whirlpool (&ctx_whirlpool, (const void*) hashA, 64);
-	sph_whirlpool_close(&ctx_whirlpool, hash);
-
-	sph_shabal512_init(&ctx_shabal);
-	sph_shabal512(&ctx_shabal, (const void*) hash, 64);
-	sph_shabal512_close(&ctx_shabal, hashB);
-
-	LYRA2RE(&hashA[ 0], 32, &hashB[ 0], 32, &hashB[ 0], 32, 1, 8, 8);
-	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);	
-	
-	sph_jh512_init(&ctx_jh);
-	sph_jh512(&ctx_jh, (const void*) hashA, 64);
-	sph_jh512_close(&ctx_jh, hash);		
-
-	sph_keccak512_init(&ctx_keccak);
-	sph_keccak512 (&ctx_keccak, hash, 64);
-	sph_keccak512_close(&ctx_keccak, hashB);
-
-	LYRA2RE(&hashA[ 0], 32, &hashB[ 0], 32, &hashB[ 0], 32, 1, 8, 8);
-	LYRA2RE(&hashA[32], 32, &hashB[32], 32, &hashB[32], 32, 1, 8, 8);	
-	
-	sph_skein512_init(&ctx_skein);
-	sph_skein512(&ctx_skein, (const void*)hashA, 64);
-	sph_skein512_close(&ctx_skein, (void*)hash);	
-			      
-	for (int i=0; i<32; i++)
-		hash[i] ^= hash[i+32];
-
-	memcpy(output, hash, 32);
 }
 
 int scanhash_evohash( struct work *work, uint32_t max_nonce,

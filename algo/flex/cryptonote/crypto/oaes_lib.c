@@ -35,14 +35,30 @@ static const char _NR[] = {
  
 #include <stddef.h>
 #include <time.h> 
-/*
+
+#ifdef __APPLE__
+#include <malloc/malloc.h>
+#else 
+#include <malloc.h>
+#endif
+
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#ifdef WIN32
+#include <process.h>
 #include <sys/timeb.h>
+#else
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/time.h>
+/*
   ftime from timeb.h was removed in POSIX 2008 and there are
   systems (Android's Bionic) that followed this move. All other
   systems will hopefully work with this ftime() implementation.
   Adapted from https://github.com/termux/termux-app/issues/1442
- */
-#include <sys/time.h>
+*/
 struct timeb {
 	time_t time;
 	unsigned short int millitm;
@@ -50,13 +66,6 @@ struct timeb {
 	short int dstflag;
 };
 int ftime(struct timeb *tb)
-/*
-  This is not a full implementation of ftime(). It is lacking the
-  timezone handling, which may not always be correct on all platforms,
-  e.g. on Windows. Luckily it is not needed further down.
-  OTOH, calling gettimeofday() with a NULL pointer as 2nd argument
-  is POSIX compliant.
- */
 {
 	struct timeval  tv;
 
@@ -73,20 +82,6 @@ int ftime(struct timeb *tb)
 
 	return 0;
 }
-#ifdef __APPLE__
-#include <malloc/malloc.h>
-#else 
-#include <malloc.h>
-#endif
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-
-#ifdef WIN32
-#include <process.h>
-#else
-#include <sys/types.h>
-#include <unistd.h>
 #endif
 
 #include "oaes_config.h"

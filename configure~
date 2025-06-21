@@ -3594,7 +3594,6 @@ fi
  PACKAGE='cpuminer-kudaraidee'
  VERSION='1.2.4'
 
-
 printf "%s\n" "#define PACKAGE \"$PACKAGE\"" >>confdefs.h
 
 

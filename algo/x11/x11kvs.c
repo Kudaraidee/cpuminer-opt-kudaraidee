@@ -347,7 +347,6 @@ int scanhash_x11kvs(struct work *work, uint32_t max_nonce,
 				{
 					if (fulltest(hash64, ptarget))
 					{
-						pdata[19] = swab32(pdata[19]);
 						submit_solution(work, hash64, mythr);
 					}
 				}

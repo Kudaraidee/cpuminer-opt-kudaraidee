@@ -127,12 +127,12 @@ void rin_build_block_header( struct work* g_work, uint32_t version,
    g_work->sapling = opt_sapling;
 
    if (have_stratum) {
-      g_work->data[0] = swab32(version);
+      g_work->data[0] = bswap_32(version);
       for (int i = 0; i < 8; i++)
-         g_work->data[1 + i] = swab32(prevhash[i]);
+         g_work->data[1 + i] = bswap_32(prevhash[i]);
    }
    else for (int i = 0; i < 8; i++)
-      g_work->data[1 + i] = swab32(prevhash[7 - i]);
+      g_work->data[1 + i] = bswap_32(prevhash[7 - i]);
    memcpy(&g_work->data[9], merkle_tree, 32);
 
    g_work->data[ algo_gate.ntime_index ] = ntime;
@@ -169,7 +169,7 @@ void rin_build_extraheader( struct work* g_work, struct stratum_ctx* sctx )
    algo_gate.gen_merkle_root( merkle_tree, sctx );
    algo_gate.build_block_header( g_work, le32dec(sctx->job.version),
           (uint32_t*) sctx->job.prevhash, (uint32_t*) merkle_tree,
-          swab32(le32dec(sctx->job.ntime)), swab32(le32dec(sctx->job.nbits)),
+          bswap_32(le32dec(sctx->job.ntime)), bswap_32(le32dec(sctx->job.nbits)),
           sctx->job.final_sapling_hash );
 }
 

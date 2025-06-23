@@ -44,7 +44,7 @@ cp $LOCAL_LIB/curl/lib/.libs/libcurl-4.dll release/
 rm -f config.status
 ./autogen.sh || echo done
 CFLAGS="-march=icelake-client $DEFAULT_CFLAGS" ./configure $CONFIGURE_ARGS
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-avx512-sha-vaes.exe
 
@@ -52,7 +52,7 @@ mv cpuminer.exe release/cpuminer-avx512-sha-vaes.exe
 make clean || echo clean
 rm -f config.status
 CFLAGS="-march=skylake-avx512 $DEFAULT_CFLAGS" ./configure $CONFIGURE_ARGS
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-avx512.exe
 
@@ -60,7 +60,7 @@ mv cpuminer.exe release/cpuminer-avx512.exe
 make clean || echo done
 rm -f config.status
 CFLAGS="-mavx2 -msha -mvaes $DEFAULT_CFLAGS" ./configure $CONFIGURE_ARGS
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-avx2-sha-vaes.exe
 
@@ -68,7 +68,7 @@ mv cpuminer.exe release/cpuminer-avx2-sha-vaes.exe
 make clean || echo clean
 rm -f config.status
 CFLAGS="-march=znver1 $DEFAULT_CFLAGS" ./configure $CONFIGURE_ARGS
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-avx2-sha.exe
 
@@ -76,7 +76,7 @@ mv cpuminer.exe release/cpuminer-avx2-sha.exe
 make clean || echo clean
 rm -f config.status
 CFLAGS="-march=core-avx2 $DEFAULT_CFLAGS" ./configure $CONFIGURE_ARGS
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-avx2.exe
 
@@ -84,7 +84,7 @@ mv cpuminer.exe release/cpuminer-avx2.exe
 make clean || echo clean
 rm -f config.status
 CFLAGS="-march=corei7-avx $DEFAULT_CFLAGS_OLD" ./configure $CONFIGURE_ARGS 
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-avx.exe
 
@@ -92,7 +92,7 @@ mv cpuminer.exe release/cpuminer-avx.exe
 make clean || echo clean
 rm -f config.status
 CFLAGS="-march=corei7-avx -maes $DEFAULT_CFLAGS_OLD" ./configure $CONFIGURE_ARGS 
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-aes-avx.exe
 
@@ -100,7 +100,7 @@ mv cpuminer.exe release/cpuminer-aes-avx.exe
 make clean || echo clean
 rm -f config.status
 CFLAGS="-march=westmere -maes $DEFAULT_CFLAGS_OLD" ./configure $CONFIGURE_ARGS
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-aes-sse42.exe
 
@@ -125,7 +125,7 @@ mv cpuminer.exe release/cpuminer-aes-sse42.exe
 make clean || echo clean
 rm -f config.status
 CFLAGS="-msse2 $DEFAULT_CFLAGS_OLD" ./configure $CONFIGURE_ARGS
-make -j 8
+make -j $(nproc)
 strip -s cpuminer.exe
 mv cpuminer.exe release/cpuminer-sse2.exe
 #make clean || echo clean
@@ -134,6 +134,6 @@ mv cpuminer.exe release/cpuminer-sse2.exe
 #make clean || echo clean
 #rm -f config.status
 #CFLAGS="-march=native $DEFAULT_CFLAGS_OLD" ./configure $CONFIGURE_ARGS
-#make -j 8
+#make -j $(nproc)
 #strip -s cpuminer.exe
 

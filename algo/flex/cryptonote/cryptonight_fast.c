@@ -202,11 +202,18 @@ struct cryptonightfast_ctx {
 };
 
 void cryptonightfast_hash(const char* input, char* output, uint32_t len, int variant) {
+
 #if defined(_MSC_VER)
-    struct cryptonightfast_ctx *ctx = _malloca(sizeof(struct cryptonightfast_ctx));
+	struct cryptonightfast_ctx *ctx = _malloca(sizeof(struct cryptonightfast_ctx));
+#elif defined(_WIN32)
+	struct cryptonightfast_ctx *ctx = malloc(sizeof(struct cryptonightfast_ctx));
 #else
-    struct cryptonightfast_ctx *ctx = alloca(sizeof(struct cryptonightfast_ctx));
+	struct cryptonightfast_ctx *ctx = alloca(sizeof(struct cryptonightfast_ctx));
+//	struct cryptonightfast_ctx *ctx = malloc(sizeof(struct cryptonightfast_ctx));
 #endif
+
+	
+
     hash_process(&ctx->state.hs, (const uint8_t*) input, len);
     memcpy(ctx->text, ctx->state.init, INIT_SIZE_BYTE);
     memcpy(ctx->aes_key, ctx->state.hs.b, AES_KEY_SIZE);
@@ -288,7 +295,7 @@ void cryptonightfast_hash(const char* input, char* output, uint32_t len, int var
     hash_permutation(&ctx->state.hs);
     /*memcpy(hash, &state, 32);*/
     extra_hashes[ctx->state.hs.b[0] & 2](&ctx->state, 200, output);
-    oaes_free((OAES_CTX **) &ctx->aes_ctx);
+	oaes_free((OAES_CTX **) &ctx->aes_ctx);
 }
 
 void cryptonightfast_fast_hash(const char* input, char* output, uint32_t len) {

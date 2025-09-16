@@ -315,6 +315,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_GROESTL:      rc = register_groestl_algo       ( gate ); break;
     case ALGO_HEX:          rc = register_hex_algo           ( gate ); break;
     case ALGO_HMQ1725:      rc = register_hmq1725_algo       ( gate ); break;
+    case ALGO_INTERCHAINED: rc = register_interchained_algo  ( gate ); break;
     case ALGO_JHA:          rc = register_jha_algo           ( gate ); break;
     case ALGO_KECCAK:       rc = register_keccak_algo        ( gate ); break;
     case ALGO_KECCAKC:      rc = register_keccakc_algo       ( gate ); break;
@@ -461,6 +462,7 @@ const char* const algo_alias_map[][2] =
   { "xelishashv2",       "xelisv2"        },
   { "xelisv2_pepew",     "xelisv2"        },
   { "yenten",            "yespowerr16"    },
+  { "interchained",      "interchained"   },
   { "yespowerADVC",      "yespoweradvc"   },
   { "yespowerarwn",      "yespowerarwn"   },
   { "yespowerEQPAY",     "yespowereqpay"  },

@@ -623,6 +623,7 @@ enum algos {
         ALGO_GROESTL,     
         ALGO_HEX,
         ALGO_HMQ1725,
+        ALGO_INTERCHAINED,
         ALGO_JHA,
         ALGO_KECCAK,
         ALGO_KECCAKC,
@@ -733,6 +734,7 @@ static const char* const algo_names[] = {
         "groestl",
         "hex",
         "hmq1725",
+        "interchained",
         "jha",
         "keccak",
         "keccakc",
@@ -910,6 +912,7 @@ Options:\n\
                           groestl       Groestl coin\n\
                           hex           x16r-hex\n\
                           hmq1725       Espers\n\
+                          interchained  Interchained\n\
                           jha           jackppot (Jackpotcoin)\n\
                           keccak        Maxcoin\n\
                           keccakc       Creative Coin\n\

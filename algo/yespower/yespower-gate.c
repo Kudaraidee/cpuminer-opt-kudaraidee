@@ -454,17 +454,3 @@ bool register_interchained_algo( algo_gate_t* gate )
   return true;
  };
 
-bool register_yespowereqpay_algo( algo_gate_t* gate )
-{
-  yespower_params.version = YESPOWER_1_0;
-  yespower_params.N       = 2048;
-  yespower_params.r       = 32;
-  yespower_params.pers    = "The gods had gone away, and the ritual of the religion continued senselessly, uselessly.";
-  yespower_params.perslen = 88;
-  gate->optimizations = SSE2_OPT | AVX2_OPT | NEON_OPT;
-  gate->scanhash      = (void*)&scanhash_yespower;
-  gate->hash          = (void*)&yespower_hash;
-  opt_target_factor = 65536.0;
-  return true;
- };
-

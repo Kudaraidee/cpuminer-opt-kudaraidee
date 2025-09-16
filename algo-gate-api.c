@@ -390,7 +390,6 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_YESPOWER:     rc = register_yespower_algo      ( gate ); break;
     case ALGO_YESPOWERADVC: rc = register_yespoweradvc_algo  ( gate ); break;
     case ALGO_YESPOWERARWN: rc = register_yespowerarwn_algo  ( gate ); break;
-    case ALGO_YESPOWEREQPAY: rc = register_yespowereqpay_algo( gate ); break;
     case ALGO_YESPOWERMGPC: rc = register_yespowermgpc_algo  ( gate ); break;
     case ALGO_YESPOWERR16:  rc = register_yespowerr16_algo   ( gate ); break;
     case ALGO_YESPOWERSUGAR: rc = register_yespowersugar_algo( gate ); break;
@@ -465,7 +464,6 @@ const char* const algo_alias_map[][2] =
   { "interchained",      "interchained"   },
   { "yespowerADVC",      "yespoweradvc"   },
   { "yespowerarwn",      "yespowerarwn"   },
-  { "yespowerEQPAY",     "yespowereqpay"  },
   { "yespowersugar",     "yespowersugar"  },
   { "yespowerurx",     	 "yespowerurx"    },
   { "ziftr",             "zr5"            },

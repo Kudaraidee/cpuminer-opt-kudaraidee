@@ -623,6 +623,7 @@ enum algos {
         ALGO_GROESTL,     
         ALGO_HEX,
         ALGO_HMQ1725,
+        ALGO_INTERCHAINED,
         ALGO_JHA,
         ALGO_KECCAK,
         ALGO_KECCAKC,
@@ -697,7 +698,6 @@ enum algos {
         ALGO_YESPOWER,
         ALGO_YESPOWERADVC,
         ALGO_YESPOWERARWN,
-        ALGO_YESPOWEREQPAY,
         ALGO_YESPOWERMGPC,
         ALGO_YESPOWERR16,
         ALGO_YESPOWERSUGAR,
@@ -733,6 +733,7 @@ static const char* const algo_names[] = {
         "groestl",
         "hex",
         "hmq1725",
+        "interchained",
         "jha",
         "keccak",
         "keccakc",
@@ -807,7 +808,6 @@ static const char* const algo_names[] = {
         "yespower",
         "yespoweradvc",
         "yespowerarwn",
-        "yespowereqpay",
         "yespowermgpc",
         "yespowerr16",
         "yespowersugar",
@@ -910,6 +910,7 @@ Options:\n\
                           groestl       Groestl coin\n\
                           hex           x16r-hex\n\
                           hmq1725       Espers\n\
+                          interchained  Interchained\n\
                           jha           jackppot (Jackpotcoin)\n\
                           keccak        Maxcoin\n\
                           keccakc       Creative Coin\n\
@@ -986,7 +987,6 @@ Options:\n\
                           yespower      Cryply\n\
                           yespoweradvc  AdventureCoin (ADVC)\n\
                           yespowerarwn  ARWN\n\
-                          yespowereqpay EquityPay (EQPAY)\n\
                           yespowermgpc	Magpies\n\
                           yespowerr16   Yenten (YTN)\n\
                           yespowersugar Sugarchain (SUGAR)\n\

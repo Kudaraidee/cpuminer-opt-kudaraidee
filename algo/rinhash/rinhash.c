@@ -381,3 +381,35 @@ void rin_build_block_header( struct work* g_work, uint32_t version,
       }      
       g_work->data[28] = 0x80000000;
       g_work->data[29] = 0x00000000;
+      g_work->data[30] = 0x00000000;
+      g_work->data[31] = 0x00000380;
+   }
+   else
+   {
+      g_work->data[20] = 0x80000000;
+      g_work->data[31] = 0x00000280;
+   }
+}
+
+void rin_build_extraheader( struct work* g_work, struct stratum_ctx* sctx )
+{
+   uchar merkle_tree[64] = { 0 };
+
+   algo_gate.gen_merkle_root( merkle_tree, sctx );
+   algo_gate.build_block_header( g_work, le32dec(sctx->job.version),
+          (uint32_t*) sctx->job.prevhash, (uint32_t*) merkle_tree,
+          bswap_32(le32dec(sctx->job.ntime)), bswap_32(le32dec(sctx->job.nbits)),
+          sctx->job.final_sapling_hash );
+}
+
+// Register algorithm
+bool register_rin_algo( algo_gate_t* gate )
+{
+    gate->scanhash = (void*)&scanhash_rinhash;
+    gate->hash = (void*)&rinhash;
+    gate->optimizations = SSE2_OPT | AVX_OPT | AVX2_OPT | AVX512_OPT;
+    gate->build_stratum_request = (void*)&std_be_build_stratum_request;
+    gate->build_block_header = (void*)&rin_build_block_header;
+    gate->build_extraheader = (void*)&rin_build_extraheader;
+    return true;
+}

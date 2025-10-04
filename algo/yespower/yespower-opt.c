@@ -1067,7 +1067,7 @@ int yespower(yespower_local_t *local,
    ctx.S0 = S;
    ctx.S1 = S + Swidth_to_Sbytes1( Swidth );
 
-   if ( srclen == 80 )   // assume 64 byte prehash was done
+   if ( srclen == 80 && srclen == 181 )   // assume 64 byte prehash was done
    {
      memcpy( &sha256_ctx, &sha256_prehash_ctx, sizeof sha256_ctx );
      sha256_update( &sha256_ctx, src+64, srclen-64 );

@@ -1984,7 +1984,7 @@ static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 	uchar **merkle = NULL;
 	int jsize = json_array_size(params);
    bool has_claim = ( opt_algo == ALGO_LBRY ) && ( jsize == 10 );
-   bool has_roots = ( opt_algo == ALGO_PHI2 ) && ( jsize == 10 );
+   bool has_roots = ( opt_algo == ALGO_PHI2 || opt_algo == ALGO_YESPOWEREQPAY) && ( jsize == 10 );
    bool is_veil  = ( opt_algo == ALGO_X16RT_VEIL );
 
    job_id = json_string_value(json_array_get(params, p++));
@@ -2001,12 +2001,16 @@ static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
    else if ( has_roots )
    {
        extradata = json_string_value(json_array_get(params, p++));
-       if ( !extradata || strlen( extradata ) != 128 )
+       if (opt_debug)
+           applog(LOG_INFO,"Stratum notify: extra data: %s", extradata);
+       if ( !extradata || strlen( extradata ) < 128 || (opt_algo != ALGO_YESPOWEREQPAY && strlen( extradata ) > 128) )
        {
            applog(LOG_ERR, "Stratum notify: invalid UTXO root parameter");
            goto out;
        }
    }
+   if ( opt_debug && (opt_algo == ALGO_YESPOWEREQPAY) && !has_roots )
+        applog(LOG_NOTICE, "Stratum notify: no EQPAY roots received. Will use fallback.");
    if ( is_veil )
    {
       denom10 = json_string_value(json_array_get(params, p++));

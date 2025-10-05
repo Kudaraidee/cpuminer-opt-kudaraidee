@@ -33,12 +33,28 @@ yespower_params_t yespower_params;
 
 __thread sha256_context sha256_prehash_ctx;
 
+bool has_eqp_roots = false;
+
+int eqp_get_work_data_size() { return 101 + STD_WORK_DATA_SIZE; }
+
+void eqp_build_extraheader( struct work* g_work, struct stratum_ctx* sctx )
+{
+   uchar merkle_tree[64] = { 0 };
+   size_t t;
+
+   algo_gate.gen_merkle_root( merkle_tree, sctx );
+   algo_gate.build_block_header( g_work, le32dec( sctx->job.version ),
+                  (uint32_t*) sctx->job.prevhash, (uint32_t*) merkle_tree,
+                  le32dec( sctx->job.ntime ), le32dec(sctx->job.nbits), NULL);
+   for ( t = 0; t < 16; t++ )
+      g_work->data[ 20+t ] = le32dec( (uint32_t*)sctx->job.extra + t);
+}
 
 #if defined(__SSE2__) || defined(__aarch64__)
 
 int yespower_hash( const char *input, char *output, int thrid )
 {
-   return yespower_tls( input, 80, &yespower_params,
+   return yespower_tls( input, has_eqp_roots ? 181 : 80, &yespower_params,
            (yespower_binary_t*)output, thrid );
 }
 
@@ -46,7 +62,7 @@ int yespower_hash( const char *input, char *output, int thrid )
 
 int yespower_hash_ref( const char *input, char *output, int thrid )
 {
-   return yespower_tls_ref( input, 80, &yespower_params,
+   return yespower_tls_ref( input, has_eqp_roots ? 181 : 80, &yespower_params,
            (yespower_binary_t*)output, thrid );
 }
 
@@ -58,17 +74,57 @@ int scanhash_yespower( struct work *work, uint32_t max_nonce,
                        uint64_t *hashes_done, struct thr_info *mythr )
 {
    uint32_t _ALIGN(64) vhash[8];
-   uint32_t _ALIGN(64) endiandata[20];
+   uint32_t _ALIGN(64) endiandata[46] = { 0 };
    uint32_t *pdata = work->data;
    uint32_t *ptarget = work->target;
    const uint32_t first_nonce = pdata[19];
    const uint32_t last_nonce = max_nonce;
    uint32_t n = first_nonce;
    const int thr_id = mythr->id;
+   bool received_eqp_roots = false;
+   uint8_t eqproots[] = { 0xb8,0x42,0xea,0x73,
+                          0xbe,0x5f,0xb5,0x92,
+                          0xf1,0x34,0x70,0xf9,
+                          0xcc,0x31,0xb9,0x26,
+                          0xf5,0x0f,0x19,0x1c,
+                          0x7e,0x8c,0xec,0x8f,
+                          0x7e,0xe9,0xdb,0xcc,
+                          0xcd,0x02,0x38,0x1c,
+                          0x56,0xe8,0x1f,0x17,
+                          0x1b,0xcc,0x55,0xa6,
+                          0xff,0x83,0x45,0xe6,
+                          0x92,0xc0,0xf8,0x6e,
+                          0x5b,0x48,0xe0,0x1b,
+                          0x99,0x6c,0xad,0xc0,
+                          0x01,0x62,0x2f,0xb5,
+                          0xe3,0x63,0xb4,0x21 };
+
+   has_eqp_roots = opt_algo == ALGO_YESPOWEREQPAY ? true : false ;
 
    for ( int k = 0; k < 19; k++ )
       be32enc( &endiandata[k], pdata[k] );
    endiandata[19] = n;
+
+   if (has_eqp_roots) {
+      for ( int k = 20; k < 36; k++ ) {
+         be32enc( &endiandata[k], pdata[k] );
+         if (pdata[k]) received_eqp_roots = true;
+      }
+      if (!received_eqp_roots) {
+         if (opt_debug)
+            applog(LOG_INFO,"scanhash_yespower: (EQPAY) No roots received. "
+                            "Falling back to using hard coded root defaults.");
+         memcpy(&endiandata[20], eqproots, 64);
+      }
+      if (opt_debug) {
+         char s[129];
+         bin2hex(s, (unsigned char *)&endiandata[20], 64);
+         applog(LOG_DEBUG,"scanhash_yespower: added EQPAY roots: %s", s);
+      }
+      // For EQPAY, the remainder is PoS related and has to be zero. Only
+      // the last full size uint32_t has to be 0xffffff
+      endiandata[44] = 0xffffffff;
+   }
 
    // do sha256 prehash
    sha256_ctx_init( &sha256_prehash_ctx );
@@ -454,3 +510,22 @@ bool register_interchained_algo( algo_gate_t* gate )
   return true;
  };
 
+bool register_yespowereqpay_algo( algo_gate_t* gate )
+{
+  yespower_params.version = YESPOWER_1_0;
+  yespower_params.N       = 2048;
+  yespower_params.r       = 32;
+  yespower_params.pers    = "The gods had gone away, and the ritual of the religion continued senselessly, uselessly.";
+  yespower_params.perslen = 88;
+  gate->optimizations = SSE2_OPT | AVX2_OPT | NEON_OPT;
+  gate->scanhash      = (void*)&scanhash_yespower;
+#if (__SSE2__) || defined(__aarch64__)
+  gate->hash          = (void*)&yespower_hash;
+#else
+  gate->hash          = (void*)&yespower_hash_ref;
+#endif
+  gate->get_work_data_size = (void*)&eqp_get_work_data_size;
+  gate->build_extraheader  = (void*)&eqp_build_extraheader;
+  opt_target_factor = 65536.0;
+  return true;
+ };

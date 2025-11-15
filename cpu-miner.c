@@ -81,23 +81,6 @@
 #pragma comment(lib, "winmm.lib")
 #endif
 
-#if defined(_WIN32) || defined(_WIN64)
-    static inline uint32_t htole32(uint32_t x) {
-        return ((x >> 24) & 0x000000FF) |
-               ((x >> 8)  & 0x0000FF00) |
-               ((x << 8)  & 0x00FF0000) |
-               ((x << 24) & 0xFF000000);
-    }
-    static inline uint32_t htobe32(uint32_t x) {
-      return ((x >> 24) & 0x000000FF) |
-             ((x >> 8)  & 0x0000FF00) |
-             ((x << 8)  & 0x00FF0000) |
-             ((x << 24) & 0xFF000000);
-  }
-#else
-    #include <endian.h>
-#endif
-
 #define LP_SCANTIME		60
 
 algo_gate_t algo_gate;
@@ -135,7 +118,6 @@ int opt_param_n = 0;
 int opt_param_r = 0;
 int opt_n_threads = 0;
 bool opt_sapling = false;
-bool opt_mweb = false; 
 static uint64_t opt_affinity = 0xFFFFFFFFFFFFFFFFULL;  // default, use all cores
 int opt_priority = 0;  // deprecated
 int num_cpus = 1;
@@ -635,13 +617,11 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
    }
    curtime = (uint32_t) json_integer_value(tmp);
 
-   uint32_t bits_be;
-   if ( unlikely( !jobj_binary( val, "bits", &bits_be, sizeof(bits_be) ) ) )
+   if ( unlikely( !jobj_binary( val, "bits", &bits, sizeof(bits) ) ) )
    {
-       applog(LOG_ERR, "JSON invalid bits");
-       goto out;
+      applog(LOG_ERR, "JSON invalid bits");
+      goto out;
    }
-   bits = be32dec(&bits_be);
 
    if ( work->sapling )
    {
@@ -901,10 +881,10 @@ static bool gbt_work_decode( const json_t *val, struct work *work )
       goto out;
    }
 
-   for (int i = 0; i < 32; i++) {
-      ((uint8_t*)work->target)[i] = ((uint8_t*)target)[31 - i];
-   }
-   net_diff = work->targetdiff = hash_to_diff(work->target);
+   // reverse the bytes in target
+   casti_v128( work->target, 0 ) = v128_bswap128( casti_v128( target, 1 ) );
+   casti_v128( work->target, 1 ) = v128_bswap128( casti_v128( target, 0 ) );
+   net_diff = work->targetdiff = hash_to_diff( work->target );
 
    tmp = json_object_get( val, "workid" );
    if ( tmp )
@@ -941,40 +921,33 @@ out:
    return rc;
 }
 
-// returns the unit prefix and the hashrate appropriately scaled.
-void scale_hash_for_display ( double* hashrate, char* prefix )
-{
-       if ( *hashrate < 1e4  )    *prefix =  0;
-  else if ( *hashrate < 1e7  )  { *prefix = 'k';  *hashrate /= 1e3;  }
-  else if ( *hashrate < 1e10 )  { *prefix = 'M';  *hashrate /= 1e6;  }  
-  else if ( *hashrate < 1e13 )  { *prefix = 'G';  *hashrate /= 1e9;  }
-  else if ( *hashrate < 1e16 )  { *prefix = 'T';  *hashrate /= 1e12; }
-  else if ( *hashrate < 1e19 )  { *prefix = 'P';  *hashrate /= 1e15; }
-  else if ( *hashrate < 1e22 )  { *prefix = 'E';  *hashrate /= 1e18; }
-  else if ( *hashrate < 1e25 )  { *prefix = 'Z';  *hashrate /= 1e21; } 
-  else                          { *prefix = 'Y';  *hashrate /= 1e24; }
-}
-
+// Does not account for leap years.
 static inline void sprintf_et( char *str, long unsigned int seconds )
 {
-   long unsigned int min = seconds / 60;
-   long unsigned int sec = seconds % 60;
-   long unsigned int hrs = min / 60;
-   
-   if ( unlikely( hrs ) )   
+   long unsigned int minutes = seconds / 60;
+   if ( minutes )
    {
-      long unsigned int days = hrs / 24;
-      long unsigned int years = days / 365;
-      if ( years )      // 0y000d
-         sprintf( str, "%luy%lud", years, years % 365 );
-      else if ( days )  // 0d00h
-         sprintf( str, "%lud%02luh", days, hrs % 24 );
-      else         // 0h00m  
-         sprintf( str, "%luh%02lum", hrs, min % 60 );
+      long unsigned int hours = minutes / 60;
+      if ( hours )
+      {
+         long unsigned int days = hours / 24;
+         if ( days )
+         {
+            long unsigned int years = days / 365;
+            if ( years )   
+               sprintf( str, "%luy%03lud", years, days % 365 ); // 0y000d
+            else
+               sprintf( str, "%lud%02luh", days, hours % 24 );  // 0d00h
+         }
+         else
+            sprintf( str, "%luh%02lum", hours, minutes % 60 );  // 0h00m
+      }
+      else
+         sprintf( str, "%lum%02lus", minutes, seconds % 60 );   // 0m00s
    }
-   else         // 0m00s
-      sprintf( str, "%lum%02lus", min, sec );
-}
+   else
+      sprintf( str, "%lus", seconds );   // 0s
+}      
 
 const long double exp32  = EXP32;                                 // 2**32
 const long double exp48  = EXP32 * EXP16;                         // 2**48
@@ -1427,40 +1400,41 @@ bool std_be_submit_getwork_result( CURL *curl, struct work *work )
    return true;
 }
 
-char* std_malloc_txs_request(struct work *work)
+char* std_malloc_txs_request( struct work *work )
 {
-    char *req;
-    json_t *val;
-    char data_str[2 * sizeof(work->data) + 1];
-    int i;
-    int datasize = work->sapling ? 112 : 80;
-    // ?????????:
-    bin2hex(data_str, (unsigned char *)work->data, datasize);
+  char *req;
+  json_t *val;
+  char data_str[2 * sizeof(work->data) + 1];
+  int i;
+  // datasize is an ugly hack, it should go through the gate
+  int datasize = work->sapling ? 112 : 80;
 
-
-    if (work->workid)
-    {
-        char *params;
-        val = json_object();
-        json_object_set_new(val, "workid", json_string(work->workid));
-        params = json_dumps(val, 0);
-        json_decref(val);
-        req = (char *)malloc(128 + 2 * datasize + strlen(work->txs) + strlen(params));
-        sprintf(req,
-                "{\"method\": \"submitblock\", \"params\": [\"%s%s\", %s], \"id\":4}\r\n",
-                data_str, work->txs, params);
-        free(params);
-    }
-    else
-    {
-        req = (char *)malloc(128 + 2 * datasize + strlen(work->txs));
-        sprintf(req,
-                "{\"method\": \"submitblock\", \"params\": [\"%s%s\"], \"id\":4}\r\n",
-                data_str, work->txs);
-    }
-
-    return req;
-}
+  for ( i = 0; i < ARRAY_SIZE(work->data); i++ )
+     be32enc( work->data + i, work->data[i] );
+  bin2hex( data_str, (unsigned char *)work->data, datasize );
+  if ( work->workid )
+  {
+    char *params;
+    val = json_object();
+    json_object_set_new( val, "workid", json_string( work->workid ) );
+    params = json_dumps( val, 0 );
+    json_decref( val );
+    req = (char*) malloc( 128 + 2 * datasize + strlen( work->txs )
+                            + strlen( params ) );
+    sprintf( req,
+     "{\"method\": \"submitblock\", \"params\": [\"%s%s\", %s], \"id\":4}\r\n",
+      data_str, work->txs, params );
+    free( params );
+  }
+  else
+  {
+    req = (char*) malloc( 128 + 2 * datasize + strlen( work->txs ) );
+    sprintf( req,
+         "{\"method\": \"submitblock\", \"params\": [\"%s%s\"], \"id\":4}\r\n",
+         data_str, work->txs);
+  }
+  return req;
+} 
 
 static bool submit_upstream_work( CURL *curl, struct work *work )
 {
@@ -1525,21 +1499,12 @@ const char *getwork_req =
 
 #define GBT_RULES "[\"segwit\"]"
 
-#define GBT_MWEB_RULES "[\"segwit\", \"mweb\"]"
-
 static const char *gbt_req =
    "{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
    GBT_CAPABILITIES ", \"rules\": " GBT_RULES "}], \"id\":0}\r\n";
 const char *gbt_lp_req =
    "{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
    GBT_CAPABILITIES ", \"rules\": " GBT_RULES ", \"longpollid\": \"%s\"}], \"id\":0}\r\n";
-
-static const char *gbt_mweb_req =
-   "{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
-   GBT_CAPABILITIES ", \"rules\": " GBT_MWEB_RULES "}], \"id\":0}\r\n";
-const char *gbt_lp_mweb_req =
-   "{\"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": "
-   GBT_CAPABILITIES ", \"rules\": " GBT_MWEB_RULES ", \"longpollid\": \"%s\"}], \"id\":0}\r\n";
 
 static bool get_upstream_work( CURL *curl, struct work *work )
 {
@@ -1551,14 +1516,9 @@ static bool get_upstream_work( CURL *curl, struct work *work )
 start:
    gettimeofday( &tv_start, NULL );
 
-   if ( opt_mweb )
-      val = json_rpc_call( curl, rpc_url, rpc_userpass,
-                 have_gbt ? gbt_mweb_req : getwork_req, &err,
+   val = json_rpc_call( curl, rpc_url, rpc_userpass,
+		           have_gbt ? gbt_req : getwork_req, &err,
                            have_gbt ? JSON_RPC_QUIET_404 : 0);
-   else
-      val = json_rpc_call( curl, rpc_url, rpc_userpass,
-      have_gbt ? gbt_req : getwork_req, &err,
-                have_gbt ? JSON_RPC_QUIET_404 : 0);
  
    gettimeofday( &tv_end, NULL );
 
@@ -2460,16 +2420,8 @@ json_t *std_longpoll_rpc_call( CURL *curl, int *err, char* lp_url )
    char *req = NULL;
    if (have_gbt)
    {
-       if (opt_mweb)
-       {
-          req = (char*) malloc( strlen(gbt_lp_mweb_req) + strlen(lp_id) + 1 );
-          sprintf( req, gbt_lp_mweb_req, lp_id );
-       }
-       else
-       {
-          req = (char*) malloc( strlen(gbt_lp_req) + strlen(lp_id) + 1 );
-          sprintf( req, gbt_lp_req, lp_id );
-       }
+       req = (char*) malloc( strlen(gbt_lp_req) + strlen(lp_id) + 1 );
+       sprintf( req, gbt_lp_req, lp_id );
    }
    val = json_rpc_call( curl, rpc_url, rpc_userpass, getwork_req, err,
                         JSON_RPC_LONGPOLL );
@@ -2668,7 +2620,6 @@ void std_build_block_header( struct work* g_work, uint32_t version,
       g_work->data[ 9+i ] = be32dec( merkle_tree + i );
    g_work->data[ algo_gate.ntime_index ] = ntime;
    g_work->data[ algo_gate.nbits_index ] = nbits;
-   g_work->data[ algo_gate.nonce_index ] = 0;
 
    if ( g_work->sapling )
    {
@@ -2698,7 +2649,6 @@ void std_build_extraheader( struct work* g_work, struct stratum_ctx* sctx )
    uchar merkle_tree[64] = { 0 };
 
    algo_gate.gen_merkle_root( merkle_tree, sctx );
-
    algo_gate.build_block_header( g_work, le32dec( sctx->job.version ),
           (uint32_t*) sctx->job.prevhash, (uint32_t*) merkle_tree,
           le32dec( sctx->job.ntime ), le32dec(sctx->job.nbits),
@@ -2876,67 +2826,29 @@ static void show_credits()
 static bool cpu_capability( bool display_only )
 {
      char cpu_brand[0x40];
-     bool cpu_has_sse2     = has_sse2();     // X86_64 only
-     bool cpu_has_ssse3    = has_ssse3();    // X86_64 only
-     bool cpu_has_sse41    = has_sse41();    // X86_64 only
-     bool cpu_has_sse42    = has_sse42();
-     bool cpu_has_avx      = has_avx();
-     bool cpu_has_neon     = has_neon();     // AArch64 
-     bool cpu_has_sve      = has_sve();      // aarch64 only, insignificant
-     bool cpu_has_sve2     = has_sve2();     // AArch64 only
-     bool cpu_has_sme      = has_sme();
-     bool cpu_has_sme2     = has_sme2();  
-     bool cpu_has_avx2     = has_avx2(); 
-     bool cpu_has_avx512   = has_avx512();
-     bool cpu_has_avx10    = has_avx10();
-     bool cpu_has_aes      = has_aes();      // x86_64 or AArch64
-     bool cpu_has_vaes     = has_vaes();     // X86_64 only
-     bool cpu_has_sha256   = has_sha256();   // x86_64 or AArch64
-     bool cpu_has_sha512   = has_sha512();
      bool sw_has_x86_64    = false;
      bool sw_has_aarch64   = false;
      int  sw_arm_arch      = 0;            // AArch64 version
      bool sw_has_neon      = false;        // AArch64
-     bool sw_has_sve       = false;        // AArch64
-     bool sw_has_sve2      = false;        // AArch64
+     bool sw_has_sve       = false;
+     bool sw_has_sve2      = false;
      bool sw_has_sme       = false;  
      bool sw_has_sme2      = false; 
      bool sw_has_sse2      = false;        // x86_64
-     bool sw_has_ssse3     = false;        // x86_64
-     bool sw_has_sse41     = false;        // x86_64
+     bool sw_has_ssse3     = false;
+     bool sw_has_sse41     = false;
      bool sw_has_sse42     = false;
      bool sw_has_avx       = false;
      bool sw_has_avx2      = false;
      bool sw_has_avx512    = false;
      bool sw_has_avx10     = false;
-     bool sw_has_aes       = false;
-     bool sw_has_vaes      = false;
+     bool sw_has_amx       = false;
+     bool sw_has_apx       = false;
+     bool sw_has_aes       = false;        // x86_64 or AArch64
+     bool sw_has_vaes      = false;        // x86_64
      bool sw_has_sha256    = false;        // x86_64 or AArch64
-     bool sw_has_sha512    = false;        // x86_64 or AArch64
-/*
-     set_t algo_features   = algo_gate.optimizations;
-     bool algo_has_sse2    = set_incl( SSE2_OPT,    algo_features );
-     bool algo_has_sse42   = set_incl( SSE42_OPT,   algo_features );
-     bool algo_has_avx     = set_incl( AVX_OPT,     algo_features );
-     bool algo_has_avx2    = set_incl( AVX2_OPT,    algo_features );
-     bool algo_has_avx512  = set_incl( AVX512_OPT,  algo_features );
-     bool algo_has_aes     = set_incl( AES_OPT,     algo_features );
-     bool algo_has_vaes    = set_incl( VAES_OPT,    algo_features );
-     bool algo_has_sha256  = set_incl( SHA256_OPT,  algo_features );
-     bool algo_has_sha512  = set_incl( SHA512_OPT,  algo_features );
-     bool algo_has_neon    = set_incl( NEON_OPT,    algo_features );
-     bool use_sse2;
-     bool use_sse42;
-     bool use_avx;
-     bool use_avx2;
-     bool use_avx512;
-     bool use_aes;
-     bool use_vaes;
-     bool use_sha256;
-     bool use_sha512;
-     bool use_neon;
-     bool use_none;
-*/
+     bool sw_has_sha512    = false;
+
      #if defined(__x86_64__)
          sw_has_x86_64 = true;
      #elif defined(__aarch64__)
@@ -2971,13 +2883,14 @@ static bool cpu_capability( bool display_only )
      #if (defined(__AVX512F__) && defined(__AVX512DQ__) && defined(__AVX512BW__) && defined(__AVX512VL__))
          sw_has_avx512 = true;
      #endif
-// AVX10 version is not significant as of AVX10.2. If that changes use a better
-// way to test the version than sequentially.
-//     #if defined(__AVX10_2__)
-// 
-//     #elif defined(__AVX10_1__)
-     #if defined(__AVX10_1__)
+     #if defined(__AVX10_1__)    // version is not significant
          sw_has_avx10 = true;
+     #endif
+     #ifdef __AMX_TILE__
+         sw_has_amx = true;
+     #endif
+     #ifdef __APX_F__
+         sw_has_apx = true;
      #endif
 
      // x86_64 or AArch64 
@@ -2998,6 +2911,7 @@ static bool cpu_capability( bool display_only )
      #if defined(__ARM_NEON)
          sw_has_neon = true;
      #endif
+     // FYI, SVE & SME not used by cpuminer
      #if defined(__ARM_FEATURE_SVE)
          sw_has_sve = true;
      #endif
@@ -3018,8 +2932,7 @@ static bool cpu_capability( bool display_only )
      // Build
      printf( "SW built on " __DATE__
      #if defined(__clang__)
-        " with CLANG-%d.%d.%d", __clang_major__, __clang_minor__,
-                                __clang_patchlevel__ );
+        " with CLANG-%d.%d.%d", __clang_major__, __clang_minor__, __clang_patchlevel__ );
      #elif defined(__GNUC__)
         " with GCC-%d.%d.%d", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__ );
      #endif
@@ -3045,39 +2958,44 @@ static bool cpu_capability( bool display_only )
      printf("CPU features: ");
      if ( cpu_arch_x86_64()  )
      {
-       if      ( cpu_has_avx10  )    printf( " AVX10.%d", avx10_version() );
-       if      ( cpu_has_avx512 )    printf( " AVX512" );
-       else if ( cpu_has_avx2   )    printf( " AVX2" );
-       else if ( cpu_has_avx    )    printf( " AVX" );
-       else if ( cpu_has_sse42  )    printf( " SSE4.2" );
-       else if ( cpu_has_sse41  )    printf( " SSE4.1" );
-       else if ( cpu_has_ssse3  )    printf( " SSSE3 " );
-       else if ( cpu_has_sse2   )    printf( " SSE2  " );
+       if      ( has_avx10()  )    printf( " AVX10.%d", avx10_version() );
+       else if ( has_avx512() )    printf( " AVX512" );
+       else if ( has_avx2()   )    printf( " AVX2  " );
+       else if ( has_avx()    )    printf( " AVX   " );
+       else if ( has_sse42()  )    printf( " SSE4.2" );
+       else if ( has_sse41()  )    printf( " SSE4.1" );
+       else if ( has_ssse3()  )    printf( " SSSE3 " );
+       else if ( has_sse2()   )    printf( " SSE2  " );
+       if      ( has_amx()    )    printf( " AMX"    );
+       if      ( has_apx_f()  )    printf( " APX"    );
+
      }
      else if   ( cpu_arch_aarch64() )
      {
-       if      ( cpu_has_neon   )    printf( " NEON" );
-       if      ( cpu_has_sve2   )    printf( " SVE2-%d", sve_vector_length() );
-       else if ( cpu_has_sve    )    printf( " SVE"    );
-       if      ( cpu_has_sme2   )    printf( " SME2"   );
-       else if ( cpu_has_sme    )    printf( " SME"    );
+       if      ( has_neon()   )    printf( "       NEON" );
+       if      ( has_sve2()   )    printf( " SVE2-%d", sve_vector_length() );
+       else if ( has_sve()    )    printf( " SVE"    );
+       if      ( has_sme2()   )    printf( " SME2"   );
+       else if ( has_sme()    )    printf( " SME"    );
      }     
-     if        ( cpu_has_vaes   )    printf( " VAES"   );
-     else if   ( cpu_has_aes    )    printf( " AES"   );
-     if        ( cpu_has_sha512 )    printf( " SHA512" );
-     else if   ( cpu_has_sha256 )    printf( " SHA256" );
+     if        ( has_vaes()   )    printf( " VAES"   );
+     else if   ( has_aes()    )    printf( "  AES"   );
+     if        ( has_sha512() )    printf( " SHA512" );
+     else if   ( has_sha256() )    printf( " SHA256" );
 
      printf("\nSW features:  ");
      if ( sw_has_x86_64 )
      {                     
         if      ( sw_has_avx10     ) printf( " AVX10 " );
         else if ( sw_has_avx512    ) printf( " AVX512" );
-        else if ( sw_has_avx2      ) printf( " AVX2" );
-        else if ( sw_has_avx       ) printf( " AVX" );
+        else if ( sw_has_avx2      ) printf( " AVX2  " );
+        else if ( sw_has_avx       ) printf( " AVX   " );
         else if ( sw_has_sse42     ) printf( " SSE4.2" );
         else if ( sw_has_sse41     ) printf( " SSE4.1" );
-        else if ( sw_has_ssse3     ) printf( " SSSE3" );
-        else if ( sw_has_sse2      ) printf( " SSE2" );
+        else if ( sw_has_ssse3     ) printf( " SSSE3 " );
+        else if ( sw_has_sse2      ) printf( " SSE2  " );
+        if      ( sw_has_amx       ) printf( " AMX"    );
+        if      ( sw_has_apx       ) printf( " APX"    );
      }
      else if    ( sw_has_aarch64 ) 
      {
@@ -3089,7 +3007,7 @@ static bool cpu_capability( bool display_only )
         else if ( sw_has_sme     )   printf( " SME"    );
      }
      if         ( sw_has_vaes    )   printf( " VAES"   );
-     else if    ( sw_has_aes     )   printf( " AES"   );
+     else if    ( sw_has_aes     )   printf( "  AES"   );
      if         ( sw_has_sha512  )   printf( " SHA512" );
      else if    ( sw_has_sha256  )   printf( " SHA256" );
 
@@ -3487,17 +3405,14 @@ void parse_arg(int key, char *arg )
    case 1029:  // stratum-keepalive
       opt_stratum_keepalive = true;
       break;
-   case 1032:  // --mweb
-      opt_mweb = true;
-      break;
    case 'V':   // version
       display_cpu_capability();
       exit(0);
-   case 'h':   // help
-      show_usage_and_exit(0);
+	case 'h':   // help
+		show_usage_and_exit(0);
 
    default:
-      show_usage_and_exit(1);
+		show_usage_and_exit(1);
 	}
 }
 
@@ -3601,18 +3516,8 @@ BOOL WINAPI ConsoleHandler(DWORD dwType)
 static int thread_create(struct thr_info *thr, void* func)
 {
 	int err = 0;
-	size_t stack_size = 0;
 	pthread_attr_init(&thr->attr);
-	// as long as Cryptonight's scratchpad is on the stack, the stack
-	// needs to be large enough. cn and cn_fast are the largest with 2MB.
-	// Therefore, we add 2MB to the stack size. The Bionic C library
-	// needs this. Gnulibc usually doesn't but the orgiginal cn
-	// implementation suggested, Gnulibc did need it. It shouldn't hurt.
-	// Doing this ONLY when cn is needed is probably unnecessary.
-	err = pthread_attr_getstacksize(&thr->attr, &stack_size);
-	stack_size += 2097152;
-	err += pthread_attr_setstacksize(&thr->attr, stack_size);
-	err += pthread_create(&thr->pth, &thr->attr, func, thr);
+	err = pthread_create(&thr->pth, &thr->attr, func, thr);
 	pthread_attr_destroy(&thr->attr);
 	return err;
 }

@@ -170,7 +170,7 @@ static inline __m256i mm256_not( const __m256i v )
 #define mm256_orand( a, b, c )     _mm256_ternarylogic_epi64( a, b, c, 0xf8 )
 
 // ~( a ^ b ), same as (~a) ^ b
-#define mm256_xnor( a, b )         _mm256_ternarylogic_epi64( a, b, b, 0x81 )
+#define mm256_nxor( a, b )         _mm256_ternarylogic_epi64( a, b, b, 0x81 )
     
 #else
 
@@ -208,7 +208,7 @@ static inline __m256i mm256_not( const __m256i v )
 #define mm256_orand( a, b, c ) \
   _mm256_or_si256( a, _mm256_and_si256( b, c ) )
 
-#define mm256_xnor( a, b ) \
+#define mm256_nxor( a, b ) \
   mm256_not( _mm256_xor_si256( a, b ) )
 
 #endif
@@ -217,7 +217,9 @@ static inline __m256i mm256_not( const __m256i v )
 // Equivalent of AVX512 _mm256_movepi64_mask & _mm256_movepi32_mask.
 // Returns 4 or 8 bit integer mask from MSBit of 64 or 32 bit elements.
 // Effectively a sign test.
-
+// The functions return int which can promote small integers to int when used
+// in an expression. Users should mask the slack bits strategically to maintain
+// data integrity.
 #define mm256_movmask_64( v ) \
    _mm256_movemask_pd( _mm256_castsi256_pd( v ) )
 

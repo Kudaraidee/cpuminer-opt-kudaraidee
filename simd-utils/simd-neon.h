@@ -4,9 +4,10 @@
 #if defined(__aarch64__) && defined(__ARM_NEON)
 
 // Targeted functions supporting NEON SIMD 128 & 64 bit vectors.
-// Element size matters!
 //
-// Intel naming is generally used.
+// Intel style naming is generally used, however, this not an attempt to emulate Intel
+// intructions. It's focussed on the functions used in this program and the best way
+// to implement them with NEON.
 //
 // Some advanced logical operations that require SHA3. Prior to GCC-13
 // they also require armv8.2
@@ -125,7 +126,7 @@
 #define v128_andnot( v1, v0 )         vbicq_u32( v0, v1 )
 
 // ~( v1 ^ v0 ), same as (~v1) ^ v0
-#define v128_xnor( v1, v0 )           v128_not( v128_xor( v1, v0 ) )
+#define v128_nxor( v1, v0 )           v128_not( v128_xor( v1, v0 ) )
 
 // ~v1 | v0,  args reversed for consistency with x86_64
 #define v128_ornot( v1, v0 )          vornq_u32( v0, v1 )
@@ -186,9 +187,21 @@
 // vzipq_u32 can do hi & lo and return uint32x4x2, no 64 bit version.
 
 // AES
-// consistent with Intel AES intrinsics, break up for optimizing
-#define v128_aesenc( v, k ) \
-   v128_xor( k, vaesmcq_u8( vaeseq_u8( v, v128_zero ) ) )
+
+// xor key with result after encryption, x86_64 format.
+#define v128_aesencxor( v, k ) \
+   v128_xor( vaesmcq_u8( vaeseq_u8( v, v128_zero ) ), k )
+// default is x86_64 format.
+#define v128_aesenc v128_aesencxor
+
+// xor key with v before encryption, arm64 format.
+#define v128_xoraesenc( v, k ) \
+   vaesmcq_u8( vaeseq_u8( v, k ) )
+
+// xor v with k_in before encryption then xor the result with k_out afterward.
+// Uses the applicable optimization based on the target.
+#define v128_xoraesencxor( v, k_in, k_out ) \
+   v128_xor( v128_xoraesenc( v, k_in ), k_out )
 
 #define v128_aesenc_nokey( v ) \
    vaesmcq_u8( vaeseq_u8( v, v128_zero ) )
@@ -336,52 +349,6 @@ static inline void v128_memcpy( void *dst, const void *src, const int n )
      vqtbl1q_u8( (uint8x16_t)(v), (uint8x16_t)(vmask) )
 
 // Bit rotation
-/*
-#define v128_shuflr64_8( v )        v128_shuffle8( v, V128_SHUFLR64_8 )
-#define v128_shufll64_8( v )        v128_shuffle8( v, V128_SHUFLL64_8 )
-#define v128_shuflr64_16(v )        v128_shuffle8( v, V128_SHUFLR64_16 )
-#define v128_shufll64_16(v )        v128_shuffle8( v, V128_SHUFLL64_16 )
-#define v128_shuflr64_24(v )        v128_shuffle8( v, V128_SHUFLR64_24 )
-#define v128_shufll64_24(v )        v128_shuffle8( v, V128_SHUFLL64_24 )
-#define v128_shuflr32_8( v )        v128_shuffle8( v, V128_SHUFLR32_8 )
-#define v128_shufll32_8( v )        v128_shuffle8( v, V128_SHUFLL32_8 )
-
-#define v128_ror64( v, c ) \
-   ( (c) ==  8 ) ? v128_shuflr64_8( v ) \
- : ( (c) == 16 ) ? v128_shuflr64_16( v ) \
- : ( (c) == 24 ) ? v128_shuflr64_24( v ) \
- : ( (c) == 32 ) ? (uint64x2_t)vrev64q_u32( ((uint32x4_t)(v)) ) \
- : ( (c) == 40 ) ? v128_shufll64_24( v ) \
- : ( (c) == 48 ) ? v128_shufll64_16( v ) \
- : ( (c) == 56 ) ? v128_shufll64_8( v ) \
- :                 vsriq_n_u64( vshlq_n_u64( ((uint64x2_t)(v)), 64-(c) ), \
-                                ((uint64x2_t)(v)), c )
-
-#define v128_rol64( v, c ) \
-   ( (c) ==  8 ) ? v128_shufll64_8( v ) \
- : ( (c) == 16 ) ? v128_shufll64_16( v ) \
- : ( (c) == 24 ) ? v128_shufll64_24( v ) \
- : ( (c) == 32 ) ? (uint64x2_t)vrev64q_u32( ((uint32x4_t)(v)) ) \
- : ( (c) == 40 ) ? v128_shuflr64_24( v ) \
- : ( (c) == 48 ) ? v128_shuflr64_16( v ) \
- : ( (c) == 56 ) ? v128_shuflr64_8( v ) \
- :                 vsliq_n_u64( vshrq_n_u64( ((uint64x2_t)(v)), 64-(c) ), \
-                                ((uint64x2_t)(v)), c )
-
-#define v128_ror32( v, c ) \
-   ( (c) ==  8 ) ? v128_shuflr32_8( v ) \
- : ( (c) == 16 ) ? (uint32x4_t)vrev32q_u16( ((uint16x8_t)(v)) ) \
- : ( (c) == 24 ) ? v128_shufll32_8( v ) \
- :                 vsriq_n_u32( vshlq_n_u32( ((uint32x4_t)(v)), 32-(c) ), \
-                                ((uint32x4_t)(v)), c )
-
-#define v128_rol32( v, c ) \
-   ( (c) ==  8 ) ? v128_shufll32_8( v ) \
- : ( (c) == 16 ) ? (uint32x4_t)vrev32q_u16( ((uint16x8_t)(v)) ) \
- : ( (c) == 24 ) ? v128_shuflr32_8( v ) \
- :                 vsliq_n_u32( vshrq_n_u32( ((uint32x4_t)(v)), 32-(c) ), \
-                                ((uint32x4_t)(v)), c )
-*/
 
 #define v128_ror64( v, c ) \
   ( (c) == 32 ) ? (uint64x2_t)vrev64q_u32( ((uint32x4_t)(v)) ) \

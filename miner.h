@@ -542,7 +542,9 @@ void applog_hash(void *hash);
 void format_hashrate(double hashrate, char *output);
 void print_hash_tests(void);
 
+// Factors of 1000 used for hashes, ie kH/s, Mh/s.
 void scale_hash_for_display ( double* hashrate, char* units );
+// Factors of 1024 used for bytes, ie kiB, MiB.
 void format_number_si( double* hashrate, char* si_units );
 void report_summary_log( bool force );
 
@@ -582,6 +584,8 @@ enum algos {
         ALGO_ANIME,
         ALGO_ARGON2D250,
         ALGO_ARGON2D500,
+        ALGO_ARGON2D1000,
+        ALGO_ARGON2D16000,
         ALGO_ARGON2D4096,
         ALGO_AXIOM,       
         ALGO_BLAKE,       
@@ -677,6 +681,8 @@ static const char* const algo_names[] = {
         "anime",
         "argon2d250",
         "argon2d500",
+        "argon2d1000",
+        "argon2d16000",
         "argon2d4096",
         "axiom",
         "blake",
@@ -837,6 +843,8 @@ Options:\n\
                           anime         Animecoin (ANI)\n\
                           argon2d250\n\
                           argon2d500\n\
+                          argon2d1000\n\
+                          argon2d16000\n\
                           argon2d4096\n\
                           axiom         Shabal-256 MemoHash\n\
                           blake         blake256r14 (SFR)\n\

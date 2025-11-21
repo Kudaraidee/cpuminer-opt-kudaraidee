@@ -137,10 +137,24 @@
 #define v128_unpackhi8                 _mm_unpackhi_epi8
 
 // AES
-// Nokey means nothing on x86_64 but it saves an instruction and a register
-// on ARM.
-#define v128_aesenc                    _mm_aesenc_si128
+
+// xor key with result after encryption, x86_64 format.
+#define v128_aesencxor                 _mm_aesenc_si128
+// default is x86_64 format.
+#define v128_aesenc                    v128_aesencxor
+
+// xor key with v before encryption, arm64 format.
+#define v128_xoraesenc( v, k ) \
+   _mm_aesenc_si128( v128_xor( v, k ), v128_zero )
+
+// xor v with k_in before encryption then xor the result with k_out afterward.
+// Uses the applicable optimization based on the target.
+#define v128_xoraesencxor( v, k_in, k_out ) \
+   _mm_aesenc_si128( v128_xor( v, k_in ), k_out )
+
+// arm64 optimized
 #define v128_aesenc_nokey(v)           _mm_aesenc_si128( v, v128_zero )
+
 #define v128_aesenclast                _mm_aesenclast_si128
 #define v128_aesenclast_nokey(v)       _mm_aesenclast_si128( v, v128_zero )
 #define v128_aesdec                    _mm_aesdec_si128
@@ -433,7 +447,7 @@ static inline void v128_memcpy( v128_t *dst, const v128_t *src, const int n )
 #define v128_orand( a, b, c )     _mm_ternarylogic_epi64( a, b, c, 0xf8 )
 
 // ~( a ^ b ), same as (~a) ^ b
-#define v128_xnor( a, b )         _mm_ternarylogic_epi64( a, b, b, 0x81 )
+#define v128_nxor( a, b )         _mm_ternarylogic_epi64( a, b, b, 0x81 )
 
 #else
 
@@ -455,7 +469,7 @@ static inline void v128_memcpy( v128_t *dst, const v128_t *src, const int n )
 
 #define v128_orand( a, b, c )     _mm_or_si128( a, _mm_and_si128( b, c ) )
 
-#define v128_xnor( a, b )         v128_not( _mm_xor_si128( a, b ) )
+#define v128_nxor( a, b )         v128_not( _mm_xor_si128( a, b ) )
 
 #endif
 

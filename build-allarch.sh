@@ -4,7 +4,7 @@
 # during develpment. However the information contained may provide compilation
 # tips to users.
 
-rm cpuminer-arrowlake* cpuminer-graniterapids* cpuminer-avx512-sha-vaes cpuminer-avx512 cpuminer-avx2 cpuminer-avx cpuminer-aes-sse42 cpuminer-sse42 cpuminer-ssse3 cpuminer-sse2 cpuminer-zen cpuminer-zen3 cpuminer-zen4 cpuminer-zen5 cpuminer-alderlake cpuminer-x64 cpuminer-armv8 cpuminer-armv8-aes cpuminer-armv8-sha2 cpuminer-armv8-aes-sha2  > /dev/null
+./clean-all.sh
 
 # AVX512 SHA VAES: Intel Core Icelake, Rocketlake
 make distclean || echo clean
@@ -18,39 +18,37 @@ strip -s cpuminer
 mv cpuminer cpuminer-avx512-sha-vaes
 
 # Intel Core Alderlake: AVX2 SHA VAES, needs gcc-12
-#make clean || echo clean
-#rm -f config.status
-#CFLAGS="-O3 -march=alderlake -Wall" ./configure --with-curl
-#make -j $(nproc)
-#strip -s cpuminer
-#mv cpuminer cpuminer-alderlake
+make clean || echo clean
+rm -f config.status
+CFLAGS="-O3 -march=alderlake -Wall" ./configure --with-curl
+make -j $(nproc)
+strip -s cpuminer
+mv cpuminer cpuminer-alderlake
 
 # Intel Core Arrowlake-s: AVX2 SHA512 VAES, needs gcc-14
 # Arrowlake-s includes SHA512, Arrowlake does not?
-#make clean || echo clean
-#rm -f config.status
-#CFLAGS="-O3 -march=arrowlake-s -Wall" ./configure --with-curl
-#make -j $(nproc)
-#strip -s cpuminer
-#mv cpuminer cpuminer-arrowlake-s
+make clean || echo clean
+rm -f config.status
+CFLAGS="-O3 -march=arrowlake-s -Wall" ./configure --with-curl
+make -j $(nproc)
+strip -s cpuminer
+mv cpuminer cpuminer-arrowlake-s
 
-# Intel Core Graniterapids: AVX512, SHA256, VAES, needs gcc-14
-# Granitrapids does not build with AVX10, SHA512 or APX.
-# wait for Diamondrapids & gcc-15.
-#make clean || echo clean
-#rm -f config.status
-#CFLAGS="-O3 -march=graniterapids -Wall" ./configure --with-curl
-#make -j $(nproc)
-#strip -s cpuminer
-#mv cpuminer cpuminer-graniterapids
+# Intel Core Graniterapids: AVX512, SHA256, VAES, AMX, needs gcc-14
+make clean || echo clean
+rm -f config.status
+CFLAGS="-O3 -march=graniterapids -Wall" ./configure --with-curl
+make -j $(nproc)
+strip -s cpuminer
+mv cpuminer cpuminer-graniterapids
 
-# SHA512 AVX10.1
-#make clean || echo clean
-#rm -f config.status
-#CFLAGS="-O3 -march=graniterapids -msha512 -mavx10.1 -Wall" ./configure --with-curl
-#make -j $(nproc)
-#strip -s cpuminer
-#mv cpuminer cpuminer-avx10_1
+# Graniterapids + SHA512, AVX10.1
+make clean || echo clean
+rm -f config.status
+CFLAGS="-O3 -march=graniterapids -msha512 -mavx10.1 -Wall" ./configure --with-curl
+make -j $(nproc)
+strip -s cpuminer
+mv cpuminer cpuminer-avx10.1
 
 # SHA512 AVX10.2
 #make clean || echo clean
@@ -69,20 +67,23 @@ mv cpuminer cpuminer-avx512-sha-vaes
 #mv cpuminer cpuminer-diamondrapids
 
 # Zen5: AVX512 SHA VAES, requires gcc-14.
-#make clean || echo clean
-#rm -f config.status
-#CFLAGS="-O3 -march=znver5 -Wall" ./configure --with-curl
-#make -j $(nproc)
-#strip -s cpuminer
-#mv cpuminer cpuminer-zen5
+make clean || echo clean
+rm -f config.status
+CFLAGS="-O3 -march=znver5 -Wall" ./configure --with-curl
+# zen4 is close enough for older compiler
+#CFLAGS="-O3 -march=znver4 -Wall" ./configure --with-curl
+
+make -j $(nproc)
+strip -s cpuminer
+mv cpuminer cpuminer-zen5
 
 # Zen4: AVX512 SHA VAES
 make clean || echo clean
 rm -f config.status
 # Zen4: AVX512, SHA, VAES, needs gcc-12.3.
-#CFLAGS="-O3 -march=znver4 -Wall" ./configure --with-curl
+CFLAGS="-O3 -march=znver4 -Wall" ./configure --with-curl
 # Inclomplete list of Zen4 AVX512 extensions but includes all extensions used by cpuminer.
-CFLAGS="-O3 -march=znver3 -mavx512f -mavx512cd -mavx512dq -mavx512bw -mavx512vl -mavx512vbmi -mavx512vbmi2 -mavx512bitalg -mavx512vpopcntdq -Wall" ./configure --with-curl
+#CFLAGS="-O3 -march=znver3 -mavx512f -mavx512cd -mavx512dq -mavx512bw -mavx512vl -mavx512vbmi -mavx512vbmi2 -mavx512bitalg -mavx512vpopcntdq -Wall" ./configure --with-curl
 make -j $(nproc)
 strip -s cpuminer
 mv cpuminer cpuminer-zen4
@@ -115,8 +116,8 @@ mv cpuminer cpuminer-avx2-sha-vaes
 # AVX2 SHA AES: AMD Zen1
 make clean || echo done
 rm -f config.status
-#CFLAGS="-O3 -march=znver1 -maes -Wall" ./configure --with-curl
-CFLAGS="-O3 -maes -mavx2 -msha -Wall" ./configure --with-curl
+CFLAGS="-O3 -march=znver1 -maes -Wall" ./configure --with-curl
+#CFLAGS="-O3 -maes -mavx2 -msha -Wall" ./configure --with-curl
 make -j $(nproc)
 strip -s cpuminer
 mv cpuminer cpuminer-avx2-sha
@@ -138,13 +139,21 @@ make -j $(nproc)
 strip -s cpuminer
 mv cpuminer cpuminer-avx
 
-# SSE4.2 AES: Intel Westmere, most Pentium & Celeron
+# SSE4.2 AES SHA: Intel Atom Goldmont, newer Pentium & Celeron
+make clean || echo clean
+rm -f config.status
+CFLAGS="-O3 -march=goldmont -Wall" ./configure --with-curl
+make -j $(nproc)
+strip -s cpuminer
+mv cpuminer cpuminer-sse42-aes-sha
+
+# SSE4.2 AES: Intel Westmere, older Pentium & Celeron
 make clean || echo clean
 rm -f config.status
 CFLAGS="-O3 -march=westmere -maes -Wall" ./configure --with-curl
 make -j $(nproc)
 strip -s cpuminer
-mv cpuminer cpuminer-aes-sse42
+mv cpuminer cpuminer-sse42-aes
 
 # SSE4.2: Intel Nehalem
 make clean || echo clean

@@ -75,6 +75,25 @@ If not what makes it happen or not happen?
 Change Log
 ----------
 
+v25.7
+
+Fixed a bug calculating TTF longer than 1 year.
+Faster argon2d.
+Faster hamsi AVX512.
+Faster switfftx AVX2.
+Other small fixes and improvements.
+
+v25.6
+
+Added argon2d1000, argon2d16000 algos.
+Target specific AES optimizations improve shavite for ARM64 & x86_64.
+
+v25.5
+
+x86_64: Fixed an insidious bug in sha256 early rejection optimization for AVX2 & AVX512.
+x86_64: Faster sha256d, sha256dt for AVX2 & AVX512.
+Other small bug fixes.
+
 v25.4
 
 x86_64: improved handling of vector constants used for byte permutations.
